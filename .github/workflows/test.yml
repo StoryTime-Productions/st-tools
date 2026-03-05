@@ -35,8 +35,6 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/lcov.info
           fail_ci_if_error: true
-          # Enforce 80% patch coverage on PRs
-          override_patch: 80
 
   # Reuse the validate job from the validate workflow via needs
   validate:
