@@ -39,9 +39,7 @@ Closes #<!-- issue number -->
 <!-- Bullet list of the concrete changes made. Be specific — reviewers read this first. -->
 
 -
--
-
----
+- ***
 
 ## How to Test
 

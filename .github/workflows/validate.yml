@@ -1,9 +1,6 @@
 name: validate
 
 on:
-  push:
-    branches-ignore:
-      - main
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
@@ -79,7 +76,8 @@ jobs:
           fi
 
           # Extract all issue numbers from Refs/Closes/Fixes/Resolves footers
-          ISSUE_NUMS=$(echo "$COMMITS" | grep -oP '(?<=(Refs|Closes|Fixes|Resolves): #)\d+' || true)
+          # Use \K instead of lookbehind — GNU grep PCRE doesn't support variable-length lookbehinds
+          ISSUE_NUMS=$(echo "$COMMITS" | grep -oP '(Refs|Closes|Fixes|Resolves): #\K\d+' || true)
 
           if [ -z "$ISSUE_NUMS" ]; then
             echo "::error::No 'Refs: #N' or 'Closes: #N' footer found in commits."

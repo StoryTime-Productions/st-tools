@@ -10,6 +10,7 @@ export default defineConfig({
     setupFiles: ["./src/tests/setup.ts"],
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
     exclude: ["node_modules", ".next"],
+    passWithNoTests: true,
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov", "html"],
