@@ -1,0 +1,109 @@
+name: Bug
+description: Something is broken or behaving incorrectly.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template when **something that previously worked is broken, or something never worked as intended**.
+        The more detail you provide, the faster it gets fixed.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One or two sentences describing what is wrong.
+      placeholder: "e.g. The Pomodoro timer continues counting after the browser tab is backgrounded and resumes at the wrong value."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: Numbered steps to reliably trigger the bug.
+      placeholder: |
+        1. Navigate to the Timer page.
+        2. Start a 25-minute Pomodoro session.
+        3. Switch to a different browser tab for 2 minutes.
+        4. Return to the tab.
+        5. Observe the timer value.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behaviour
+      description: What should happen?
+      placeholder: "The timer should show the correct remaining time accounting for elapsed wall time."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behaviour
+      description: What actually happens?
+      placeholder: "The timer resumes from where it paused when the tab was backgrounded, skipping several minutes."
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser, OS, screen size, or any other relevant context.
+      placeholder: |
+        - Browser: Chrome 122 / Firefox 123
+        - OS: Windows 11
+        - Viewport: 1440px
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots / Screen Recording
+      description: Attach any visuals that help illustrate the problem.
+      placeholder: Drag and drop images here, or paste a screen recording link.
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console Errors / Logs
+      description: Paste any relevant browser console errors or network failures.
+      render: shell
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: How badly does this affect users?
+      options:
+        - Low — cosmetic or minor inconvenience
+        - Medium — feature partially broken, workaround exists
+        - High — feature broken, no workaround
+        - Critical — data loss, auth failure, or app crash
+    validations:
+      required: true
+
+  - type: dropdown
+    id: regression
+    attributes:
+      label: Regression?
+      description: Did this used to work?
+      options:
+        - "Yes — was working before"
+        - "No — never worked"
+        - "Unknown"
+    validations:
+      required: true
+
+  - type: textarea
+    id: related
+    attributes:
+      label: Related Issues / PRs
+      description: Link any related tickets or previous attempts to fix this.
+      placeholder: "Refs: #N"

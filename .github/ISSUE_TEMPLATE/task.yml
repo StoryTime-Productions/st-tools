@@ -1,0 +1,62 @@
+name: Task
+description: A discrete unit of technical or operational work.
+title: "[Task] "
+labels: ["task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for **technical chores, infrastructure work, refactors, dependency upgrades, docs, or any non-feature/non-bug work**.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What needs to be done and why?
+      placeholder: Clear, concise description of the work.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: How do we know this task is complete? Use a checklist.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: implementation-notes
+    attributes:
+      label: Implementation Notes
+      description: Any technical context, constraints, or approach hints.
+      placeholder: Optional — relevant files, patterns to follow, external docs, etc.
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+    validations:
+      required: true
+
+  - type: input
+    id: estimate
+    attributes:
+      label: Estimate
+      description: Rough effort estimate (e.g. 1h, half-day, 2 days).
+      placeholder: "e.g. 2h"
+
+  - type: textarea
+    id: related
+    attributes:
+      label: Related Issues / PRs
+      description: Link any related tickets or pull requests.
+      placeholder: "Refs: #N"

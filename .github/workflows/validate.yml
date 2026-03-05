@@ -1,0 +1,102 @@
+name: validate
+
+on:
+  push:
+    branches-ignore:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  validate:
+    name: Branch & Commit Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check branch name
+        run: |
+          BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
+          echo "Branch: $BRANCH"
+          # Allow main and release branches through without pattern enforcement
+          if [[ "$BRANCH" == "main" || "$BRANCH" =~ ^release/ ]]; then
+            echo "Protected branch — skipping pattern check."
+            exit 0
+          fi
+          PATTERN='^(feat|fix|docs|style|refactor|perf|test|chore|ci|revert)\/[0-9]+-[a-z0-9-]+$'
+          if ! [[ "$BRANCH" =~ $PATTERN ]]; then
+            echo "::error::Branch '$BRANCH' does not match required pattern: <type>/<issue-number>-<short-description>"
+            echo "Examples: feat/14-kanban-drag-drop, fix/27-timer-bug, chore/31-upgrade-deps"
+            exit 1
+          fi
+          echo "Branch name is valid."
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint commit messages
+        run: |
+          # Get commits in this push / PR
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            COMMITS=$(git log --format="%H" ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }})
+          else
+            COMMITS=$(git log --format="%H" HEAD~1..HEAD)
+          fi
+
+          FAILED=0
+          for COMMIT in $COMMITS; do
+            MSG=$(git log -1 --format="%B" $COMMIT)
+            echo "Checking: $COMMIT"
+            echo "$MSG" | pnpx commitlint || FAILED=1
+          done
+
+          if [ $FAILED -ne 0 ]; then
+            echo "::error::One or more commit messages failed commitlint validation."
+            exit 1
+          fi
+
+      - name: Verify issue references exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            COMMITS=$(git log --format="%B" ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }})
+          else
+            COMMITS=$(git log --format="%B" HEAD~1..HEAD)
+          fi
+
+          # Extract all issue numbers from Refs/Closes/Fixes/Resolves footers
+          ISSUE_NUMS=$(echo "$COMMITS" | grep -oP '(?<=(Refs|Closes|Fixes|Resolves): #)\d+' || true)
+
+          if [ -z "$ISSUE_NUMS" ]; then
+            echo "::error::No 'Refs: #N' or 'Closes: #N' footer found in commits."
+            exit 1
+          fi
+
+          FAILED=0
+          for NUM in $ISSUE_NUMS; do
+            STATUS=$(gh api repos/${{ github.repository }}/issues/$NUM --jq '.number' 2>/dev/null || echo "NOT_FOUND")
+            if [ "$STATUS" = "NOT_FOUND" ]; then
+              echo "::error::Issue #$NUM referenced in commit does not exist in ${{ github.repository }}"
+              FAILED=1
+            else
+              echo "Issue #$NUM exists."
+            fi
+          done
+
+          if [ $FAILED -ne 0 ]; then
+            exit 1
+          fi

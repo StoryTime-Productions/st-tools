@@ -1,0 +1,81 @@
+name: Story
+description: A user-facing feature or capability described from the user's perspective.
+title: "[Story] "
+labels: ["story"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for **new features or improvements that deliver value to a user**.
+        Write the title and user story from the perspective of the person using the tool.
+
+  - type: textarea
+    id: user-story
+    attributes:
+      label: User Story
+      description: In the format — As a [role], I want [goal], so that [reason].
+      placeholder: |
+        As a team member,
+        I want to drag and drop Kanban cards between columns,
+        so that I can update task status without leaving the board view.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Concrete, testable conditions that define "done". Use a checklist.
+      placeholder: |
+        - [ ] Cards can be dragged between any two columns.
+        - [ ] Board state persists after page refresh.
+        - [ ] Drag is accessible via keyboard.
+    validations:
+      required: true
+
+  - type: textarea
+    id: design-notes
+    attributes:
+      label: Design / UX Notes
+      description: Wireframes, mockups, or UX behaviour notes. Attach images or link to Figma.
+      placeholder: Optional — link or describe expected UI behaviour.
+
+  - type: textarea
+    id: implementation-notes
+    attributes:
+      label: Implementation Notes
+      description: Technical context, component scope, data model changes, API changes.
+      placeholder: Optional — relevant files, patterns, third-party docs, etc.
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+    validations:
+      required: true
+
+  - type: input
+    id: estimate
+    attributes:
+      label: Estimate
+      description: Rough effort estimate (e.g. 1h, half-day, 2 days).
+      placeholder: "e.g. 1 day"
+
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of Scope
+      description: Explicitly list anything that will NOT be addressed in this story.
+      placeholder: Optional but encouraged — prevents scope creep.
+
+  - type: textarea
+    id: related
+    attributes:
+      label: Related Issues / PRs
+      description: Link parent epics, blocking tickets, or related PRs.
+      placeholder: "Refs: #N"
