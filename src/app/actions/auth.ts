@@ -100,3 +100,9 @@ export async function signInAction(
 
   redirect("/dashboard");
 }
+
+export async function signOutAction(): Promise<void> {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  redirect("/auth/sign-in");
+}
