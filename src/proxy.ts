@@ -34,12 +34,12 @@ export async function proxy(request: NextRequest) {
   // Protect all routes under /dashboard
   if (!user && pathname.startsWith("/dashboard")) {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = "/auth/sign-in";
     return NextResponse.redirect(url);
   }
 
   // Redirect authenticated users away from auth pages
-  if (user && (pathname === "/login" || pathname === "/signup")) {
+  if (user && pathname.startsWith("/auth")) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);
@@ -49,5 +49,14 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  matcher: [
+    /*
+     * Match all request paths except:
+     * - _next/static  (static files)
+     * - _next/image   (image optimisation)
+     * - favicon.ico / robots.txt / sitemap.xml
+     * - public assets (images, fonts, etc.)
+     */
+    "/((?!_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|.*\\.(?:svg|png|jpg|jpeg|gif|webp|woff2?)$).*)",
+  ],
 };
