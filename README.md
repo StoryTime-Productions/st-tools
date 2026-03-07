@@ -2,6 +2,8 @@
 
 Internal productivity web app for the StoryTime Productions team.
 
+> See [FEATURE_SET.md](./FEATURE_SET.md) for the full feature specification and tech stack rationale.
+
 ## Stack
 
 | Layer                      | Technology                           |
@@ -63,6 +65,8 @@ Open [http://localhost:3000](http://localhost:3000).
 | `pnpm db:studio`    | Open Prisma Studio     |
 
 ## Contributing
+
+See [FEATURE_SET.md](./FEATURE_SET.md) for branch naming, commit format, and quality gate requirements.
 
 All contributions must:
 

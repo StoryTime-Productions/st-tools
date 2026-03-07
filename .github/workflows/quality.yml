@@ -26,6 +26,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Check migration drift
+        run: |
+          if [ -f "./prisma/migrations/migration_lock.toml" ]; then
+            pnpm prisma migrate diff --from-migrations ./prisma/migrations --to-schema ./prisma/schema.prisma --exit-code
+          else
+            echo "No migrations found, skipping drift check."
+          fi
+
       - name: Lint (zero warnings)
         run: pnpm lint
 
