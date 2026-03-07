@@ -31,8 +31,11 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Protect all routes under /dashboard
-  if (!user && pathname.startsWith("/dashboard")) {
+  // Public routes — no auth required
+  const isPublicRoute = pathname === "/" || pathname.startsWith("/auth");
+
+  // Redirect unauthenticated users away from protected routes
+  if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/sign-in";
     return NextResponse.redirect(url);
