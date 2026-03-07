@@ -59,7 +59,7 @@ export default function SignUpPage() {
 
   if (emailSent) {
     return (
-      <Card className="w-full max-w-md text-center">
+      <Card className="border-border/70 bg-background/95 w-full max-w-md rounded-3xl text-center shadow-none">
         <CardHeader>
           <CardTitle className="text-2xl">Check your email</CardTitle>
           <CardDescription>
@@ -72,7 +72,7 @@ export default function SignUpPage() {
   }
 
   return (
-    <Card className="w-full max-w-md">
+    <Card className="border-border/70 bg-background/95 w-full max-w-md rounded-3xl shadow-none">
       <CardHeader>
         <CardTitle className="text-2xl">Create an account</CardTitle>
         <CardDescription>Enter your details to get started</CardDescription>
@@ -163,7 +163,7 @@ export default function SignUpPage() {
           </Button>
         </form>
       </CardContent>
-      <CardFooter className="text-muted-foreground justify-center text-sm">
+      <CardFooter className="text-muted-foreground border-border/60 justify-center border-t text-sm">
         Already have an account?&nbsp;
         <Link href="/auth/sign-in" className="text-foreground underline-offset-4 hover:underline">
           Sign in
