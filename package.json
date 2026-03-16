@@ -17,6 +17,13 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
+    "db:local:up": "docker compose up -d db",
+    "db:local:down": "docker compose down",
+    "db:local:logs": "docker compose logs -f db",
+    "db:local:reset": "docker compose down -v && docker compose up -d db",
+    "supabase:start": "pnpm dlx supabase start",
+    "supabase:stop": "pnpm dlx supabase stop",
+    "supabase:status": "pnpm dlx supabase status",
     "prepare": "husky"
   },
   "lint-staged": {

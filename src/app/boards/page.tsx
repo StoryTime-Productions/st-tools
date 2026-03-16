@@ -77,18 +77,7 @@ export default async function BoardsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="space-y-2">
-          <p className="text-muted-foreground text-xs font-medium tracking-[0.24em] uppercase">
-            Kanban workspace
-          </p>
-          <div className="space-y-1">
-            <h2 className="text-2xl font-semibold tracking-tight">Boards</h2>
-            <p className="text-muted-foreground max-w-2xl text-sm leading-6">
-              Manage private boards, collaborative team boards, and the cards flowing through each
-              project.
-            </p>
-          </div>
-        </div>
+        <h2 className="text-2xl font-semibold tracking-tight">Boards</h2>
 
         <CreateBoardDialog />
       </div>
@@ -141,10 +130,7 @@ export default async function BoardsPage() {
       ) : (
         <Card className="border-border/70 bg-background/85 overflow-hidden rounded-3xl shadow-none">
           <CardHeader className="border-border/60 flex flex-col gap-2 border-b sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle>Your boards</CardTitle>
-              <CardDescription>Open a board to manage members, columns, and cards.</CardDescription>
-            </div>
+            <CardTitle>Your boards</CardTitle>
             <Badge variant="outline">{boards.length} total</Badge>
           </CardHeader>
           <CardContent className="p-0">

@@ -56,6 +56,10 @@ Thumbs.db
 # Vercel
 .vercel
 
+# Local Copilot customizations (keep personal)
+.copilot-local/
+.github/instructions/agency-prefix.instructions.md
+
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts

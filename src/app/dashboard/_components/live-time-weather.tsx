@@ -28,7 +28,13 @@ type IpLocation = {
   country_name?: string;
 };
 
-const WEATHER_REFRESH_MS = 15 * 60 * 1000;
+type CachedWeatherRecord = {
+  weather: WeatherInfo;
+  fetchedAt: number;
+};
+
+const WEATHER_REFRESH_MS = 60 * 60 * 1000;
+const WEATHER_CACHE_KEY = "dashboard-weather-cache-v1";
 
 function describeWeather(code: number): { label: string; Icon: typeof Sun } {
   if (code === 0) return { label: "Clear sky", Icon: Sun };
@@ -40,6 +46,63 @@ function describeWeather(code: number): { label: string; Icon: typeof Sun } {
   if ([71, 73, 75, 77, 85, 86].includes(code)) return { label: "Snow", Icon: CloudSnow };
   if ([95, 96, 99].includes(code)) return { label: "Thunderstorm", Icon: CloudLightning };
   return { label: "Weather available", Icon: Cloud };
+}
+
+function isValidWeatherInfo(value: unknown): value is WeatherInfo {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.temperature === "number" &&
+    typeof candidate.unit === "string" &&
+    typeof candidate.weatherCode === "number" &&
+    typeof candidate.locationLabel === "string"
+  );
+}
+
+function readCachedWeather(): WeatherInfo | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const raw = window.localStorage.getItem(WEATHER_CACHE_KEY);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as CachedWeatherRecord;
+    if (typeof parsed.fetchedAt !== "number" || !isValidWeatherInfo(parsed.weather)) {
+      window.localStorage.removeItem(WEATHER_CACHE_KEY);
+      return null;
+    }
+
+    const ageMs = Date.now() - parsed.fetchedAt;
+    if (ageMs > WEATHER_REFRESH_MS) {
+      window.localStorage.removeItem(WEATHER_CACHE_KEY);
+      return null;
+    }
+
+    return parsed.weather;
+  } catch {
+    window.localStorage.removeItem(WEATHER_CACHE_KEY);
+    return null;
+  }
+}
+
+function writeCachedWeather(weather: WeatherInfo) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const payload: CachedWeatherRecord = {
+    weather,
+    fetchedAt: Date.now(),
+  };
+
+  window.localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify(payload));
 }
 
 async function loadWeather(): Promise<WeatherInfo> {
@@ -103,6 +166,18 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
     let cancelled = false;
 
     async function refreshWeather() {
+      const cachedWeather = readCachedWeather();
+
+      if (cachedWeather) {
+        if (!cancelled) {
+          setWeather(cachedWeather);
+          setWeatherError(null);
+          setIsWeatherLoading(false);
+        }
+
+        return;
+      }
+
       setIsWeatherLoading(true);
       setWeatherError(null);
 
@@ -110,6 +185,7 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
         const nextWeather = await loadWeather();
         if (!cancelled) {
           setWeather(nextWeather);
+          writeCachedWeather(nextWeather);
         }
       } catch (error) {
         if (!cancelled) {

@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type {
+  CardActivity as PrismaCardActivity,
+  Prisma,
   Board as PrismaBoard,
   Card as PrismaCard,
   CardChecklistItem as PrismaChecklistItem,
@@ -12,7 +14,12 @@ import type {
 import { getCurrentUser } from "@/lib/get-current-user";
 import { getAccessibleBoardWhere, getManageableBoardWhere } from "@/lib/boards";
 import { prisma } from "@/lib/prisma";
-import type { BoardCardData, BoardChecklistItemData, BoardColumnData } from "@/app/boards/types";
+import type {
+  BoardCardActivityData,
+  BoardCardData,
+  BoardChecklistItemData,
+  BoardColumnData,
+} from "@/app/boards/types";
 
 export type BoardActionResult = { error: string } | { success: true; boardId?: string };
 export type ColumnActionResult = { error: string } | { success: true; column?: BoardColumnData };
@@ -51,6 +58,12 @@ const checklistItemSchema = z.object({
     .max(240, "Checklist items must be 240 characters or fewer"),
   completed: z.boolean(),
 });
+
+const commentContentSchema = z
+  .string()
+  .trim()
+  .min(1, "Comment cannot be empty")
+  .max(2000, "Comment must be 2000 characters or fewer");
 
 const createBoardSchema = z.object({
   title: boardTitleSchema,
@@ -110,6 +123,11 @@ const updateCardSchema = z.object({
   checklistItems: z.array(checklistItemSchema).max(50, "Use 50 checklist items or fewer"),
 });
 
+const addCardCommentSchema = z.object({
+  cardId: z.string().uuid(),
+  content: commentContentSchema,
+});
+
 const deleteCardSchema = z.object({
   cardId: z.string().uuid(),
 });
@@ -125,12 +143,18 @@ const moveCardsSchema = z.object({
 });
 
 const defaultColumns = ["To do", "In progress", "Done"];
+const CARD_ACTIVITY_RECENT_LIMIT = 50;
+const CARD_ACTIVITY_RETENTION_DAYS = 180;
 
 type ChecklistItemRecord = PrismaChecklistItem;
 type UserSummaryRecord = Pick<PrismaUser, "id" | "name" | "email" | "avatarUrl" | "role">;
+type CardActivityRecord = PrismaCardActivity & {
+  actorUser: UserSummaryRecord | null;
+};
 type CardRecord = PrismaCard & {
   assignee: UserSummaryRecord | null;
   checklistItems: ChecklistItemRecord[];
+  activities: CardActivityRecord[];
 };
 type ColumnRecord = PrismaColumn & { cards: CardRecord[] };
 
@@ -140,6 +164,66 @@ type BoardAccessRecord = Pick<
 > & {
   members?: Array<{ userId: string }>;
 };
+
+type CardUpdateSnapshot = {
+  id: string;
+  title: string;
+  description: string | null;
+  dueDate: Date | null;
+  labels: string[];
+  assigneeId: string | null;
+  position: number;
+  columnId: string;
+  checklistItems: Array<{ content: string; completed: boolean; position: number }>;
+};
+
+function mapActivityDetails(details: Prisma.JsonValue | null): BoardCardActivityData["details"] {
+  if (!details || typeof details !== "object" || Array.isArray(details)) {
+    return null;
+  }
+
+  const payload = details as Record<string, unknown>;
+  const changedFields = Array.isArray(payload.changedFields)
+    ? payload.changedFields.filter((item): item is string => typeof item === "string")
+    : undefined;
+
+  const fromColumnId = typeof payload.fromColumnId === "string" ? payload.fromColumnId : undefined;
+  const toColumnId = typeof payload.toColumnId === "string" ? payload.toColumnId : undefined;
+  const fromPosition = typeof payload.fromPosition === "number" ? payload.fromPosition : undefined;
+  const toPosition = typeof payload.toPosition === "number" ? payload.toPosition : undefined;
+  const commentCandidate = typeof payload.comment === "string" ? payload.comment.trim() : "";
+  const comment = commentCandidate.length > 0 ? commentCandidate : undefined;
+
+  if (
+    !changedFields &&
+    !fromColumnId &&
+    !toColumnId &&
+    !comment &&
+    typeof fromPosition === "undefined" &&
+    typeof toPosition === "undefined"
+  ) {
+    return null;
+  }
+
+  return {
+    changedFields,
+    fromColumnId,
+    toColumnId,
+    fromPosition,
+    toPosition,
+    comment,
+  };
+}
+
+function mapCardActivity(activity: CardActivityRecord): BoardCardActivityData {
+  return {
+    id: activity.id,
+    eventType: activity.eventType,
+    createdAt: activity.createdAt.toISOString(),
+    actor: activity.actorUser,
+    details: mapActivityDetails(activity.details),
+  };
+}
 
 function mapChecklistItem(item: ChecklistItemRecord): BoardChecklistItemData {
   return {
@@ -163,6 +247,9 @@ function mapCard(card: CardRecord): BoardCardData {
     checklistItems: card.checklistItems
       .sort((left, right) => left.position - right.position)
       .map(mapChecklistItem),
+    activities: card.activities
+      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+      .map(mapCardActivity),
   };
 }
 
@@ -200,6 +287,111 @@ function parseDueDate(value: string | null): Date | null {
   }
 
   return parsed;
+}
+
+function getCardActivityRetentionCutoff(): Date {
+  return new Date(Date.now() - CARD_ACTIVITY_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+}
+
+async function pruneOldCardActivities(tx: Prisma.TransactionClient, boardId: string) {
+  await tx.cardActivity.deleteMany({
+    where: {
+      boardId,
+      createdAt: {
+        lt: getCardActivityRetentionCutoff(),
+      },
+    },
+  });
+}
+
+function dateKey(value: Date | null): string | null {
+  return value ? value.toISOString().slice(0, 10) : null;
+}
+
+function arraysEqual(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((item, index) => item === right[index]);
+}
+
+function checklistSignature(items: Array<{ content: string; completed: boolean }>): string[] {
+  return items.map((item) => `${item.completed ? "1" : "0"}:${item.content.trim()}`);
+}
+
+function buildCardUpdateActivityDetails(args: {
+  previous: CardUpdateSnapshot;
+  next: {
+    title: string;
+    description: string | null;
+    dueDate: Date | null;
+    labels: string[];
+    assigneeId: string | null;
+    checklistItems: Array<{ content: string; completed: boolean }>;
+  };
+}): Prisma.JsonObject | null {
+  const changedFields: string[] = [];
+
+  if (args.previous.title !== args.next.title) {
+    changedFields.push("title");
+  }
+
+  if (normaliseDescription(args.previous.description) !== args.next.description) {
+    changedFields.push("description");
+  }
+
+  if (dateKey(args.previous.dueDate) !== dateKey(args.next.dueDate)) {
+    changedFields.push("dueDate");
+  }
+
+  if (args.previous.assigneeId !== args.next.assigneeId) {
+    changedFields.push("assigneeId");
+  }
+
+  const previousLabels = [...args.previous.labels].sort();
+  const nextLabels = [...args.next.labels].sort();
+  if (!arraysEqual(previousLabels, nextLabels)) {
+    changedFields.push("labels");
+  }
+
+  const previousChecklist = checklistSignature(
+    [...args.previous.checklistItems]
+      .sort((left, right) => left.position - right.position)
+      .map((item) => ({
+        content: item.content,
+        completed: item.completed,
+      }))
+  );
+  const nextChecklist = checklistSignature(args.next.checklistItems);
+  if (!arraysEqual(previousChecklist, nextChecklist)) {
+    changedFields.push("checklistItems");
+  }
+
+  if (changedFields.length === 0) {
+    return null;
+  }
+
+  return { changedFields };
+}
+
+async function createCardActivity(
+  tx: Prisma.TransactionClient,
+  values: {
+    cardId: string;
+    boardId: string;
+    actorUserId: string;
+    eventType: BoardCardActivityData["eventType"];
+    details?: Prisma.JsonObject;
+  }
+) {
+  await tx.cardActivity.create({
+    data: {
+      cardId: values.cardId,
+      boardId: values.boardId,
+      actorUserId: values.actorUserId,
+      eventType: values.eventType,
+      details: values.details,
+    },
+  });
+
+  await pruneOldCardActivities(tx, values.boardId);
 }
 
 async function getAccessibleBoard(
@@ -268,7 +460,23 @@ async function getCardWithBoard(cardId: string) {
     where: { id: cardId },
     select: {
       id: true,
+      title: true,
+      description: true,
+      dueDate: true,
+      labels: true,
+      assigneeId: true,
+      position: true,
       columnId: true,
+      checklistItems: {
+        orderBy: {
+          position: "asc",
+        },
+        select: {
+          content: true,
+          completed: true,
+          position: true,
+        },
+      },
       column: {
         select: {
           boardId: true,
@@ -294,6 +502,23 @@ async function getCardRecord(cardId: string) {
       checklistItems: {
         orderBy: {
           position: "asc",
+        },
+      },
+      activities: {
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: CARD_ACTIVITY_RECENT_LIMIT,
+        include: {
+          actorUser: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              avatarUrl: true,
+              role: true,
+            },
+          },
         },
       },
     },
@@ -571,6 +796,23 @@ export async function createColumnAction(boardId: string): Promise<ColumnActionR
               position: "asc",
             },
           },
+          activities: {
+            orderBy: {
+              createdAt: "desc",
+            },
+            take: CARD_ACTIVITY_RECENT_LIMIT,
+            include: {
+              actorUser: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  avatarUrl: true,
+                  role: true,
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -734,30 +976,33 @@ export async function createCardAction(columnId: string, title: string): Promise
     },
   });
 
-  const card = await prisma.card.create({
-    data: {
-      columnId: column.id,
-      title: parsed.data.title,
-      position,
-      labels: [],
-    },
-    include: {
-      assignee: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          avatarUrl: true,
-          role: true,
-        },
+  const createdCard = await prisma.$transaction(async (tx) => {
+    const nextCard = await tx.card.create({
+      data: {
+        columnId: column.id,
+        title: parsed.data.title,
+        position,
+        labels: [],
       },
-      checklistItems: {
-        orderBy: {
-          position: "asc",
-        },
+      select: {
+        id: true,
       },
-    },
+    });
+
+    await createCardActivity(tx, {
+      cardId: nextCard.id,
+      boardId: board.id,
+      actorUserId: currentUser.id,
+      eventType: "CREATED",
+    });
+
+    return nextCard;
   });
+
+  const card = await getCardRecord(createdCard.id);
+  if (!card) {
+    return { error: "Card not found" };
+  }
 
   revalidateBoardViews(board.id);
   return { success: true, card: mapCard(card) };
@@ -800,17 +1045,39 @@ export async function updateCardAction(
   }
 
   const labels = parsed.data.labels.map((label) => label.trim()).filter(Boolean);
+  const nextDescription = normaliseDescription(parsed.data.description);
   const checklistItems = parsed.data.checklistItems.map((item) => ({
     content: item.content.trim(),
     completed: item.completed,
   }));
+  const activityDetails = buildCardUpdateActivityDetails({
+    previous: {
+      id: card.id,
+      title: card.title,
+      description: card.description,
+      dueDate: card.dueDate,
+      labels: card.labels,
+      assigneeId: card.assigneeId,
+      position: card.position,
+      columnId: card.columnId,
+      checklistItems: card.checklistItems,
+    },
+    next: {
+      title: parsed.data.title,
+      description: nextDescription,
+      dueDate,
+      labels,
+      assigneeId: parsed.data.assigneeId,
+      checklistItems,
+    },
+  });
 
   await prisma.$transaction(async (tx) => {
     await tx.card.update({
       where: { id: card.id },
       data: {
         title: parsed.data.title,
-        description: normaliseDescription(parsed.data.description),
+        description: nextDescription,
         labels,
         assigneeId: parsed.data.assigneeId,
         dueDate,
@@ -833,6 +1100,60 @@ export async function updateCardAction(
         })),
       });
     }
+
+    if (activityDetails) {
+      await createCardActivity(tx, {
+        cardId: card.id,
+        boardId: board.id,
+        actorUserId: currentUser.id,
+        eventType: "UPDATED",
+        details: activityDetails,
+      });
+    }
+  });
+
+  const updatedCard = await getCardRecord(card.id);
+  if (!updatedCard) {
+    return { error: "Card not found" };
+  }
+
+  revalidateBoardViews(board.id);
+  return { success: true, card: mapCard(updatedCard) };
+}
+
+export async function addCardCommentAction(
+  cardId: string,
+  content: string
+): Promise<CardActionResult> {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) return { error: "Not authenticated" };
+
+  const parsed = addCardCommentSchema.safeParse({ cardId, content });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const card = await getCardWithBoard(parsed.data.cardId);
+  if (!card) {
+    return { error: "Card not found" };
+  }
+
+  const board = await getAccessibleBoard(
+    { id: currentUser.id, role: currentUser.role },
+    card.column.boardId
+  );
+  if (!board) {
+    return { error: "Board not found" };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await createCardActivity(tx, {
+      cardId: card.id,
+      boardId: board.id,
+      actorUserId: currentUser.id,
+      eventType: "COMMENTED",
+      details: {
+        comment: parsed.data.content,
+      },
+    });
   });
 
   const updatedCard = await getCardRecord(card.id);
@@ -912,6 +1233,7 @@ export async function moveCardsAction(
           cards: {
             select: {
               id: true,
+              position: true,
             },
           },
         },
@@ -942,19 +1264,69 @@ export async function moveCardsAction(
     return { error: "Card positions are out of date. Refresh and try again." };
   }
 
-  await prisma.$transaction(
-    parsed.data.columns.flatMap((column) =>
-      column.cardIds.map((cardId, index) =>
-        prisma.card.update({
-          where: { id: cardId },
-          data: {
-            columnId: column.columnId,
-            position: index,
-          },
-        })
-      )
-    )
-  );
+  const previousCardLocations = new Map<string, { columnId: string; position: number }>();
+  board.columns.forEach((column) => {
+    column.cards.forEach((card) => {
+      previousCardLocations.set(card.id, { columnId: column.id, position: card.position });
+    });
+  });
+
+  const movedActivities: Array<{
+    cardId: string;
+    boardId: string;
+    actorUserId: string;
+    eventType: BoardCardActivityData["eventType"];
+    details: Prisma.JsonObject;
+  }> = [];
+
+  parsed.data.columns.forEach((column) => {
+    column.cardIds.forEach((cardId, index) => {
+      const previous = previousCardLocations.get(cardId);
+      if (!previous) {
+        return;
+      }
+
+      if (previous.columnId === column.columnId && previous.position === index) {
+        return;
+      }
+
+      movedActivities.push({
+        cardId,
+        boardId: board.id,
+        actorUserId: currentUser.id,
+        eventType: "MOVED",
+        details: {
+          fromColumnId: previous.columnId,
+          toColumnId: column.columnId,
+          fromPosition: previous.position,
+          toPosition: index,
+        },
+      });
+    });
+  });
+
+  await prisma.$transaction(async (tx) => {
+    for (const column of parsed.data.columns) {
+      await Promise.all(
+        column.cardIds.map((cardId, index) =>
+          tx.card.update({
+            where: { id: cardId },
+            data: {
+              columnId: column.columnId,
+              position: index,
+            },
+          })
+        )
+      );
+    }
+
+    if (movedActivities.length > 0) {
+      await tx.cardActivity.createMany({
+        data: movedActivities,
+      });
+      await pruneOldCardActivities(tx, board.id);
+    }
+  });
 
   revalidateBoardViews(board.id);
   return { success: true };

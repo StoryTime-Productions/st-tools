@@ -23,6 +23,8 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -33,7 +35,8 @@ jobs:
   deploy:
     name: Deploy to Vercel (Preview)
     runs-on: ubuntu-latest
-    needs: migrate
+    needs: [migrate]
+    if: ${{ needs.migrate.result == 'success' }}
     environment: preview
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -47,6 +50,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
 
       - name: Install Vercel CLI
         run: npm install --global vercel@latest

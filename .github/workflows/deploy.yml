@@ -7,9 +7,68 @@ on:
       - main
 
 jobs:
+  quality:
+    name: Quality checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Lint (zero warnings)
+        run: pnpm lint
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Type check
+        run: pnpm typecheck
+
+  test:
+    name: Unit tests & coverage
+    runs-on: ubuntu-latest
+    needs: [quality]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests with coverage
+        run: pnpm test:ci
+
   migrate:
     name: Run database migrations
     runs-on: ubuntu-latest
+    needs: [quality, test]
     environment: production
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -25,6 +84,8 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -35,7 +96,8 @@ jobs:
   deploy:
     name: Deploy to Vercel (Production)
     runs-on: ubuntu-latest
-    needs: migrate
+    needs: [quality, test, migrate]
+    if: ${{ needs.quality.result == 'success' && needs.test.result == 'success' && needs.migrate.result == 'success' }}
     environment: production
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -49,6 +111,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
 
       - name: Install Vercel CLI
         run: npm install --global vercel@latest

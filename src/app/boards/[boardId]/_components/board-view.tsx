@@ -23,6 +23,7 @@ import { Globe2, GripVertical, Lock, Plus, Trash2, UserPlus, Users } from "lucid
 import { toast } from "sonner";
 import {
   addBoardMemberAction,
+  addCardCommentAction,
   createCardAction,
   createColumnAction,
   deleteBoardAction,
@@ -46,7 +47,7 @@ import {
 } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -157,6 +158,7 @@ function createOptimisticCard(title: string, position: number): BoardCardData {
     assigneeId: null,
     assignee: null,
     checklistItems: [],
+    activities: [],
   };
 }
 
@@ -192,6 +194,7 @@ function buildOptimisticCard(
         position: index,
       }))
       .filter((item) => item.content.length > 0),
+    activities: card.activities,
   };
 }
 
@@ -317,8 +320,8 @@ function CardItem({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {card.labels.slice(0, 3).map((label) => (
-              <Badge key={label} variant="outline">
+            {card.labels.slice(0, 3).map((label, index) => (
+              <Badge key={`${label}-${index}`} variant="outline">
                 {label}
               </Badge>
             ))}
@@ -582,6 +585,9 @@ export function BoardView({ board }: BoardViewProps) {
 
   const boardState = boardQuery.data ?? board;
   const columns = boardState.columns;
+  const columnLookup = Object.fromEntries(columns.map((column) => [column.id, column.title]));
+  const showMemberManagementControls = !board.isPersonal && board.canManage;
+  const showInviteControls = showMemberManagementControls && !board.isOpenToWorkspace;
 
   const selectedCard = selectedCardId ? findCardById(columns, selectedCardId) : null;
   const inviteableMembers = boardState.allMembers.filter(
@@ -643,6 +649,21 @@ export function BoardView({ board }: BoardViewProps) {
         return;
       }
 
+      if (payload.table === "card_activities") {
+        const nextBoardId =
+          typeof payload.new.boardId === "string"
+            ? payload.new.boardId
+            : typeof payload.old.boardId === "string"
+              ? payload.old.boardId
+              : null;
+
+        if (nextBoardId === board.id) {
+          void invalidateBoardQuery(queryClient, board.id);
+        }
+
+        return;
+      }
+
       const currentColumnIds = new Set(currentBoard.columns.map((column) => column.id));
       const nextColumnId =
         typeof payload.new.columnId === "string"
@@ -673,6 +694,15 @@ export function BoardView({ board }: BoardViewProps) {
           event: "*",
           schema: "public",
           table: "cards",
+        },
+        (payload) => invalidateIfRelevant(payload)
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "card_activities",
         },
         (payload) => invalidateIfRelevant(payload)
       )
@@ -844,6 +874,29 @@ export function BoardView({ board }: BoardViewProps) {
       }));
       toast.success("Card updated");
       void invalidateBoardQuery(queryClient, board.id);
+    });
+  }
+
+  function handleAddComment(values: { cardId: string; content: string }): Promise<boolean> {
+    return new Promise((resolve) => {
+      startTransition(async () => {
+        const result = await addCardCommentAction(values.cardId, values.content);
+        if ("error" in result || !result.card) {
+          toast.error("error" in result ? result.error : "Unable to add comment");
+          void invalidateBoardQuery(queryClient, board.id);
+          resolve(false);
+          return;
+        }
+
+        updateBoardCache((current) => ({
+          ...current,
+          columns: replaceCard(current.columns, result.card!),
+        }));
+
+        toast.success("Comment added");
+        void invalidateBoardQuery(queryClient, board.id);
+        resolve(true);
+      });
     });
   }
 
@@ -1045,16 +1098,7 @@ export function BoardView({ board }: BoardViewProps) {
               <Badge variant="outline">Invite only</Badge>
             )}
           </div>
-          <div className="space-y-1">
-            <h2 className="text-2xl font-semibold tracking-tight">{board.title}</h2>
-            <p className="text-muted-foreground text-sm leading-6">
-              {board.isPersonal
-                ? "Personal planning space for your own work."
-                : board.isOpenToWorkspace
-                  ? "Shared board visible to everyone in the workspace."
-                  : "Shared board restricted to invited teammates."}
-            </p>
-          </div>
+          <h2 className="text-2xl font-semibold tracking-tight">{board.title}</h2>
         </div>
 
         {board.canManage ? (
@@ -1067,17 +1111,10 @@ export function BoardView({ board }: BoardViewProps) {
 
       <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
         <CardHeader className="flex flex-col gap-3 border-b sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Users className="size-4" />
-              Active members
-            </CardTitle>
-            <CardDescription>
-              {board.isPersonal
-                ? "Only you can view and edit this board."
-                : `${board.activeMembers.length} teammate${board.activeMembers.length === 1 ? "" : "s"} currently have access.`}
-            </CardDescription>
-          </div>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Users className="size-4" />
+            Active members
+          </CardTitle>
 
           <AvatarGroup>
             {board.activeMembers.slice(0, 5).map((member) => (
@@ -1094,8 +1131,8 @@ export function BoardView({ board }: BoardViewProps) {
             ) : null}
           </AvatarGroup>
         </CardHeader>
-        <CardContent className="space-y-4 pt-6">
-          {!board.isPersonal && board.canManage ? (
+        <CardContent className={cn("space-y-4", showMemberManagementControls ? "pt-6" : "pt-3")}>
+          {showMemberManagementControls ? (
             <label className="flex items-start gap-3 rounded-2xl border px-4 py-3">
               {board.isOpenToWorkspace ? (
                 <Globe2 className="mt-0.5 size-4" />
@@ -1118,7 +1155,7 @@ export function BoardView({ board }: BoardViewProps) {
             </label>
           ) : null}
 
-          {!board.isPersonal && !board.isOpenToWorkspace && board.canManage ? (
+          {showInviteControls ? (
             <div className="grid gap-3 rounded-2xl border px-4 py-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
               <div className="space-y-2">
                 <Label>Invite teammate</Label>
@@ -1191,12 +1228,7 @@ export function BoardView({ board }: BoardViewProps) {
 
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-3">
-          <div>
-            <h3 className="text-lg font-semibold tracking-tight">Board canvas</h3>
-            <p className="text-muted-foreground text-sm">
-              Drag columns and cards to reorder the workflow.
-            </p>
-          </div>
+          <h3 className="text-lg font-semibold tracking-tight">Board canvas</h3>
           <Button type="button" onClick={handleAddColumn} disabled={isPending}>
             <Plus className="size-4" />
             Add column
@@ -1248,6 +1280,7 @@ export function BoardView({ board }: BoardViewProps) {
           }
         }}
         card={selectedCard}
+        columnLookup={columnLookup}
         members={
           board.isPersonal
             ? board.activeMembers
@@ -1257,6 +1290,7 @@ export function BoardView({ board }: BoardViewProps) {
         }
         isPending={isPending}
         onSave={handleSaveCard}
+        onAddComment={handleAddComment}
         onDelete={handleDeleteCard}
       />
     </div>

@@ -1,4 +1,4 @@
-import type { Role } from "@prisma/client";
+import type { CardActivityEvent, Role } from "@prisma/client";
 
 export interface BoardMemberSummary {
   id: string;
@@ -16,6 +16,21 @@ export interface BoardChecklistItemData {
   position: number;
 }
 
+export interface BoardCardActivityData {
+  id: string;
+  eventType: CardActivityEvent;
+  createdAt: string;
+  actor: BoardMemberSummary | null;
+  details: {
+    changedFields?: string[];
+    fromColumnId?: string;
+    toColumnId?: string;
+    fromPosition?: number;
+    toPosition?: number;
+    comment?: string;
+  } | null;
+}
+
 export interface BoardCardData {
   id: string;
   title: string;
@@ -26,6 +41,7 @@ export interface BoardCardData {
   assigneeId: string | null;
   assignee: BoardMemberSummary | null;
   checklistItems: BoardChecklistItemData[];
+  activities: BoardCardActivityData[];
 }
 
 export interface BoardColumnData {

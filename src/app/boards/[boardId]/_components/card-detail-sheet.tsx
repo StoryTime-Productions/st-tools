@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import type { BoardCardData, BoardMemberSummary } from "@/app/boards/types";
+import type { BoardCardActivityData, BoardCardData, BoardMemberSummary } from "@/app/boards/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ interface CardDetailSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   card: BoardCardData | null;
+  columnLookup: Record<string, string>;
   members: BoardMemberSummary[];
   isPending: boolean;
   onSave: (values: {
@@ -40,6 +41,7 @@ interface CardDetailSheetProps {
     dueDate: string | null;
     checklistItems: Array<{ content: string; completed: boolean }>;
   }) => void;
+  onAddComment: (values: { cardId: string; content: string }) => Promise<boolean>;
   onDelete: (cardId: string) => void;
 }
 
@@ -64,19 +66,131 @@ function createDraftId(): string {
   return `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+const timelineFieldLabels: Record<string, string> = {
+  title: "title",
+  description: "description",
+  dueDate: "due date",
+  assigneeId: "assignee",
+  labels: "labels",
+  checklistItems: "checklist",
+};
+
+type TimelineFilterState = {
+  columnTransitions: boolean;
+  fieldUpdates: boolean;
+  comments: boolean;
+};
+
+const defaultTimelineFilters: TimelineFilterState = {
+  columnTransitions: true,
+  fieldUpdates: true,
+  comments: true,
+};
+
+function isColumnTransitionActivity(activity: BoardCardActivityData): boolean {
+  return (
+    activity.eventType === "MOVED" &&
+    Boolean(activity.details?.fromColumnId) &&
+    Boolean(activity.details?.toColumnId) &&
+    activity.details?.fromColumnId !== activity.details?.toColumnId
+  );
+}
+
+function isCommentActivity(activity: BoardCardActivityData): boolean {
+  return activity.eventType === "COMMENTED";
+}
+
+function matchesTimelineFilters(
+  activity: BoardCardActivityData,
+  filters: TimelineFilterState
+): boolean {
+  const columnTransition = isColumnTransitionActivity(activity);
+  if (columnTransition) {
+    return filters.columnTransitions;
+  }
+
+  const comment = isCommentActivity(activity);
+  if (comment) {
+    return filters.comments;
+  }
+
+  return filters.fieldUpdates;
+}
+
+function formatActivityTimestamp(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return "Unknown time";
+  }
+
+  return date.toLocaleString();
+}
+
+function getActivitySummary(
+  activity: BoardCardActivityData,
+  columnLookup: Record<string, string>
+): string {
+  if (activity.eventType === "CREATED") {
+    return "Card created";
+  }
+
+  if (activity.eventType === "COMMENTED") {
+    return "Commented";
+  }
+
+  if (activity.eventType === "MOVED") {
+    const fromColumnId = activity.details?.fromColumnId;
+    const toColumnId = activity.details?.toColumnId;
+    const fromPosition = activity.details?.fromPosition;
+    const toPosition = activity.details?.toPosition;
+
+    if (fromColumnId && toColumnId && fromColumnId !== toColumnId) {
+      const fromLabel = columnLookup[fromColumnId] ?? "another column";
+      const toLabel = columnLookup[toColumnId] ?? "another column";
+      return `Moved from ${fromLabel} to ${toLabel}`;
+    }
+
+    if (
+      typeof fromPosition === "number" &&
+      typeof toPosition === "number" &&
+      fromPosition !== toPosition
+    ) {
+      return `Reordered in column (${fromPosition + 1} -> ${toPosition + 1})`;
+    }
+
+    return "Card moved";
+  }
+
+  if (activity.eventType === "UPDATED") {
+    const changedFields = activity.details?.changedFields ?? [];
+    if (changedFields.length === 0) {
+      return "Card updated";
+    }
+
+    const labels = changedFields.map((field) => timelineFieldLabels[field] ?? field).slice(0, 4);
+    return `Updated ${labels.join(", ")}`;
+  }
+
+  return "Card updated";
+}
+
 function CardDetailSheetBody({
   card,
+  columnLookup,
   members,
   isPending,
   onOpenChange,
   onSave,
+  onAddComment,
   onDelete,
 }: {
   card: BoardCardData;
+  columnLookup: Record<string, string>;
   members: BoardMemberSummary[];
   isPending: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: CardDetailSheetProps["onSave"];
+  onAddComment: CardDetailSheetProps["onAddComment"];
   onDelete: CardDetailSheetProps["onDelete"];
 }) {
   const [title, setTitle] = useState(card.title);
@@ -91,7 +205,14 @@ function CardDetailSheetBody({
       completed: item.completed,
     }))
   );
+  const [commentDraft, setCommentDraft] = useState("");
+  const [timelineFilters, setTimelineFilters] =
+    useState<TimelineFilterState>(defaultTimelineFilters);
   const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
+
+  const filteredActivities = card.activities.filter((activity) =>
+    matchesTimelineFilters(activity, timelineFilters)
+  );
 
   const selectedAssignee = members.find((member) => member.id === assigneeId) ?? null;
   const labelPreview = labels
@@ -132,6 +253,25 @@ function CardDetailSheetBody({
     }
 
     onDelete(card.id);
+  }
+
+  async function handleAddComment() {
+    const content = commentDraft.trim();
+    if (content.length === 0) {
+      return;
+    }
+
+    const success = await onAddComment({ cardId: card.id, content });
+    if (success) {
+      setCommentDraft("");
+    }
+  }
+
+  function updateTimelineFilter(key: keyof TimelineFilterState, checked: boolean) {
+    setTimelineFilters((current) => ({
+      ...current,
+      [key]: checked,
+    }));
   }
 
   return (
@@ -242,8 +382,8 @@ function CardDetailSheetBody({
           />
           {labelPreview.length > 0 ? (
             <div className="flex flex-wrap gap-2 pt-1">
-              {labelPreview.map((label) => (
-                <Badge key={label} variant="outline">
+              {labelPreview.map((label, index) => (
+                <Badge key={`${label}-${index}`} variant="outline">
                   {label}
                 </Badge>
               ))}
@@ -255,9 +395,6 @@ function CardDetailSheetBody({
           <div className="flex items-center justify-between gap-3">
             <div>
               <Label>Checklist</Label>
-              <p className="text-muted-foreground text-xs">
-                Track the smaller steps needed to finish this card.
-              </p>
             </div>
             <Button
               type="button"
@@ -330,6 +467,97 @@ function CardDetailSheetBody({
             )}
           </div>
         </div>
+
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <Label htmlFor="card-comment">Add comment</Label>
+            <Textarea
+              id="card-comment"
+              value={commentDraft}
+              onChange={(event) => setCommentDraft(event.target.value)}
+              placeholder="Write a comment for this task"
+              className="min-h-24"
+              maxLength={2000}
+              disabled={isPending}
+            />
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  void handleAddComment();
+                }}
+                disabled={isPending || commentDraft.trim().length === 0}
+              >
+                Add comment
+              </Button>
+            </div>
+          </div>
+
+          <div>
+            <Label>Timeline</Label>
+            <p className="text-muted-foreground text-xs">
+              Showing {filteredActivities.length} of {card.activities.length} timeline entries
+            </p>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-3">
+            <label className="hover:bg-muted/40 flex items-center gap-2 rounded-xl border px-3 py-2 text-sm">
+              <input
+                type="checkbox"
+                checked={timelineFilters.columnTransitions}
+                onChange={(event) =>
+                  updateTimelineFilter("columnTransitions", event.target.checked)
+                }
+                className="h-4 w-4 rounded border"
+              />
+              <span>Column transitions</span>
+            </label>
+
+            <label className="hover:bg-muted/40 flex items-center gap-2 rounded-xl border px-3 py-2 text-sm">
+              <input
+                type="checkbox"
+                checked={timelineFilters.fieldUpdates}
+                onChange={(event) => updateTimelineFilter("fieldUpdates", event.target.checked)}
+                className="h-4 w-4 rounded border"
+              />
+              <span>Field updates</span>
+            </label>
+
+            <label className="hover:bg-muted/40 flex items-center gap-2 rounded-xl border px-3 py-2 text-sm">
+              <input
+                type="checkbox"
+                checked={timelineFilters.comments}
+                onChange={(event) => updateTimelineFilter("comments", event.target.checked)}
+                className="h-4 w-4 rounded border"
+              />
+              <span>Comments</span>
+            </label>
+          </div>
+
+          <div className="space-y-2">
+            {filteredActivities.length === 0 ? (
+              <div className="text-muted-foreground rounded-2xl border border-dashed px-4 py-3 text-sm">
+                No timeline entries match the selected filters.
+              </div>
+            ) : (
+              filteredActivities.map((activity) => (
+                <div key={activity.id} className="space-y-1 rounded-2xl border px-3 py-3">
+                  <p className="text-sm font-medium">
+                    {getActivitySummary(activity, columnLookup)}
+                  </p>
+                  {activity.details?.comment ? (
+                    <p className="text-sm whitespace-pre-wrap">{activity.details.comment}</p>
+                  ) : null}
+                  <p className="text-muted-foreground text-xs">
+                    {activity.actor ? (activity.actor.name ?? activity.actor.email) : "System"} ·{" "}
+                    {formatActivityTimestamp(activity.createdAt)}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
 
       <SheetFooter className="border-t px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -358,9 +586,11 @@ export function CardDetailSheet({
   open,
   onOpenChange,
   card,
+  columnLookup,
   members,
   isPending,
   onSave,
+  onAddComment,
   onDelete,
 }: CardDetailSheetProps) {
   return (
@@ -369,7 +599,7 @@ export function CardDetailSheet({
         <SheetHeader>
           <SheetTitle>{card?.title ?? "Card details"}</SheetTitle>
           <SheetDescription>
-            Update task details, labels, assignee, due date, and checklist progress.
+            Update task details, labels, assignee, due date, checklist, and comments.
           </SheetDescription>
         </SheetHeader>
 
@@ -377,10 +607,12 @@ export function CardDetailSheet({
           <CardDetailSheetBody
             key={card.id}
             card={card}
+            columnLookup={columnLookup}
             members={members}
             isPending={isPending}
             onOpenChange={onOpenChange}
             onSave={onSave}
+            onAddComment={onAddComment}
             onDelete={onDelete}
           />
         ) : null}

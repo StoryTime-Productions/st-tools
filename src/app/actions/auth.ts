@@ -32,6 +32,20 @@ async function resolveSiteOrigin(): Promise<string> {
   return "http://localhost:3000";
 }
 
+function resolveAuthEmail(user: {
+  email?: string | null;
+  user_metadata?: Record<string, unknown> | null;
+}): string | null {
+  const metadataEmail =
+    typeof user.user_metadata?.email === "string" ? user.user_metadata.email : null;
+  const candidate = user.email ?? metadataEmail;
+  if (!candidate) {
+    return null;
+  }
+  const normalized = candidate.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
 const signUpSchema = z
   .object({
     email: z.string().email("Invalid email address"),
@@ -79,14 +93,24 @@ export async function signUpAction(
 
   // Email confirmation is disabled on this project — session is immediately available.
   if (data.user) {
-    await prisma.user.upsert({
-      where: { id: data.user.id },
-      update: {},
-      create: {
-        id: data.user.id,
-        email: data.user.email!,
-      },
-    });
+    const email = resolveAuthEmail(data.user);
+    if (!email) {
+      return { error: "Could not determine an email for this account." };
+    }
+
+    try {
+      await prisma.user.upsert({
+        where: { id: data.user.id },
+        update: {},
+        create: {
+          id: data.user.id,
+          email,
+        },
+      });
+    } catch (upsertError) {
+      console.error("Failed to sync sign-up user profile", upsertError);
+      return { error: "Could not sync your account profile." };
+    }
   }
 
   redirect("/dashboard");

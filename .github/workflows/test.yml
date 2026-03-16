@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -21,13 +23,44 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: latest
+          version: 10.30.3
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
       - name: Run tests with coverage
         run: pnpm test:ci
+
+      - name: Ensure coverage report contains executable lines
+        run: |
+          if [ ! -f coverage/lcov.info ]; then
+            echo "coverage/lcov.info was not generated."
+            exit 1
+          fi
+
+          if ! grep -q "^DA:" coverage/lcov.info; then
+            echo "coverage/lcov.info has no executable line entries (DA)."
+            echo "No tests appear to have run."
+            exit 1
+          fi
+
+      - name: Fetch base branch for patch coverage
+        run: git fetch origin "${{ github.base_ref }}" --depth=1
+
+      - name: Enforce patch coverage >= 70%
+        run: |
+          python3 -m pip install --disable-pip-version-check --no-input diff-cover
+          DIFF_COVER_OUTPUT="$(diff-cover coverage/lcov.info --compare-branch="origin/${{ github.base_ref }}" --fail-under=70)"
+          echo "$DIFF_COVER_OUTPUT"
+
+          if echo "$DIFF_COVER_OUTPUT" | grep -q "No lines with coverage information in this diff."; then
+            echo "diff-cover could not map changed lines to coverage data."
+            echo "Failing to avoid a false-green patch coverage check."
+            exit 1
+          fi
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

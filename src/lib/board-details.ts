@@ -1,9 +1,15 @@
 import "server-only";
 
-import type { Role } from "@prisma/client";
-import type { BoardDetailsData, BoardMemberSummary } from "@/app/boards/types";
+import type { Prisma, Role } from "@prisma/client";
+import type {
+  BoardCardActivityData,
+  BoardDetailsData,
+  BoardMemberSummary,
+} from "@/app/boards/types";
 import { getAccessibleBoardWhere, sortUsersByDisplayName } from "@/lib/boards";
 import { prisma } from "@/lib/prisma";
+
+const CARD_ACTIVITY_RECENT_LIMIT = 50;
 
 interface BoardDataActor {
   id: string;
@@ -23,6 +29,66 @@ function mapMember(user: {
     email: user.email,
     avatarUrl: user.avatarUrl,
     role: user.role,
+  };
+}
+
+function mapActivityDetails(details: Prisma.JsonValue | null): BoardCardActivityData["details"] {
+  if (!details || typeof details !== "object" || Array.isArray(details)) {
+    return null;
+  }
+
+  const payload = details as Record<string, unknown>;
+  const changedFields = Array.isArray(payload.changedFields)
+    ? payload.changedFields.filter((item): item is string => typeof item === "string")
+    : undefined;
+
+  const fromColumnId = typeof payload.fromColumnId === "string" ? payload.fromColumnId : undefined;
+  const toColumnId = typeof payload.toColumnId === "string" ? payload.toColumnId : undefined;
+  const fromPosition = typeof payload.fromPosition === "number" ? payload.fromPosition : undefined;
+  const toPosition = typeof payload.toPosition === "number" ? payload.toPosition : undefined;
+  const commentCandidate = typeof payload.comment === "string" ? payload.comment.trim() : "";
+  const comment = commentCandidate.length > 0 ? commentCandidate : undefined;
+
+  if (
+    !changedFields &&
+    !fromColumnId &&
+    !toColumnId &&
+    !comment &&
+    typeof fromPosition === "undefined" &&
+    typeof toPosition === "undefined"
+  ) {
+    return null;
+  }
+
+  return {
+    changedFields,
+    fromColumnId,
+    toColumnId,
+    fromPosition,
+    toPosition,
+    comment,
+  };
+}
+
+function mapCardActivity(activity: {
+  id: string;
+  eventType: BoardCardActivityData["eventType"];
+  createdAt: Date;
+  details: Prisma.JsonValue | null;
+  actorUser: {
+    id: string;
+    name: string | null;
+    email: string;
+    avatarUrl: string | null;
+    role: BoardMemberSummary["role"];
+  } | null;
+}): BoardCardActivityData {
+  return {
+    id: activity.id,
+    eventType: activity.eventType,
+    createdAt: activity.createdAt.toISOString(),
+    details: mapActivityDetails(activity.details),
+    actor: activity.actorUser ? mapMember(activity.actorUser) : null,
   };
 }
 
@@ -129,6 +195,19 @@ function normaliseBoardData(
           completed: boolean;
           position: number;
         }>;
+        activities: Array<{
+          id: string;
+          eventType: BoardCardActivityData["eventType"];
+          createdAt: Date;
+          details: Prisma.JsonValue | null;
+          actorUser: {
+            id: string;
+            name: string | null;
+            email: string;
+            avatarUrl: string | null;
+            role: BoardMemberSummary["role"];
+          } | null;
+        }>;
       }>;
     }>;
   },
@@ -171,6 +250,9 @@ function normaliseBoardData(
                 completed: item.completed,
                 position: item.position,
               })),
+            activities: card.activities
+              .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+              .map(mapCardActivity),
           })),
       })),
   };
@@ -231,6 +313,23 @@ export async function getBoardDetailsData(
                 checklistItems: {
                   orderBy: {
                     position: "asc",
+                  },
+                },
+                activities: {
+                  orderBy: {
+                    createdAt: "desc",
+                  },
+                  take: CARD_ACTIVITY_RECENT_LIMIT,
+                  include: {
+                    actorUser: {
+                      select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                        avatarUrl: true,
+                        role: true,
+                      },
+                    },
                   },
                 },
               },

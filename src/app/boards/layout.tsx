@@ -11,12 +11,7 @@ export default async function BoardsLayout({ children }: { children: ReactNode }
   }
 
   return (
-    <WorkspaceShell
-      user={user}
-      activeNav="boards"
-      title="Boards"
-      description="Create and manage private Kanban boards for your own work."
-    >
+    <WorkspaceShell user={user} activeNav="boards" title="Boards">
       {children}
     </WorkspaceShell>
   );

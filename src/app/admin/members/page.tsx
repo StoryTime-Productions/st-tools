@@ -69,10 +69,7 @@ export default async function AdminMembersPage() {
 
       <Card className="border-border/70 bg-background/85 overflow-hidden rounded-3xl shadow-none">
         <CardHeader className="border-border/60 flex flex-col gap-2 border-b sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle>Members</CardTitle>
-            <CardDescription>Review and update workspace roles.</CardDescription>
-          </div>
+          <CardTitle>Members</CardTitle>
           <Badge variant="outline">{adminCount} admin</Badge>
         </CardHeader>
         <CardContent className="p-0">

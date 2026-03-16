@@ -1,0 +1,1 @@
+ALTER TYPE "CardActivityEvent" ADD VALUE 'COMMENTED';

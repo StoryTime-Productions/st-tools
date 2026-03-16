@@ -64,9 +64,11 @@ export async function updateAvatarAction(formData: FormData): Promise<ProfileAct
     data: { publicUrl },
   } = supabase.storage.from("avatars").getPublicUrl(path);
 
+  const cacheBustedAvatarUrl = `${publicUrl}?v=${Date.now()}`;
+
   await prisma.user.update({
     where: { id: user.id },
-    data: { avatarUrl: publicUrl },
+    data: { avatarUrl: cacheBustedAvatarUrl },
   });
 
   revalidatePath("/settings/profile");

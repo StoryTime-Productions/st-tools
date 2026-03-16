@@ -10,14 +10,7 @@ import { z } from "zod";
 import { signInAction, signInWithGoogleAction } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Form,
   FormControl,
@@ -66,7 +59,6 @@ export default function SignInPage() {
       <Card className="border-border/70 bg-background/95 w-full rounded-3xl shadow-none">
         <CardHeader>
           <CardTitle className="text-2xl">Sign in</CardTitle>
-          <CardDescription>Welcome back — enter your credentials</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>

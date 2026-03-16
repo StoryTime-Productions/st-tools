@@ -5,9 +5,10 @@ import { ArrowUpRight, BookOpen, Clock3, FolderKanban, User, Users } from "lucid
 import { getCurrentUser } from "@/lib/get-current-user";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { WorkspaceShell } from "@/components/layout/workspace-shell";
 import { LiveTimeWeather } from "./_components/live-time-weather";
+import { OnlineUsersCard } from "./_components/online-users-card";
 import { PuppyOfTheDayCard } from "./_components/puppy-of-the-day";
 
 type DashboardBadgeVariant = "default" | "secondary" | "destructive" | "outline" | "ghost" | "link";
@@ -15,7 +16,6 @@ type DashboardBadgeVariant = "default" | "secondary" | "destructive" | "outline"
 type ModuleItem = {
   href: string;
   title: string;
-  description: string;
   icon: LucideIcon;
   badge: string;
   badgeVariant: DashboardBadgeVariant;
@@ -24,6 +24,12 @@ type ModuleItem = {
 
 function ModuleCard({ item }: { item: ModuleItem }) {
   const Icon = item.icon;
+  const badgeClassName =
+    item.badge === "Live"
+      ? "border-emerald-200 bg-emerald-100 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-900/30 dark:text-emerald-300"
+      : item.badge === "Soon"
+        ? "border-rose-200 bg-rose-100 text-rose-800 dark:border-rose-900/40 dark:bg-rose-900/30 dark:text-rose-300"
+        : undefined;
 
   const content = (
     <Card
@@ -37,12 +43,11 @@ function ModuleCard({ item }: { item: ModuleItem }) {
           <div className="bg-muted text-foreground flex size-12 items-center justify-center rounded-2xl">
             <Icon className="size-5" />
           </div>
-          <Badge variant={item.badgeVariant}>{item.badge}</Badge>
+          <Badge variant={item.badgeVariant} className={badgeClassName}>
+            {item.badge}
+          </Badge>
         </div>
-        <div className="space-y-1">
-          <CardTitle className="text-base">{item.title}</CardTitle>
-          <CardDescription className="leading-6">{item.description}</CardDescription>
-        </div>
+        <CardTitle className="text-base">{item.title}</CardTitle>
       </CardHeader>
       <CardContent className="text-muted-foreground flex items-center gap-2 text-sm font-medium">
         <span>{item.disabled ? "Planned area" : "Open area"}</span>
@@ -76,7 +81,6 @@ export default async function DashboardPage() {
     {
       href: "/settings/profile",
       title: "Profile settings",
-      description: "Update your name and avatar so the workspace stays accurate and recognizable.",
       icon: User,
       badge: "Live",
       badgeVariant: "secondary",
@@ -84,9 +88,6 @@ export default async function DashboardPage() {
     {
       href: isAdmin ? "/admin/members" : "#",
       title: "Member access",
-      description: isAdmin
-        ? "Review roles, keep permissions tight, and manage who can administer the workspace."
-        : "Reserved for admins to manage roles and workspace access when needed.",
       icon: Users,
       badge: isAdmin ? "Live" : "Admin",
       badgeVariant: isAdmin ? "secondary" : "outline",
@@ -95,7 +96,6 @@ export default async function DashboardPage() {
     {
       href: "/boards",
       title: "Kanban boards",
-      description: "Organize work with boards, columns, and cards in a familiar project flow.",
       icon: FolderKanban,
       badge: "Live",
       badgeVariant: "secondary",
@@ -103,8 +103,6 @@ export default async function DashboardPage() {
     {
       href: "#",
       title: "Pomodoro",
-      description:
-        "Track deep-work sessions and personal productivity directly from the workspace.",
       icon: Clock3,
       badge: "Soon",
       badgeVariant: "outline",
@@ -113,7 +111,6 @@ export default async function DashboardPage() {
     {
       href: "#",
       title: "Knowledge base",
-      description: "Capture internal documentation and make team context easier to find.",
       icon: BookOpen,
       badge: "Soon",
       badgeVariant: "outline",
@@ -122,12 +119,7 @@ export default async function DashboardPage() {
   ];
 
   return (
-    <WorkspaceShell
-      user={user}
-      activeNav="overview"
-      title="Dashboard"
-      description="Overview of workspace status, access, and quick links."
-    >
+    <WorkspaceShell user={user} activeNav="overview" title="Dashboard">
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-6">
           <Card className="overflow-hidden rounded-4xl border-0 bg-slate-950 text-white shadow-xl shadow-slate-950/10">
@@ -137,10 +129,7 @@ export default async function DashboardPage() {
           </Card>
 
           <section className="space-y-4">
-            <div className="space-y-1">
-              <p className="text-muted-foreground text-xs font-medium tracking-[0.24em] uppercase">
-                Workspace areas
-              </p>
+            <div>
               <h3 className="text-2xl font-semibold tracking-tight">Quick access</h3>
             </div>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -153,6 +142,14 @@ export default async function DashboardPage() {
 
         <div className="space-y-6">
           <PuppyOfTheDayCard />
+          <OnlineUsersCard
+            currentUser={{
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              avatarUrl: user.avatarUrl,
+            }}
+          />
         </div>
       </div>
     </WorkspaceShell>
