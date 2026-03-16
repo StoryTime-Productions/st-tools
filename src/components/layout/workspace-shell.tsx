@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export type WorkspaceNavKey = "overview" | "profile" | "members";
+export type WorkspaceNavKey = "overview" | "boards" | "profile" | "members";
 
 export interface WorkspaceShellUser {
   name: string | null;
@@ -124,6 +124,13 @@ export function WorkspaceShell({
       key: "overview",
     },
     {
+      href: "/boards",
+      label: "Boards",
+      caption: "Personal Kanban planning",
+      icon: FolderKanban,
+      key: "boards",
+    },
+    {
       href: "/settings/profile",
       label: "Profile",
       caption: "Identity and avatar settings",
@@ -143,14 +150,6 @@ export function WorkspaceShell({
   }
 
   const upcomingItems: SidebarItemConfig[] = [
-    {
-      href: "#",
-      label: "Boards",
-      caption: "Visual project planning",
-      icon: FolderKanban,
-      disabled: true,
-      badge: "Soon",
-    },
     {
       href: "#",
       label: "Focus",

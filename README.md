@@ -64,6 +64,25 @@ Open [http://localhost:3000](http://localhost:3000).
 | `pnpm db:migrate`   | Run Prisma migrations  |
 | `pnpm db:studio`    | Open Prisma Studio     |
 
+## Deployment Environments
+
+Two separate Supabase projects are used to isolate production from preview:
+
+| Environment    | Trigger                     | Database                    |
+| -------------- | --------------------------- | --------------------------- |
+| **Production** | Push to `master`/`main`     | Production Supabase project |
+| **Preview**    | Pull request opened/updated | Preview Supabase project    |
+
+Migrations run automatically via GitHub Actions before each deploy.
+
+### Required external setup
+
+1. Create two Supabase projects — one for production, one for preview.
+2. Add production credentials as Vercel **Production** environment variables and as GitHub Actions secrets (`DATABASE_URL`, `DIRECT_URL`).
+3. Add preview credentials as Vercel **Preview** environment variables and as GitHub Actions secrets (`PREVIEW_DATABASE_URL`, `PREVIEW_DIRECT_URL`).
+4. Add `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` as GitHub Actions secrets.
+5. Add allowed redirect URLs for each Supabase project (production URL and Vercel preview URL pattern).
+
 ## Contributing
 
 See [FEATURE_SET.md](./FEATURE_SET.md) for branch naming, commit format, and quality gate requirements.

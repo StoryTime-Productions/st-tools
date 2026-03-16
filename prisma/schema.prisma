@@ -38,12 +38,13 @@ enum Role {
 // ─── Kanban ────────────────────────────────────────────────────────────────────
 
 model Board {
-  id          String   @id @default(uuid())
-  title       String
-  description String?
-  isPersonal  Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String   @id @default(uuid())
+  title             String
+  description       String?
+  isPersonal        Boolean  @default(false)
+  isOpenToWorkspace Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   ownerId String
   owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
@@ -95,7 +96,21 @@ model Card {
   assigneeId String?
   assignee   User?   @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
 
+  checklistItems CardChecklistItem[]
+
   @@map("cards")
+}
+
+model CardChecklistItem {
+  id        String  @id @default(uuid())
+  content   String
+  completed Boolean @default(false)
+  position  Int
+
+  cardId String
+  card   Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@map("card_checklist_items")
 }
 
 // ─── Pomodoro & Leaderboard ────────────────────────────────────────────────────

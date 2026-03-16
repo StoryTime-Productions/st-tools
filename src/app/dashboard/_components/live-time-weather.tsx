@@ -143,15 +143,25 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
     [now]
   );
 
-  const liveTime = useMemo(
-    () =>
-      now.toLocaleTimeString(undefined, {
-        hour: "numeric",
-        minute: "2-digit",
-        second: "2-digit",
-      }),
-    [now]
-  );
+  const liveTime = useMemo(() => {
+    const parts = new Intl.DateTimeFormat(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+      second: "2-digit",
+    }).formatToParts(now);
+
+    return {
+      timeText: parts
+        .filter(
+          (part) =>
+            part.type !== "dayPeriod" &&
+            !(part.type === "literal" && part.value.trim().length === 0)
+        )
+        .map((part) => part.value)
+        .join(""),
+      dayPeriod: parts.find((part) => part.type === "dayPeriod")?.value ?? null,
+    };
+  }, [now]);
 
   const weatherView = useMemo(() => {
     if (isWeatherLoading) {
@@ -170,13 +180,14 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
     }
 
     const { label, Icon } = describeWeather(weather.weatherCode);
-    const displayUnit = weather.unit.replace(/[^A-Za-z]/g, "") || "C";
+    const displayUnit = weather.unit.replace(/\s+/g, "") || "°C";
 
     return (
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-200">
         <Icon className="size-4" />
         <span>
-          {Math.round(weather.temperature)} {displayUnit}
+          {Math.round(weather.temperature)}
+          {displayUnit}
         </span>
         <span className="text-slate-400">-</span>
         <span>{label}</span>
@@ -196,7 +207,13 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
         Welcome back, {firstName}
       </h2>
       <p className="text-sm text-slate-300 md:text-base">
-        {liveDate} - {liveTime}
+        {liveDate} -{" "}
+        <span className="inline-flex items-baseline gap-2">
+          <span className="tabular-nums">{liveTime.timeText}</span>
+          {liveTime.dayPeriod ? (
+            <span className="inline-flex w-10 justify-start">{liveTime.dayPeriod}</span>
+          ) : null}
+        </span>
       </p>
       {weatherView}
     </div>

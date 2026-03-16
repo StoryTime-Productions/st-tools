@@ -1,19 +1,17 @@
-name: deploy-production
+name: preview-deploy
 
 on:
-  push:
-    branches:
-      - master
-      - main
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 jobs:
   migrate:
-    name: Run database migrations
+    name: Run preview database migrations
     runs-on: ubuntu-latest
-    environment: production
+    environment: preview
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      DIRECT_URL: ${{ secrets.DIRECT_URL }}
+      DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.PREVIEW_DIRECT_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,10 +31,10 @@ jobs:
         run: pnpm prisma migrate deploy
 
   deploy:
-    name: Deploy to Vercel (Production)
+    name: Deploy to Vercel (Preview)
     runs-on: ubuntu-latest
     needs: migrate
-    environment: production
+    environment: preview
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -54,10 +52,10 @@ jobs:
         run: npm install --global vercel@latest
 
       - name: Pull Vercel environment
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Build
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Deploy
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }}

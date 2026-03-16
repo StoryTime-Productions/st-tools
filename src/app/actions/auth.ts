@@ -1,9 +1,36 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
+
+function trimTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, "");
+}
+
+async function resolveSiteOrigin(): Promise<string> {
+  const configuredOrigin = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.SITE_URL;
+  if (configuredOrigin) {
+    return trimTrailingSlash(configuredOrigin);
+  }
+
+  const headerStore = await headers();
+  const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host");
+  if (host) {
+    const proto =
+      headerStore.get("x-forwarded-proto") ??
+      (host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https");
+    return `${proto}://${host}`;
+  }
+
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+
+  return "http://localhost:3000";
+}
 
 const signUpSchema = z
   .object({
@@ -32,8 +59,7 @@ export async function signUpAction(
   }
 
   const supabase = await createClient();
-
-  const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const origin = await resolveSiteOrigin();
 
   const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
@@ -68,7 +94,7 @@ export async function signUpAction(
 
 export async function signInWithGoogleAction(): Promise<AuthActionResult> {
   const supabase = await createClient();
-  const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const origin = await resolveSiteOrigin();
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
