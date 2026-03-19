@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/get-current-user";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ProfileForm } from "./_components/profile-form";
 import { AvatarForm } from "./_components/avatar-form";
@@ -14,23 +14,11 @@ export default async function ProfileSettingsPage() {
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
       <div className="space-y-6">
-        <div className="space-y-1">
-          <p className="text-muted-foreground text-xs font-medium tracking-[0.24em] uppercase">
-            Account
-          </p>
-          <h2 className="text-2xl font-semibold tracking-tight">Profile settings</h2>
-          <p className="text-muted-foreground text-sm leading-6">
-            Update the personal details used throughout StoryTime Tools.
-          </p>
-        </div>
+        <h2 className="text-2xl font-semibold tracking-tight">Profile settings</h2>
 
         <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
           <CardHeader>
             <CardTitle className="text-base">Profile picture</CardTitle>
-            <CardDescription>
-              Upload an image shown in navigation, member management, and future collaboration
-              views.
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <AvatarForm avatarUrl={user.avatarUrl} displayName={user.name} />
@@ -40,9 +28,6 @@ export default async function ProfileSettingsPage() {
         <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
           <CardHeader>
             <CardTitle className="text-base">Display name</CardTitle>
-            <CardDescription>
-              Keep this up to date so teammates can quickly identify you across workspace surfaces.
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <ProfileForm initialName={user.name} />

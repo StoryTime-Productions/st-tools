@@ -11,12 +11,7 @@ export default async function SettingsLayout({ children }: { children: ReactNode
   }
 
   return (
-    <WorkspaceShell
-      user={user}
-      activeNav="profile"
-      title="Settings"
-      description="Manage account settings and preferences."
-    >
+    <WorkspaceShell user={user} activeNav="profile" title="Settings">
       {children}
     </WorkspaceShell>
   );

@@ -5,14 +5,17 @@ import type { Role } from "@prisma/client";
 import type { LucideIcon } from "lucide-react";
 import { BookOpen, Clock3, FolderKanban, Home, LogOut, Settings, Users } from "lucide-react";
 import { signOutAction } from "@/app/actions/auth";
+import { OnlinePresenceTracker } from "@/components/layout/online-presence-tracker";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export type WorkspaceNavKey = "overview" | "profile" | "members";
+export type WorkspaceNavKey = "overview" | "boards" | "profile" | "members";
 
 export interface WorkspaceShellUser {
+  id: string;
   name: string | null;
   email: string;
   avatarUrl: string | null;
@@ -23,7 +26,7 @@ interface WorkspaceShellProps {
   user: WorkspaceShellUser;
   activeNav: WorkspaceNavKey;
   title: string;
-  description: string;
+  description?: string;
   children: ReactNode;
 }
 
@@ -124,6 +127,13 @@ export function WorkspaceShell({
       key: "overview",
     },
     {
+      href: "/boards",
+      label: "Boards",
+      caption: "Personal Kanban planning",
+      icon: FolderKanban,
+      key: "boards",
+    },
+    {
       href: "/settings/profile",
       label: "Profile",
       caption: "Identity and avatar settings",
@@ -145,14 +155,6 @@ export function WorkspaceShell({
   const upcomingItems: SidebarItemConfig[] = [
     {
       href: "#",
-      label: "Boards",
-      caption: "Visual project planning",
-      icon: FolderKanban,
-      disabled: true,
-      badge: "Soon",
-    },
-    {
-      href: "#",
       label: "Focus",
       caption: "Pomodoro sessions",
       icon: Clock3,
@@ -171,6 +173,16 @@ export function WorkspaceShell({
 
   return (
     <div className="bg-muted/30 min-h-screen">
+      {activeNav === "overview" ? null : (
+        <OnlinePresenceTracker
+          user={{
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            avatarUrl: user.avatarUrl,
+          }}
+        />
+      )}
       <div className="mx-auto flex min-h-screen max-w-7xl">
         <aside className="border-border/70 bg-background/90 hidden w-72 shrink-0 border-r px-4 py-5 backdrop-blur lg:flex lg:flex-col">
           <div className="flex items-center gap-3 px-2 py-2">
@@ -183,7 +195,6 @@ export function WorkspaceShell({
             />
             <div>
               <p className="text-sm font-semibold tracking-tight">StoryTime Tools</p>
-              <p className="text-muted-foreground text-xs">Internal workspace</p>
             </div>
           </div>
 
@@ -220,10 +231,13 @@ export function WorkspaceShell({
                   StoryTime Tools
                 </p>
                 <h1 className="truncate text-lg font-semibold tracking-tight">{title}</h1>
-                <p className="text-muted-foreground truncate text-sm">{description}</p>
+                {description ? (
+                  <p className="text-muted-foreground truncate text-sm">{description}</p>
+                ) : null}
               </div>
 
               <div className="flex items-center gap-2 md:gap-3">
+                <ThemeToggle />
                 <div className="border-border/70 bg-background hidden items-center gap-3 rounded-2xl border px-3 py-2 md:flex">
                   <Avatar className="h-9 w-9">
                     <AvatarImage src={user.avatarUrl ?? undefined} />

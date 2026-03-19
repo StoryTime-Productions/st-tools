@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: st-tools-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: st_tools_local
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "54329:5432"
+    volumes:
+      - st_tools_db_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d st_tools_local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  st_tools_db_data:

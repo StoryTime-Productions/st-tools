@@ -75,7 +75,6 @@ export default function SignUpPage() {
     <Card className="border-border/70 bg-background/95 w-full max-w-md rounded-3xl shadow-none">
       <CardHeader>
         <CardTitle className="text-2xl">Create an account</CardTitle>
-        <CardDescription>Enter your details to get started</CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>

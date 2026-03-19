@@ -13,12 +13,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   }
 
   return (
-    <WorkspaceShell
-      user={user}
-      activeNav="members"
-      title="Admin"
-      description="Manage users and application settings."
-    >
+    <WorkspaceShell user={user} activeNav="members" title="Admin">
       {children}
     </WorkspaceShell>
   );

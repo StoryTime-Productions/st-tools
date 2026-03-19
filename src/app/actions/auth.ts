@@ -1,9 +1,50 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
+
+function trimTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, "");
+}
+
+async function resolveSiteOrigin(): Promise<string> {
+  const configuredOrigin = process.env.NEXT_PUBLIC_SITE_URL ?? process.env.SITE_URL;
+  if (configuredOrigin) {
+    return trimTrailingSlash(configuredOrigin);
+  }
+
+  const headerStore = await headers();
+  const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host");
+  if (host) {
+    const proto =
+      headerStore.get("x-forwarded-proto") ??
+      (host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https");
+    return `${proto}://${host}`;
+  }
+
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+
+  return "http://localhost:3000";
+}
+
+function resolveAuthEmail(user: {
+  email?: string | null;
+  user_metadata?: Record<string, unknown> | null;
+}): string | null {
+  const metadataEmail =
+    typeof user.user_metadata?.email === "string" ? user.user_metadata.email : null;
+  const candidate = user.email ?? metadataEmail;
+  if (!candidate) {
+    return null;
+  }
+  const normalized = candidate.trim();
+  return normalized.length > 0 ? normalized : null;
+}
 
 const signUpSchema = z
   .object({
@@ -32,8 +73,7 @@ export async function signUpAction(
   }
 
   const supabase = await createClient();
-
-  const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const origin = await resolveSiteOrigin();
 
   const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
@@ -53,14 +93,24 @@ export async function signUpAction(
 
   // Email confirmation is disabled on this project — session is immediately available.
   if (data.user) {
-    await prisma.user.upsert({
-      where: { id: data.user.id },
-      update: {},
-      create: {
-        id: data.user.id,
-        email: data.user.email!,
-      },
-    });
+    const email = resolveAuthEmail(data.user);
+    if (!email) {
+      return { error: "Could not determine an email for this account." };
+    }
+
+    try {
+      await prisma.user.upsert({
+        where: { id: data.user.id },
+        update: {},
+        create: {
+          id: data.user.id,
+          email,
+        },
+      });
+    } catch (upsertError) {
+      console.error("Failed to sync sign-up user profile", upsertError);
+      return { error: "Could not sync your account profile." };
+    }
   }
 
   redirect("/dashboard");
@@ -68,7 +118,7 @@ export async function signUpAction(
 
 export async function signInWithGoogleAction(): Promise<AuthActionResult> {
   const supabase = await createClient();
-  const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const origin = await resolveSiteOrigin();
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
