@@ -127,7 +127,7 @@ describe("OnlineUsersCard", () => {
     });
   });
 
-  it("syncs presence users, sorts names, and groups multi-session counts", async () => {
+  it("syncs presence users, sorts names, and deduplicates multi-tab users", async () => {
     supabaseMocks.state.presence = {
       sessionA: [
         {
@@ -157,7 +157,8 @@ describe("OnlineUsersCard", () => {
 
     expect(await screen.findByText("Alpha User")).toBeInTheDocument();
     expect(screen.getByText("Beta User")).toBeInTheDocument();
-    expect(screen.getByText(/2 clients/)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Poke" })).toHaveLength(2);
+    expect(screen.queryByText(/clients/)).not.toBeInTheDocument();
 
     const memberNames = screen
       .getAllByText(/Alpha User|Beta User/)
@@ -197,7 +198,8 @@ describe("OnlineUsersCard", () => {
 
     expect(await screen.findByText("Beta User")).toBeInTheDocument();
     expect(screen.queryByText("missing-id@example.com")).not.toBeInTheDocument();
-    expect(screen.getByText(/2 clients/)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Poke" })).toHaveLength(1);
+    expect(screen.queryByText(/clients/)).not.toBeInTheDocument();
   });
 
   it("sends poke broadcasts and surfaces success", async () => {

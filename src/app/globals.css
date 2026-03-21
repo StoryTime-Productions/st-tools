@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 
 /* shadcn/tailwind.css inlined — package export uses "style" condition unsupported by Tailwind v4 postcss */
+
 @theme inline {
   @keyframes accordion-down {
     from {

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import type { User } from "@prisma/client";
 import AdminMembersPage from "@/app/admin/members/page";
 
 const roleSelectMock = vi.hoisted(() =>
@@ -29,6 +30,32 @@ const { prisma } = await import("@/lib/prisma");
 const getCurrentUserMock = vi.mocked(getCurrentUser);
 const findManyMock = vi.mocked(prisma.user.findMany);
 
+function makeUser(overrides: Partial<User>): User {
+  return {
+    id: "11111111-1111-4111-8111-111111111111",
+    name: "Default User",
+    email: "default@example.com",
+    avatarUrl: null,
+    role: "MEMBER",
+    primaryColor: null,
+    secondaryColor: null,
+    foregroundColor: null,
+    cardBackgroundColor: null,
+    backgroundMode: "NONE",
+    backgroundColor: null,
+    backgroundImageUrl: null,
+    backgroundImageStyle: "STRETCH",
+    backgroundPatternScale: 100,
+    backgroundImageOpacity: 45,
+    pomodoroWorkMin: 25,
+    pomodoroShortBreakMin: 5,
+    pomodoroLongBreakMin: 15,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
 describe("AdminMembersPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -36,43 +63,41 @@ describe("AdminMembersPage", () => {
 
   it("renders member summary cards and admin badge", async () => {
     findManyMock.mockResolvedValueOnce([
-      {
+      makeUser({
         id: "admin-1",
         name: "Alice Admin",
         email: "alice@example.com",
-        avatarUrl: null,
         role: "ADMIN",
         createdAt: new Date("2026-01-01T00:00:00.000Z"),
         updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-      },
-      {
+      }),
+      makeUser({
         id: "member-1",
         name: "Bob Member",
         email: "bob@example.com",
-        avatarUrl: null,
         role: "MEMBER",
         createdAt: new Date("2026-01-02T00:00:00.000Z"),
         updatedAt: new Date("2026-01-02T00:00:00.000Z"),
-      },
-      {
+      }),
+      makeUser({
         id: "member-2",
         name: "Cara Member",
         email: "cara@example.com",
-        avatarUrl: null,
         role: "MEMBER",
         createdAt: new Date("2026-01-03T00:00:00.000Z"),
         updatedAt: new Date("2026-01-03T00:00:00.000Z"),
-      },
+      }),
     ]);
-    getCurrentUserMock.mockResolvedValueOnce({
-      id: "admin-1",
-      name: "Alice Admin",
-      role: "ADMIN",
-      email: "alice@example.com",
-      avatarUrl: null,
-      createdAt: new Date("2026-01-01T00:00:00.000Z"),
-      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-    });
+    getCurrentUserMock.mockResolvedValueOnce(
+      makeUser({
+        id: "admin-1",
+        name: "Alice Admin",
+        role: "ADMIN",
+        email: "alice@example.com",
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+      })
+    );
 
     const output = await AdminMembersPage();
     render(output);
@@ -89,34 +114,33 @@ describe("AdminMembersPage", () => {
 
   it("renders the members table rows and passes role props", async () => {
     findManyMock.mockResolvedValueOnce([
-      {
+      makeUser({
         id: "admin-1",
         name: "Alice Admin",
         email: "alice@example.com",
-        avatarUrl: null,
         role: "ADMIN",
         createdAt: new Date("2026-02-01T00:00:00.000Z"),
         updatedAt: new Date("2026-02-01T00:00:00.000Z"),
-      },
-      {
+      }),
+      makeUser({
         id: "member-1",
         name: "Bob Member",
         email: "bob@example.com",
-        avatarUrl: null,
         role: "MEMBER",
         createdAt: new Date("2026-02-02T00:00:00.000Z"),
         updatedAt: new Date("2026-02-02T00:00:00.000Z"),
-      },
+      }),
     ]);
-    getCurrentUserMock.mockResolvedValueOnce({
-      id: "admin-1",
-      name: "Alice Admin",
-      role: "ADMIN",
-      email: "alice@example.com",
-      avatarUrl: null,
-      createdAt: new Date("2026-02-01T00:00:00.000Z"),
-      updatedAt: new Date("2026-02-01T00:00:00.000Z"),
-    });
+    getCurrentUserMock.mockResolvedValueOnce(
+      makeUser({
+        id: "admin-1",
+        name: "Alice Admin",
+        role: "ADMIN",
+        email: "alice@example.com",
+        createdAt: new Date("2026-02-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-02-01T00:00:00.000Z"),
+      })
+    );
 
     const output = await AdminMembersPage();
     render(output);
@@ -141,34 +165,33 @@ describe("AdminMembersPage", () => {
 
   it("uses email initial fallback when member name is missing", async () => {
     findManyMock.mockResolvedValueOnce([
-      {
+      makeUser({
         id: "admin-1",
         name: "Alice Admin",
         email: "alice@example.com",
-        avatarUrl: null,
         role: "ADMIN",
         createdAt: new Date("2026-03-01T00:00:00.000Z"),
         updatedAt: new Date("2026-03-01T00:00:00.000Z"),
-      },
-      {
+      }),
+      makeUser({
         id: "member-no-name",
         name: null,
         email: "zeta@example.com",
-        avatarUrl: null,
         role: "MEMBER",
         createdAt: new Date("2026-03-02T00:00:00.000Z"),
         updatedAt: new Date("2026-03-02T00:00:00.000Z"),
-      },
+      }),
     ]);
-    getCurrentUserMock.mockResolvedValueOnce({
-      id: "admin-1",
-      name: "Alice Admin",
-      role: "ADMIN",
-      email: "alice@example.com",
-      avatarUrl: null,
-      createdAt: new Date("2026-03-01T00:00:00.000Z"),
-      updatedAt: new Date("2026-03-01T00:00:00.000Z"),
-    });
+    getCurrentUserMock.mockResolvedValueOnce(
+      makeUser({
+        id: "admin-1",
+        name: "Alice Admin",
+        role: "ADMIN",
+        email: "alice@example.com",
+        createdAt: new Date("2026-03-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-03-01T00:00:00.000Z"),
+      })
+    );
 
     const output = await AdminMembersPage();
     render(output);

@@ -75,12 +75,13 @@ jobs:
             COMMITS=$(git log --format="%B" HEAD~1..HEAD)
           fi
 
-          # Extract all issue numbers from Refs/Closes/Fixes/Resolves footers
-          # Use \K instead of lookbehind — GNU grep PCRE doesn't support variable-length lookbehinds
-          ISSUE_NUMS=$(echo "$COMMITS" | grep -oP '(Refs|Closes|Fixes|Resolves): #\K\d+' || true)
+          # Extract issue numbers from standard footer tokens and plain hashtags.
+          FOOTER_ISSUES=$(echo "$COMMITS" | grep -oP '(Refs|Closes|Fixes|Resolves): #\K\d+' || true)
+          INLINE_ISSUES=$(echo "$COMMITS" | grep -oP '(?<![A-Za-z0-9_-])#\K\d+' || true)
+          ISSUE_NUMS=$(printf "%s\n%s\n" "$FOOTER_ISSUES" "$INLINE_ISSUES" | grep -E '^[0-9]+$' | sort -u || true)
 
           if [ -z "$ISSUE_NUMS" ]; then
-            echo "::error::No 'Refs: #N' or 'Closes: #N' footer found in commits."
+            echo "::error::No issue reference found in commits. Add either 'Refs: #N'/'Closes: #N' footer or include '#N' in commit text."
             exit 1
           fi
 

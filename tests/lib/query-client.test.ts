@@ -22,4 +22,26 @@ describe("query client helpers", () => {
 
     expect(first).toBe(second);
   });
+
+  it("creates a new client per call on the server", async () => {
+    const originalWindow = globalThis.window;
+    Object.defineProperty(globalThis, "window", {
+      value: undefined,
+      configurable: true,
+    });
+
+    try {
+      const { getQueryClient } = await import("@/lib/query-client");
+
+      const first = getQueryClient();
+      const second = getQueryClient();
+
+      expect(first).not.toBe(second);
+    } finally {
+      Object.defineProperty(globalThis, "window", {
+        value: originalWindow,
+        configurable: true,
+      });
+    }
+  });
 });
