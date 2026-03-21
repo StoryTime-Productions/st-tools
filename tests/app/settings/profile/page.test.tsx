@@ -7,12 +7,20 @@ async function loadProfileSettingsPageModule() {
 
   const avatarForm = vi.fn(() => <div data-testid="avatar-form" />);
   const profileForm = vi.fn(() => <div data-testid="profile-form" />);
+  const appearanceForm = vi.fn(() => <div data-testid="appearance-form" />);
+  const pomodoroPreferencesForm = vi.fn(() => <div data-testid="pomodoro-preferences-form" />);
 
   vi.doMock("next/navigation", () => ({ redirect }));
   vi.doMock("@/lib/get-current-user", () => ({ getCurrentUser }));
   vi.doMock("@/app/settings/profile/_components/avatar-form", () => ({ AvatarForm: avatarForm }));
   vi.doMock("@/app/settings/profile/_components/profile-form", () => ({
     ProfileForm: profileForm,
+  }));
+  vi.doMock("@/app/settings/profile/_components/appearance-form", () => ({
+    AppearanceForm: appearanceForm,
+  }));
+  vi.doMock("@/app/settings/profile/_components/pomodoro-preferences-form", () => ({
+    PomodoroPreferencesForm: pomodoroPreferencesForm,
   }));
 
   const profileSettingsModule = await import("@/app/settings/profile/page");
@@ -23,6 +31,8 @@ async function loadProfileSettingsPageModule() {
     getCurrentUser,
     avatarForm,
     profileForm,
+    appearanceForm,
+    pomodoroPreferencesForm,
   };
 }
 
@@ -54,6 +64,8 @@ describe("ProfileSettingsPage", () => {
       getCurrentUser,
       avatarForm,
       profileForm,
+      appearanceForm,
+      pomodoroPreferencesForm,
     } = await loadProfileSettingsPageModule();
 
     const user = {
@@ -63,6 +75,17 @@ describe("ProfileSettingsPage", () => {
       avatarUrl: "https://example.com/avatar.png",
       role: "ADMIN",
       createdAt: new Date("2026-03-18T00:00:00.000Z"),
+      primaryColor: "#123456",
+      secondaryColor: "#abcdef",
+      backgroundMode: "COLOR",
+      backgroundColor: "#112233",
+      backgroundImageUrl: null,
+      backgroundImageStyle: "STRETCH",
+      backgroundPatternScale: 100,
+      backgroundImageOpacity: 45,
+      pomodoroWorkMin: 25,
+      pomodoroShortBreakMin: 5,
+      pomodoroLongBreakMin: 15,
     };
 
     getCurrentUser.mockResolvedValueOnce(user);
@@ -85,6 +108,28 @@ describe("ProfileSettingsPage", () => {
     expect(profileForm).toHaveBeenCalledWith(
       {
         initialName: user.name,
+      },
+      undefined
+    );
+    expect(appearanceForm).toHaveBeenCalledWith(
+      {
+        initialPrimaryColor: user.primaryColor,
+        initialSecondaryColor: user.secondaryColor,
+        initialBackgroundMode: user.backgroundMode,
+        initialBackgroundColor: user.backgroundColor,
+        initialBackgroundImageUrl: user.backgroundImageUrl,
+        initialBackgroundImageStyle: user.backgroundImageStyle,
+        initialBackgroundPatternScale: user.backgroundPatternScale,
+        initialBackgroundImageOpacity: user.backgroundImageOpacity,
+      },
+      undefined
+    );
+
+    expect(pomodoroPreferencesForm).toHaveBeenCalledWith(
+      {
+        initialWorkMin: user.pomodoroWorkMin,
+        initialShortBreakMin: user.pomodoroShortBreakMin,
+        initialLongBreakMin: user.pomodoroLongBreakMin,
       },
       undefined
     );

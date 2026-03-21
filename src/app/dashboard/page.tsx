@@ -101,12 +101,11 @@ export default async function DashboardPage() {
       badgeVariant: "secondary",
     },
     {
-      href: "#",
+      href: "/timer",
       title: "Pomodoro",
       icon: Clock3,
-      badge: "Soon",
-      badgeVariant: "outline",
-      disabled: true,
+      badge: "Live",
+      badgeVariant: "secondary",
     },
     {
       href: "#",
