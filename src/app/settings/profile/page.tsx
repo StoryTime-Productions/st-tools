@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ProfileForm } from "./_components/profile-form";
 import { AvatarForm } from "./_components/avatar-form";
+import { AppearanceForm } from "./_components/appearance-form";
+import { PomodoroPreferencesForm } from "./_components/pomodoro-preferences-form";
 
 export const metadata = { title: "Profile – Settings" };
 
@@ -31,6 +33,37 @@ export default async function ProfileSettingsPage() {
           </CardHeader>
           <CardContent>
             <ProfileForm initialName={user.name} />
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
+          <CardHeader>
+            <CardTitle className="text-base">Appearance</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AppearanceForm
+              initialPrimaryColor={user.primaryColor}
+              initialSecondaryColor={user.secondaryColor}
+              initialBackgroundMode={user.backgroundMode}
+              initialBackgroundColor={user.backgroundColor}
+              initialBackgroundImageUrl={user.backgroundImageUrl}
+              initialBackgroundImageStyle={user.backgroundImageStyle}
+              initialBackgroundPatternScale={user.backgroundPatternScale}
+              initialBackgroundImageOpacity={user.backgroundImageOpacity}
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
+          <CardHeader>
+            <CardTitle className="text-base">Pomodoro timer</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PomodoroPreferencesForm
+              initialWorkMin={user.pomodoroWorkMin}
+              initialShortBreakMin={user.pomodoroShortBreakMin}
+              initialLongBreakMin={user.pomodoroLongBreakMin}
+            />
           </CardContent>
         </Card>
       </div>

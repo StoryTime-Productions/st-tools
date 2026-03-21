@@ -312,4 +312,67 @@ describe("BoardView", () => {
       expect(toastMocks.error).toHaveBeenCalledWith("Unable to create column");
     });
   });
+
+  it("does not delete board when confirmation is cancelled", async () => {
+    vi.mocked(window.confirm).mockReturnValueOnce(false);
+    renderBoard();
+
+    fireEvent.click(screen.getByRole("button", { name: /delete board/i }));
+
+    await waitFor(() => {
+      expect(actionMocks.deleteBoardAction).not.toHaveBeenCalled();
+    });
+  });
+
+  it("hides collaborative controls for personal boards", async () => {
+    const personalBoard = {
+      ...makeBoard(),
+      isPersonal: true,
+      isOpenToWorkspace: false,
+    };
+
+    renderBoard(personalBoard);
+
+    expect(screen.getByText("Private")).toBeInTheDocument();
+    expect(screen.queryByText("Open to workspace")).not.toBeInTheDocument();
+    expect(screen.queryByText("Invite teammate")).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(supabaseMocks.createClient).not.toHaveBeenCalled();
+  });
+
+  it("hides invite controls when board is open to workspace", async () => {
+    renderBoard({
+      ...makeBoard(),
+      isOpenToWorkspace: true,
+    });
+
+    expect(screen.getByText("Open to workspace")).toBeInTheDocument();
+    expect(screen.queryByText("Invite teammate")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^remove$/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps add card form closed when title is blank", async () => {
+    renderBoard();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /add card/i })[0]);
+    const cardTitleInput = await screen.findByPlaceholderText("Card title");
+    fireEvent.change(cardTitleInput, { target: { value: "   " } });
+    fireEvent.keyDown(cardTitleInput, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(actionMocks.createCardAction).not.toHaveBeenCalled();
+    });
+  });
+
+  it("cancels add-card flow without creating a card", async () => {
+    renderBoard();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /add card/i })[0]);
+    expect(await screen.findByRole("button", { name: /cancel/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+
+    await waitFor(() => {
+      expect(actionMocks.createCardAction).not.toHaveBeenCalled();
+    });
+  });
 });
