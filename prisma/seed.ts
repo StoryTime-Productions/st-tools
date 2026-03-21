@@ -37,6 +37,8 @@ async function seedDevData() {
     { email: "alice@storytime.gg", name: "Alice" },
     { email: "bob@storytime.gg", name: "Bob" },
     { email: "carol@storytime.gg", name: "Carol" },
+    { email: "test1@storytime.gg", name: "Test User 1" },
+    { email: "test2@storytime.gg", name: "Test User 2" },
   ];
 
   for (const user of devUsers) {

@@ -20,13 +20,11 @@ interface PresenceMeta extends Partial<WorkspacePresencePayload> {
   activeAt?: string;
 }
 
-type OnlinePresenceUser = WorkspacePresencePayload & {
-  sessionCount: number;
-};
+type OnlinePresenceUser = WorkspacePresencePayload;
 
 interface OnlinePresenceSnapshot {
   users: OnlinePresenceUser[];
-  clientCount: number;
+  userCount: number;
 }
 
 interface OnlineUsersCardProps {
@@ -58,7 +56,6 @@ function sortOnlineUsers<T extends WorkspacePresencePayload>(users: T[]): T[] {
 
 function extractOnlineUsers(state: Record<string, PresenceMeta[]>): OnlinePresenceSnapshot {
   const userMap = new Map<string, OnlinePresenceUser>();
-  let clientCount = 0;
 
   Object.values(state).forEach((entries) => {
     entries.forEach((entry) => {
@@ -70,12 +67,8 @@ function extractOnlineUsers(state: Record<string, PresenceMeta[]>): OnlinePresen
         return;
       }
 
-      clientCount += 1;
-
       const existing = userMap.get(entry.id);
       if (existing) {
-        existing.sessionCount += 1;
-
         if (!existing.name && typeof entry.name === "string") {
           existing.name = entry.name;
         }
@@ -92,14 +85,15 @@ function extractOnlineUsers(state: Record<string, PresenceMeta[]>): OnlinePresen
         name: typeof entry.name === "string" ? entry.name : null,
         email: entry.email,
         avatarUrl: typeof entry.avatarUrl === "string" ? entry.avatarUrl : null,
-        sessionCount: 1,
       });
     });
   });
 
+  const users = sortOnlineUsers(Array.from(userMap.values()));
+
   return {
-    users: sortOnlineUsers(Array.from(userMap.values())),
-    clientCount,
+    users,
+    userCount: users.length,
   };
 }
 
@@ -122,7 +116,7 @@ function isWorkspacePokePayload(payload: unknown): payload is WorkspacePokeBroad
 
 export function OnlineUsersCard({ currentUser }: OnlineUsersCardProps) {
   const [onlineUsers, setOnlineUsers] = useState<OnlinePresenceUser[]>([]);
-  const [onlineClientCount, setOnlineClientCount] = useState(0);
+  const [onlineUserCount, setOnlineUserCount] = useState(0);
   const [pendingPokeUserIds, setPendingPokeUserIds] = useState<string[]>([]);
   const channelRef = useRef<RealtimeChannel | null>(null);
 
@@ -179,7 +173,7 @@ export function OnlineUsersCard({ currentUser }: OnlineUsersCardProps) {
       const state = channel.presenceState<PresenceMeta>();
       const snapshot = extractOnlineUsers(state);
       setOnlineUsers(snapshot.users);
-      setOnlineClientCount(snapshot.clientCount);
+      setOnlineUserCount(snapshot.userCount);
     };
 
     channel.on("presence", { event: "sync" }, syncPresence);
@@ -215,15 +209,15 @@ export function OnlineUsersCard({ currentUser }: OnlineUsersCardProps) {
     };
   }, [currentUser.avatarUrl, currentUser.email, currentUser.id, currentUser.name]);
 
-  const fallbackUser: OnlinePresenceUser[] = [{ ...currentUser, sessionCount: 1 }];
+  const fallbackUser: OnlinePresenceUser[] = [currentUser];
   const users = onlineUsers.length > 0 ? onlineUsers : fallbackUser;
-  const displayedClientCount = onlineClientCount > 0 ? onlineClientCount : 1;
+  const displayedUserCount = onlineUserCount > 0 ? onlineUserCount : 1;
 
   return (
     <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
       <CardHeader className="border-border/60 flex flex-row items-center justify-between border-b">
         <CardTitle className="text-base">Online now</CardTitle>
-        <Badge variant="secondary">{displayedClientCount}</Badge>
+        <Badge variant="secondary">{displayedUserCount}</Badge>
       </CardHeader>
       <CardContent className="space-y-3">
         {users.map((member) => {
@@ -245,10 +239,7 @@ export function OnlineUsersCard({ currentUser }: OnlineUsersCardProps) {
                   {getDisplayName(member)}
                   {isCurrentUser ? " (You)" : ""}
                 </p>
-                <p className="text-muted-foreground truncate text-xs">
-                  {member.email}
-                  {member.sessionCount > 1 ? ` · ${member.sessionCount} clients` : ""}
-                </p>
+                <p className="text-muted-foreground truncate text-xs">{member.email}</p>
               </div>
 
               {isCurrentUser ? null : (
