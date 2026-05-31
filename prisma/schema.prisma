@@ -12,21 +12,39 @@ datasource db {
 // ─── Auth ──────────────────────────────────────────────────────────────────────
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  name      String?
-  avatarUrl String?
-  role      Role     @default(MEMBER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                     String               @id @default(uuid())
+  email                  String               @unique
+  name                   String?
+  avatarUrl              String?
+  role                   Role                 @default(MEMBER)
+  primaryColor           String?
+  secondaryColor         String?
+  foregroundColor        String?
+  cardBackgroundColor    String?
+  backgroundMode         BackgroundMode       @default(NONE)
+  backgroundColor        String?
+  backgroundImageUrl     String?
+  backgroundImageStyle   BackgroundImageStyle @default(STRETCH)
+  backgroundPatternScale Int                  @default(100)
+  backgroundImageOpacity Int                  @default(45)
+  pomodoroWorkMin        Int                  @default(25)
+  pomodoroShortBreakMin  Int                  @default(5)
+  pomodoroLongBreakMin   Int                  @default(15)
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
 
   // Relations
-  boards           Board[]
-  boardMemberships BoardMember[]
-  cards            Card[]
-  cardActivities   CardActivity[]
-  pomodoroSessions PomodoroSession[]
-  pages            Page[]
+  boards                       Board[]
+  boardMemberships             BoardMember[]
+  cards                        Card[]
+  cardActivities               CardActivity[]
+  pomodoroSessions             PomodoroSession[]
+  ownedFocusSessions           PomodoroFocusSession[]        @relation("PomodoroFocusSessionOwner")
+  focusSessionMemberships      PomodoroFocusSessionMember[]
+  sentFocusSessionRequests     PomodoroFocusSessionRequest[] @relation("PomodoroFocusSessionRequestRequester")
+  receivedFocusSessionRequests PomodoroFocusSessionRequest[] @relation("PomodoroFocusSessionRequestTarget")
+  minigameLeaderboardEntries   MinigameLeaderboardEntry[]
+  pages                        Page[]
 
   @@map("users")
 }
@@ -36,11 +54,29 @@ enum Role {
   MEMBER
 }
 
+enum BackgroundMode {
+  NONE
+  COLOR
+  IMAGE
+}
+
+enum BackgroundImageStyle {
+  STRETCH
+  PATTERN
+}
+
 enum CardActivityEvent {
   CREATED
   UPDATED
   MOVED
   COMMENTED
+}
+
+enum FocusSessionRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
 }
 
 // ─── Kanban ────────────────────────────────────────────────────────────────────
@@ -155,6 +191,80 @@ model PomodoroSession {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("pomodoro_sessions")
+}
+
+model PomodoroFocusSession {
+  id         String   @id @default(uuid())
+  title      String
+  isActive   Boolean  @default(true)
+  timerState Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  ownerId String
+  owner   User   @relation("PomodoroFocusSessionOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  members  PomodoroFocusSessionMember[]
+  requests PomodoroFocusSessionRequest[]
+
+  @@map("pomodoro_focus_sessions")
+}
+
+model PomodoroFocusSessionMember {
+  id       String    @id @default(uuid())
+  isActive Boolean   @default(true)
+  joinedAt DateTime  @default(now())
+  leftAt   DateTime?
+
+  sessionId String
+  session   PomodoroFocusSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+  @@index([userId, isActive])
+  @@index([sessionId, isActive])
+  @@map("pomodoro_focus_session_members")
+}
+
+model PomodoroFocusSessionRequest {
+  id          String                    @id @default(uuid())
+  status      FocusSessionRequestStatus @default(PENDING)
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+  respondedAt DateTime?
+
+  sessionId String
+  session   PomodoroFocusSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  requesterId String
+  requester   User   @relation("PomodoroFocusSessionRequestRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+
+  targetUserId String
+  targetUser   User   @relation("PomodoroFocusSessionRequestTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, status])
+  @@index([requesterId, status])
+  @@index([targetUserId, status])
+  @@map("pomodoro_focus_session_requests")
+}
+
+model MinigameLeaderboardEntry {
+  id           String   @id @default(uuid())
+  gameKey      String
+  allTimeScore Int      @default(0)
+  bestScore    Int      @default(0)
+  plays        Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([gameKey, userId])
+  @@index([gameKey, allTimeScore])
+  @@map("minigame_leaderboard_entries")
 }
 
 // ─── Knowledge Base ────────────────────────────────────────────────────────────

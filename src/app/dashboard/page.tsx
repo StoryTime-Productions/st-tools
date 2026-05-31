@@ -9,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { WorkspaceShell } from "@/components/layout/workspace-shell";
 import { LiveTimeWeather } from "./_components/live-time-weather";
 import { OnlineUsersCard } from "./_components/online-users-card";
-import { PuppyOfTheDayCard } from "./_components/puppy-of-the-day";
 
 type DashboardBadgeVariant = "default" | "secondary" | "destructive" | "outline" | "ghost" | "link";
 
@@ -101,12 +100,11 @@ export default async function DashboardPage() {
       badgeVariant: "secondary",
     },
     {
-      href: "#",
+      href: "/timer",
       title: "Pomodoro",
       icon: Clock3,
-      badge: "Soon",
-      badgeVariant: "outline",
-      disabled: true,
+      badge: "Live",
+      badgeVariant: "secondary",
     },
     {
       href: "#",
@@ -141,7 +139,6 @@ export default async function DashboardPage() {
         </div>
 
         <div className="space-y-6">
-          <PuppyOfTheDayCard />
           <OnlineUsersCard
             currentUser={{
               id: user.id,

@@ -1,0 +1,2 @@
+ALTER TABLE "users"
+ADD COLUMN "backgroundPatternScale" INTEGER NOT NULL DEFAULT 100;

@@ -25,6 +25,7 @@ async function loadProfileModule() {
   const revalidatePath = vi.fn();
   const createClient = vi.fn();
   const update = vi.fn();
+  const findUnique = vi.fn();
 
   vi.doMock("next/cache", () => ({ revalidatePath }));
   vi.doMock("@/lib/supabase/server", () => ({ createClient }));
@@ -32,6 +33,7 @@ async function loadProfileModule() {
     prisma: {
       user: {
         update,
+        findUnique,
       },
     },
   }));
@@ -43,6 +45,7 @@ async function loadProfileModule() {
     revalidatePath,
     createClient,
     update,
+    findUnique,
   };
 }
 
@@ -152,5 +155,118 @@ describe("profile actions", () => {
       data: { avatarUrl: "https://example.com/avatar.png?v=1710000000000" },
     });
     expect(revalidatePath).toHaveBeenCalledWith("/settings/profile");
+  });
+
+  it("updates appearance settings for color mode", async () => {
+    const { updateAppearanceAction, createClient, update, findUnique, revalidatePath } =
+      await loadProfileModule();
+    const supabase = buildSupabaseClient();
+
+    supabase.auth.getUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "11111111-1111-4111-8111-111111111111",
+        },
+      },
+    });
+
+    createClient.mockResolvedValue(supabase);
+    findUnique.mockResolvedValueOnce({ backgroundImageUrl: null });
+
+    const formData = new FormData();
+    formData.set("primaryColor", "#123456");
+    formData.set("secondaryColor", "#abcdef");
+    formData.set("backgroundMode", "COLOR");
+    formData.set("backgroundImageStyle", "PATTERN");
+    formData.set("backgroundPatternScale", "140");
+    formData.set("backgroundColor", "#112233");
+    formData.set("backgroundImageOpacity", "65");
+    formData.set("removeBackgroundImage", "false");
+
+    await expect(updateAppearanceAction(formData)).resolves.toEqual({ success: true });
+
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "11111111-1111-4111-8111-111111111111" },
+      data: {
+        primaryColor: "#123456",
+        secondaryColor: "#abcdef",
+        backgroundMode: "COLOR",
+        backgroundImageStyle: "PATTERN",
+        backgroundPatternScale: 140,
+        backgroundColor: "#112233",
+        backgroundImageUrl: null,
+        backgroundImageOpacity: 65,
+      },
+    });
+
+    expect(revalidatePath).toHaveBeenCalledWith("/settings/profile");
+    expect(revalidatePath).toHaveBeenCalledWith("/dashboard");
+    expect(revalidatePath).toHaveBeenCalledWith("/boards");
+    expect(revalidatePath).toHaveBeenCalledWith("/admin/members");
+  });
+
+  it("validates image mode appearance updates", async () => {
+    const { updateAppearanceAction, createClient, findUnique } = await loadProfileModule();
+    const supabase = buildSupabaseClient();
+
+    supabase.auth.getUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "11111111-1111-4111-8111-111111111111",
+        },
+      },
+    });
+
+    createClient.mockResolvedValue(supabase);
+    findUnique.mockResolvedValueOnce({ backgroundImageUrl: null });
+
+    const missingImageData = new FormData();
+    missingImageData.set("primaryColor", "#123456");
+    missingImageData.set("secondaryColor", "#abcdef");
+    missingImageData.set("backgroundMode", "IMAGE");
+    missingImageData.set("backgroundImageStyle", "STRETCH");
+    missingImageData.set("backgroundPatternScale", "100");
+    missingImageData.set("backgroundColor", "");
+    missingImageData.set("backgroundImageOpacity", "50");
+    missingImageData.set("removeBackgroundImage", "false");
+
+    await expect(updateAppearanceAction(missingImageData)).resolves.toEqual({
+      error: "Please upload a background image or switch to a different background mode",
+    });
+  });
+
+  it("defaults appearance opacity when form value is missing", async () => {
+    const { updateAppearanceAction, createClient, update, findUnique } = await loadProfileModule();
+    const supabase = buildSupabaseClient();
+
+    supabase.auth.getUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "11111111-1111-4111-8111-111111111111",
+        },
+      },
+    });
+
+    createClient.mockResolvedValue(supabase);
+    findUnique.mockResolvedValueOnce({ backgroundImageUrl: null });
+
+    const formData = new FormData();
+    formData.set("primaryColor", "#123456");
+    formData.set("secondaryColor", "#abcdef");
+    formData.set("backgroundImageStyle", "STRETCH");
+    formData.set("backgroundMode", "NONE");
+    formData.set("backgroundColor", "");
+    formData.set("removeBackgroundImage", "false");
+
+    await expect(updateAppearanceAction(formData)).resolves.toEqual({ success: true });
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          backgroundPatternScale: 100,
+          backgroundImageOpacity: 45,
+        }),
+      })
+    );
   });
 });
