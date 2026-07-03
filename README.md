@@ -1,23 +1,33 @@
 # StoryTime Tools
 
+<p align="center">
+  <img src=".github/assets/banner.png" alt="StoryTime Tools banner" />
+</p>
+
+<p align="center">
+  <a href="https://github.com/StoryTime-Productions/st-tools/actions/workflows/deploy.yml"><img src="https://github.com/StoryTime-Productions/st-tools/actions/workflows/deploy.yml/badge.svg" alt="CI status" /></a>
+  <a href="https://codecov.io/gh/StoryTime-Productions/st-tools"><img src="https://codecov.io/gh/StoryTime-Productions/st-tools/graph/badge.svg?branch=main" alt="codecov" /></a>
+  <img src="https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white" alt="Next.js" />
+  <img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
+</p>
+
 Internal productivity web app for the StoryTime Productions team.
 
-> See [FEATURE_SET.md](./FEATURE_SET.md) for the full feature specification and tech stack rationale.
+## Live App
 
-## Stack
+Internal tool, not publicly accessible. Deployed to Vercel: see [Deployment Environments](#deployment-environments) below.
 
-| Layer                      | Technology                           |
-| -------------------------- | ------------------------------------ |
-| Framework                  | Next.js 16 (App Router) + TypeScript |
-| Styling                    | Tailwind CSS + shadcn/ui             |
-| Database / Auth / Realtime | Supabase (PostgreSQL)                |
-| ORM                        | Prisma                               |
-| Rich text editor           | TipTap                               |
-| Drag & drop                | dnd-kit                              |
-| Calendar                   | FullCalendar                         |
-| Server state               | TanStack Query                       |
-| Client state               | Zustand                              |
-| Deployment                 | Vercel                               |
+## Tech Stack
+
+- Next.js 16 (App Router) + TypeScript
+- Tailwind CSS + shadcn/ui
+- Supabase (PostgreSQL) for database, auth, and realtime
+- Prisma ORM
+- TipTap (rich text editor)
+- dnd-kit (drag & drop)
+- FullCalendar
+- TanStack Query (server state) + Zustand (client state)
+- Deployment: Vercel
 
 ## Getting Started
 
@@ -62,15 +72,13 @@ pnpm supabase:start
 pnpm prisma migrate deploy
 ```
 
-### Local auth
-
-Local development uses the Supabase CLI stack, including local Auth on `http://127.0.0.1:54321` and the local database on `127.0.0.1:54322`.
+**Local auth**: local development uses the Supabase CLI stack, including local Auth on `http://127.0.0.1:54321` and the local database on `127.0.0.1:54322`.
 
 - Email/password sign-up works locally when `.env` uses the local Supabase URL and publishable key.
 - Google OAuth is optional for local work and does not need to be configured.
 - `docker-compose.yml` still provides a raw Postgres container, but that alone is not enough for the app's auth flow.
 
-## Scripts
+### Scripts
 
 | Command               | Description              |
 | --------------------- | ------------------------ |
@@ -89,7 +97,13 @@ Local development uses the Supabase CLI stack, including local Auth on `http://1
 | `pnpm db:local:logs`  | Tail local DB logs       |
 | `pnpm db:local:reset` | Recreate local DB volume |
 
-## Deployment Environments
+## CI/CD
+
+GitHub Actions workflows (`.github/workflows/`):
+
+- `validate.yml`, `quality.yml`, `test.yml`: run on pull requests (linting, formatting, type checks, tests)
+- `deploy.yml`: deploys to production on push to `master`/`main`
+- `preview-deploy.yml`: deploys preview environments for pull requests
 
 Two separate Supabase projects are used to isolate production from preview:
 
@@ -102,7 +116,7 @@ Migrations run automatically via GitHub Actions before each deploy.
 
 ### Required external setup
 
-1. Create two Supabase projects — one for production, one for preview.
+1. Create two Supabase projects: one for production, one for preview.
 2. Add production credentials as Vercel **Production** environment variables and as GitHub Actions secrets (`DATABASE_URL`, `DIRECT_URL`).
 3. Add preview credentials as Vercel **Preview** environment variables using the same names as production (`DATABASE_URL`, `DIRECT_URL`).
    Add the same preview values as GitHub Actions secrets (`PREVIEW_DATABASE_URL`, `PREVIEW_DIRECT_URL`) for the migration workflow.
@@ -112,7 +126,7 @@ Migrations run automatically via GitHub Actions before each deploy.
 
 ## Contributing
 
-See [FEATURE_SET.md](./FEATURE_SET.md) for branch naming, commit format, and quality gate requirements.
+Use issue-linked branches and conventional commits for all contributions.
 
 All contributions must:
 
@@ -120,3 +134,7 @@ All contributions must:
 - Follow `<type>/<issue-number>-<description>` branch naming
 - Use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0-beta.4/) with a `Refs: #N` or `Closes: #N` footer
 - Pass all three CI checks: `validate`, `quality`, `test`
+
+## License
+
+Proprietary: internal StoryTime Productions tool (`package.json` is marked `"private": true`). Not licensed for external use.
