@@ -52,6 +52,13 @@ jobs:
 
       - name: Enforce patch coverage >= 70%
         run: |
+          CHANGED="$(git diff --name-only --diff-filter=d "origin/${{ github.base_ref }}...HEAD")"
+          COVERED_SOURCE="$(echo "$CHANGED" | grep -E '^src/.*\.tsx?$' | grep -Ev '\.d\.ts$|^src/app/layout\.tsx$' || true)"
+          if [ -z "$COVERED_SOURCE" ]; then
+            echo "No covered source files (src/**/*.ts, *.tsx) changed; skipping patch coverage."
+            exit 0
+          fi
+
           python3 -m pip install --disable-pip-version-check --no-input diff-cover
           DIFF_COVER_OUTPUT="$(diff-cover coverage/lcov.info --compare-branch="origin/${{ github.base_ref }}" --fail-under=70)"
           echo "$DIFF_COVER_OUTPUT"
