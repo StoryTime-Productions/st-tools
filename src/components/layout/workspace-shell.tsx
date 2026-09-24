@@ -125,7 +125,7 @@ function SidebarItem({ item, isActive }: { item: SidebarItemConfig; isActive: bo
         isActive
           ? "bg-foreground text-background border-transparent shadow-sm"
           : "hover:border-border/70 hover:bg-background/80 border-transparent",
-        item.disabled && "cursor-not-allowed opacity-60"
+        item.disabled && "cursor-not-allowed"
       )}
     >
       <div
