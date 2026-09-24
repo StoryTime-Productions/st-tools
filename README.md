@@ -75,6 +75,7 @@ Local development uses the Supabase CLI stack, including local Auth on `http://1
 
 - Email/password sign-up works locally when `.env` uses the local Supabase URL and publishable key.
 - Google OAuth is optional for local work and does not need to be configured.
+- Dev accounts: after `pnpm dlx supabase db reset`, `pnpm prisma migrate deploy` and `pnpm db:seed`, you can sign in as `alice@`, `bob@`, `carol@`, `test1@` or `test2@storytime.gg` with the password `test1234`. These exist for local development only. `supabase/seed.sql` creates the Auth accounts and `prisma/seed.ts` creates the matching app rows with the same ids, so run the reset on a fresh database rather than one that already has seeded users.
 - `docker-compose.yml` still provides a raw Postgres container, but that alone is not enough for the app's auth flow.
 
 ## Scripts
