@@ -582,4 +582,85 @@ describe("boards actions", () => {
     await expect(deleteBoardAction(IDS.board)).resolves.toEqual({ success: true });
     expect(prisma.board.delete).toHaveBeenCalledWith({ where: { id: IDS.board } });
   });
+
+  it("creates personal board via helper action", async () => {
+    const { createPersonalBoardAction, getCurrentUser, prisma } = await loadBoardsModule();
+    getCurrentUser.mockResolvedValue(makeCurrentUser());
+    prisma.board.create.mockResolvedValue({ id: IDS.board });
+
+    await expect(createPersonalBoardAction({ title: "My board" })).resolves.toEqual({
+      success: true,
+      boardId: IDS.board,
+    });
+
+    expect(prisma.board.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          title: "My board",
+          isPersonal: true,
+          isOpenToWorkspace: false,
+        }),
+      })
+    );
+  });
+
+  it("returns not found when collaborative access update targets missing board", async () => {
+    const { updateBoardAccessAction, getCurrentUser, prisma } = await loadBoardsModule();
+    getCurrentUser.mockResolvedValue(makeCurrentUser());
+    prisma.board.findFirst.mockResolvedValueOnce(null);
+
+    await expect(updateBoardAccessAction(IDS.board, true)).resolves.toEqual({
+      error: "Collaborative board not found",
+    });
+  });
+
+  it("returns board not found when creating column on inaccessible board", async () => {
+    const { createColumnAction, getCurrentUser, prisma } = await loadBoardsModule();
+    getCurrentUser.mockResolvedValue(makeCurrentUser());
+    prisma.board.findFirst.mockResolvedValueOnce(null);
+
+    await expect(createColumnAction(IDS.board)).resolves.toEqual({ error: "Board not found" });
+  });
+
+  it("rejects card moves when card payload is stale", async () => {
+    const { moveCardsAction, getCurrentUser, prisma } = await loadBoardsModule();
+    getCurrentUser.mockResolvedValue(makeCurrentUser());
+
+    prisma.board.findFirst.mockResolvedValueOnce({
+      id: IDS.board,
+      columns: [
+        { id: IDS.column, cards: [{ id: IDS.card, position: 0 }] },
+        { id: IDS.columnTwo, cards: [{ id: IDS.cardTwo, position: 0 }] },
+      ],
+    });
+
+    await expect(
+      moveCardsAction(IDS.board, [
+        { columnId: IDS.column, cardIds: [IDS.card] },
+        { columnId: IDS.columnTwo, cardIds: [IDS.cardTwo, IDS.card] },
+      ])
+    ).resolves.toEqual({ error: "Card positions are out of date. Refresh and try again." });
+  });
+
+  it("moves cards without activity writes when positions are unchanged", async () => {
+    const { moveCardsAction, getCurrentUser, prisma, tx } = await loadBoardsModule();
+    getCurrentUser.mockResolvedValue(makeCurrentUser());
+
+    prisma.board.findFirst.mockResolvedValueOnce({
+      id: IDS.board,
+      columns: [
+        { id: IDS.column, cards: [{ id: IDS.card, position: 0 }] },
+        { id: IDS.columnTwo, cards: [{ id: IDS.cardTwo, position: 0 }] },
+      ],
+    });
+
+    await expect(
+      moveCardsAction(IDS.board, [
+        { columnId: IDS.column, cardIds: [IDS.card] },
+        { columnId: IDS.columnTwo, cardIds: [IDS.cardTwo] },
+      ])
+    ).resolves.toEqual({ success: true });
+
+    expect(tx.cardActivity.createMany).not.toHaveBeenCalled();
+  });
 });

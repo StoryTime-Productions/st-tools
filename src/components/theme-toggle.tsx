@@ -1,5 +1,6 @@
 "use client";
 
+import { flushSync } from "react-dom";
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,20 @@ import { Button } from "@/components/ui/button";
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
   const actionLabel = "Toggle theme";
+
+  function changeTheme(nextTheme: string) {
+    if (
+      !("startViewTransition" in document) ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      setTheme(nextTheme);
+      return;
+    }
+
+    document.startViewTransition(() => {
+      flushSync(() => setTheme(nextTheme));
+    });
+  }
 
   return (
     <Button
@@ -16,8 +31,7 @@ export function ThemeToggle() {
       className="relative rounded-xl"
       aria-label={actionLabel}
       onClick={() => {
-        const nextTheme = resolvedTheme === "dark" ? "light" : "dark";
-        setTheme(nextTheme);
+        changeTheme(resolvedTheme === "dark" ? "light" : "dark");
       }}
       title={actionLabel}
     >

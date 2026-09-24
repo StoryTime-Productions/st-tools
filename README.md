@@ -1,8 +1,15 @@
+<p align="center">
+   <img src="./src/app/icon.jpg" alt="StoryTime logo" width="120" />
+</p>
+
 # StoryTime Tools
 
-Internal productivity web app for the StoryTime Productions team.
+[![Production](https://github.com/StoryTime-Productions/st-tools/actions/workflows/deploy.yml/badge.svg)](https://github.com/StoryTime-Productions/st-tools/actions/workflows/deploy.yml)
+[![codecov](https://codecov.io/gh/StoryTime-Productions/st-tools/graph/badge.svg?branch=main)](https://codecov.io/gh/StoryTime-Productions/st-tools)
+![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
 
-> See [FEATURE_SET.md](./FEATURE_SET.md) for the full feature specification and tech stack rationale.
+Internal productivity web app for the StoryTime Productions team.
 
 ## Stack
 
@@ -112,7 +119,7 @@ Migrations run automatically via GitHub Actions before each deploy.
 
 ## Contributing
 
-See [FEATURE_SET.md](./FEATURE_SET.md) for branch naming, commit format, and quality gate requirements.
+Use issue-linked branches and conventional commits for all contributions.
 
 All contributions must:
 

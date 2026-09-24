@@ -67,6 +67,7 @@ describe("WorkspaceShell", () => {
     expect(screen.getByText("Your workspace summary")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /overview/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /boards/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /focus/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /profile/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /members/i })).not.toBeInTheDocument();
     expect(screen.getByText("Dashboard content")).toBeInTheDocument();
@@ -91,7 +92,7 @@ describe("WorkspaceShell", () => {
     expect(membersLink).toHaveAttribute("href", "/admin/members");
     expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument();
     expect(screen.getAllByText("admin@example.com").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Soon")).toHaveLength(2);
+    expect(screen.getAllByText("Soon")).toHaveLength(1);
 
     expect(trackerMock).toHaveBeenCalledTimes(1);
     expect(trackerMock.mock.calls[0][0]).toEqual({
@@ -102,5 +103,30 @@ describe("WorkspaceShell", () => {
         avatarUrl: user.avatarUrl,
       },
     });
+  });
+
+  it("applies user appearance customizations", () => {
+    const { container } = render(
+      <WorkspaceShell
+        user={makeUser({
+          primaryColor: "#1a2b3c",
+          secondaryColor: "#d8e4f0",
+          backgroundMode: "COLOR",
+          backgroundColor: "#112233",
+          backgroundImageOpacity: 60,
+        })}
+        activeNav="overview"
+        title="Dashboard"
+      >
+        <div>Styled content</div>
+      </WorkspaceShell>
+    );
+
+    const shellRoot = container.firstElementChild as HTMLElement;
+    expect(shellRoot.style.getPropertyValue("--primary")).toBe("#1a2b3c");
+    expect(shellRoot.style.getPropertyValue("--secondary")).toBe("#d8e4f0");
+
+    const contentLayer = container.querySelector("[data-workspace-content-layer]") as HTMLElement;
+    expect(contentLayer.style.backgroundColor).toBe("rgb(17, 34, 51)");
   });
 });

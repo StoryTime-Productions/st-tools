@@ -81,4 +81,26 @@ describe("OnlinePresenceTracker", () => {
     expect(channelMocks.untrack).toHaveBeenCalled();
     expect(supabaseMocks.removeChannel).toHaveBeenCalledWith(channelMocks);
   });
+
+  it("does not track presence when subscription status is not subscribed", async () => {
+    channelMocks.subscribe.mockImplementationOnce((callback?: (status: string) => void) => {
+      callback?.("CHANNEL_ERROR");
+      return channelMocks;
+    });
+
+    render(
+      <OnlinePresenceTracker
+        user={{
+          id: "33333333-3333-4333-8333-333333333333",
+          name: "Fallback User",
+          email: "fallback@example.com",
+          avatarUrl: null,
+        }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(channelMocks.track).not.toHaveBeenCalled();
+    });
+  });
 });
