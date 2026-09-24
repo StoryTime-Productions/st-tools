@@ -1,4 +1,6 @@
-import type { CSSProperties } from "react";
+"use client";
+
+import { useEffect, useEffectEvent, type CSSProperties } from "react";
 import { Pause, Play, RotateCcw, SkipForward } from "lucide-react";
 import { LONG_BREAK_CYCLE, type TimerPhase } from "@/stores/timer-store";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +26,10 @@ interface FocusTimerCardProps {
   onSkip: () => void;
   onReset: () => void;
 }
+
+// Space already activates these natively; the shortcut must not double-fire.
+const INTERACTIVE_SELECTOR =
+  'input, textarea, select, button, a[href], summary, [contenteditable]:not([contenteditable="false"]), [role="button"], [role="menuitem"], [role="checkbox"], [role="switch"], [role="option"], [role="tab"]';
 
 function describeNext(
   phase: TimerPhase,
@@ -56,6 +62,32 @@ export function FocusTimerCard({
   onSkip,
   onReset,
 }: FocusTimerCardProps) {
+  const onSpace = useEffectEvent((event: KeyboardEvent) => {
+    if (
+      controlledBy ||
+      event.code !== "Space" ||
+      event.repeat ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey ||
+      (event.target instanceof Element && event.target.closest(INTERACTIVE_SELECTOR))
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    if (isRunning) onPause();
+    else if (canResume) onResume();
+    else onStart();
+  });
+
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => onSpace(event);
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  }, []);
+
   const next = describeNext(phase, sessionNumber, durations);
   const sessionText = isBreakPhase(phase)
     ? `Session ${sessionNumber} of ${LONG_BREAK_CYCLE} next`
@@ -99,17 +131,35 @@ export function FocusTimerCard({
         ) : (
           <div className="flex flex-wrap justify-center gap-2">
             {isRunning ? (
-              <Button type="button" size="lg" onClick={onPause} className="gap-2">
+              <Button
+                type="button"
+                size="lg"
+                onClick={onPause}
+                className="gap-2"
+                aria-keyshortcuts="Space"
+              >
                 <Pause className="size-4" />
                 Pause
               </Button>
             ) : canResume ? (
-              <Button type="button" size="lg" onClick={onResume} className="gap-2">
+              <Button
+                type="button"
+                size="lg"
+                onClick={onResume}
+                className="gap-2"
+                aria-keyshortcuts="Space"
+              >
                 <Play className="size-4" />
                 Resume
               </Button>
             ) : (
-              <Button type="button" size="lg" onClick={onStart} className="gap-2">
+              <Button
+                type="button"
+                size="lg"
+                onClick={onStart}
+                className="gap-2"
+                aria-keyshortcuts="Space"
+              >
                 <Play className="size-4" />
                 Start
               </Button>

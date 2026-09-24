@@ -51,9 +51,7 @@ function subscribe(listener: () => void) {
   };
 }
 
-export function readTimerPrefs(): TimerPrefs {
-  return typeof window === "undefined" ? DEFAULT_TIMER_PREFS : getSnapshot();
-}
+export const readTimerPrefs = getSnapshot;
 
 // Server snapshot is the defaults, so SSR and the first client render match.
 export function useTimerPrefs(): TimerPrefs {
