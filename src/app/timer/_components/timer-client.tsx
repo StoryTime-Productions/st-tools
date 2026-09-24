@@ -24,12 +24,12 @@ import {
   incrementStats,
   isBreakPhase,
   mixHexColors,
-  normalizeHexColor,
   phaseLabel,
   readableTextColor,
   toRgba,
 } from "./timer-utils";
 import { playCompletionTone, playUiCue } from "./timer-audio";
+import { useTimerPrefs, writeTimerPrefs } from "./timer-prefs";
 import { FocusTimerCard } from "./focus-timer-card";
 import { SessionCollaborationCard } from "./session-collaboration-card";
 import { SessionStatsCard } from "./session-stats-card";
@@ -45,9 +45,6 @@ interface TimerClientProps {
 }
 
 const COLLABORATION_SYNC_INTERVAL_MS = 4000;
-const TIMER_COLOR_PREFERENCES_KEY = "timer-color-preferences-v1";
-const DEFAULT_FOCUS_COLOR = "#3b82f6";
-const DEFAULT_BREAK_COLOR = "#f97316";
 
 export function TimerClient({
   currentUserId,
@@ -69,91 +66,9 @@ export function TimerClient({
   );
   const [longBreakMinutesInput, setLongBreakMinutesInput] = useState(() => initialLongBreakMinutes);
   const [sessionTitleInput, setSessionTitleInput] = useState("");
-  const [focusColor, setFocusColor] = useState(() => {
-    if (typeof window === "undefined") {
-      return DEFAULT_FOCUS_COLOR;
-    }
-
-    const rawValue = window.localStorage.getItem(TIMER_COLOR_PREFERENCES_KEY);
-    if (!rawValue) {
-      return DEFAULT_FOCUS_COLOR;
-    }
-
-    try {
-      const parsed = JSON.parse(rawValue) as { focusColor?: string };
-      return normalizeHexColor(parsed.focusColor, DEFAULT_FOCUS_COLOR);
-    } catch {
-      return DEFAULT_FOCUS_COLOR;
-    }
-  });
-  const [breakColor, setBreakColor] = useState(() => {
-    if (typeof window === "undefined") {
-      return DEFAULT_BREAK_COLOR;
-    }
-
-    const rawValue = window.localStorage.getItem(TIMER_COLOR_PREFERENCES_KEY);
-    if (!rawValue) {
-      return DEFAULT_BREAK_COLOR;
-    }
-
-    try {
-      const parsed = JSON.parse(rawValue) as { breakColor?: string };
-      return normalizeHexColor(parsed.breakColor, DEFAULT_BREAK_COLOR);
-    } catch {
-      return DEFAULT_BREAK_COLOR;
-    }
-  });
-  const [interpolatePhaseColors, setInterpolatePhaseColors] = useState(() => {
-    if (typeof window === "undefined") {
-      return true;
-    }
-
-    const rawValue = window.localStorage.getItem(TIMER_COLOR_PREFERENCES_KEY);
-    if (!rawValue) {
-      return true;
-    }
-
-    try {
-      const parsed = JSON.parse(rawValue) as { interpolatePhaseColors?: boolean };
-      return parsed.interpolatePhaseColors !== false;
-    } catch {
-      return true;
-    }
-  });
-  const [autoStartBreaks, setAutoStartBreaks] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-
-    const rawValue = window.localStorage.getItem(TIMER_COLOR_PREFERENCES_KEY);
-    if (!rawValue) {
-      return false;
-    }
-
-    try {
-      const parsed = JSON.parse(rawValue) as { autoStartBreaks?: boolean };
-      return parsed.autoStartBreaks === true;
-    } catch {
-      return false;
-    }
-  });
-  const [autoStartFocus, setAutoStartFocus] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-
-    const rawValue = window.localStorage.getItem(TIMER_COLOR_PREFERENCES_KEY);
-    if (!rawValue) {
-      return false;
-    }
-
-    try {
-      const parsed = JSON.parse(rawValue) as { autoStartFocus?: boolean };
-      return parsed.autoStartFocus === true;
-    } catch {
-      return false;
-    }
-  });
+  const timerPrefs = useTimerPrefs();
+  const { focusColor, breakColor, interpolatePhaseColors, autoStartBreaks, autoStartFocus } =
+    timerPrefs;
 
   const [sharedTimerNow, setSharedTimerNow] = useState(() => Date.now());
   const [runningNow, setRunningNow] = useState(() => Date.now());
@@ -200,34 +115,6 @@ export function TimerClient({
       longBreakMinutes: initialLongBreakMinutes,
     });
   }, [initialLongBreakMinutes, initialShortBreakMinutes, initialWorkMinutes, setDurations]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    if (isLockedBySharedSession) {
-      return;
-    }
-
-    window.localStorage.setItem(
-      TIMER_COLOR_PREFERENCES_KEY,
-      JSON.stringify({
-        focusColor,
-        breakColor,
-        interpolatePhaseColors,
-        autoStartBreaks,
-        autoStartFocus,
-      })
-    );
-  }, [
-    autoStartBreaks,
-    autoStartFocus,
-    breakColor,
-    focusColor,
-    interpolatePhaseColors,
-    isLockedBySharedSession,
-  ]);
 
   useEffect(() => {
     currentSessionRef.current = currentSession;
@@ -662,21 +549,7 @@ export function TimerClient({
   }
 
   function onTimerPrefsChange(patch: Partial<TimerPrefs>) {
-    if (patch.focusColor !== undefined) {
-      setFocusColor(normalizeHexColor(patch.focusColor, DEFAULT_FOCUS_COLOR));
-    }
-    if (patch.breakColor !== undefined) {
-      setBreakColor(normalizeHexColor(patch.breakColor, DEFAULT_BREAK_COLOR));
-    }
-    if (patch.interpolatePhaseColors !== undefined) {
-      setInterpolatePhaseColors(patch.interpolatePhaseColors);
-    }
-    if (patch.autoStartBreaks !== undefined) {
-      setAutoStartBreaks(patch.autoStartBreaks);
-    }
-    if (patch.autoStartFocus !== undefined) {
-      setAutoStartFocus(patch.autoStartFocus);
-    }
+    writeTimerPrefs({ ...timerPrefs, ...patch });
   }
 
   function onStartTimer() {
