@@ -33,19 +33,28 @@ async function seedAdmin() {
 }
 
 async function seedDevData() {
+  // Ids must match supabase/seed.sql so Auth logins line up with these rows.
   const devUsers = [
-    { email: "alice@storytime.gg", name: "Alice" },
-    { email: "bob@storytime.gg", name: "Bob" },
-    { email: "carol@storytime.gg", name: "Carol" },
-    { email: "test1@storytime.gg", name: "Test User 1" },
-    { email: "test2@storytime.gg", name: "Test User 2" },
+    { id: "00000000-0000-4000-8000-000000000001", email: "alice@storytime.gg", name: "Alice" },
+    { id: "00000000-0000-4000-8000-000000000002", email: "bob@storytime.gg", name: "Bob" },
+    { id: "00000000-0000-4000-8000-000000000003", email: "carol@storytime.gg", name: "Carol" },
+    {
+      id: "00000000-0000-4000-8000-000000000004",
+      email: "test1@storytime.gg",
+      name: "Test User 1",
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000005",
+      email: "test2@storytime.gg",
+      name: "Test User 2",
+    },
   ];
 
   for (const user of devUsers) {
     const u = await prisma.user.upsert({
       where: { email: user.email },
       update: {},
-      create: { email: user.email, name: user.name },
+      create: { id: user.id, email: user.email, name: user.name },
     });
     console.log(`✔  Dev user: ${u.email}`);
   }
