@@ -13,6 +13,7 @@ const prefs: TimerPrefs = {
   interpolatePhaseColors: true,
   autoStartBreaks: false,
   autoStartFocus: false,
+  soundEnabled: true,
 };
 
 function renderCard(overrides?: { draft?: Durations; isSaving?: boolean }) {
@@ -109,10 +110,12 @@ describe("TimerSettingsCard", () => {
     fireEvent.change(screen.getByLabelText("Short break"), { target: { value: "7" } });
     fireEvent.click(screen.getByLabelText("Auto-start breaks"));
     fireEvent.click(screen.getByLabelText("Blend colors as time runs down"));
+    fireEvent.click(screen.getByLabelText("Sound cues"));
 
     expect(onDraftChange).toHaveBeenCalledWith("shortBreakMinutes", 7);
     expect(onPrefsChange).toHaveBeenCalledWith({ autoStartBreaks: true });
     expect(onPrefsChange).toHaveBeenCalledWith({ interpolatePhaseColors: false });
+    expect(onPrefsChange).toHaveBeenCalledWith({ soundEnabled: false });
   });
 
   it("shows a saving state and blocks Save while saving", () => {

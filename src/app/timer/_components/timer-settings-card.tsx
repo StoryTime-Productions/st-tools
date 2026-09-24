@@ -18,6 +18,7 @@ export interface TimerPrefs {
   interpolatePhaseColors: boolean;
   autoStartBreaks: boolean;
   autoStartFocus: boolean;
+  soundEnabled: boolean;
 }
 
 interface TimerSettingsCardProps {
@@ -155,6 +156,15 @@ export function TimerSettingsCard({
                   className="size-4"
                 />
                 Auto-start focus
+              </label>
+              <label className="flex items-center gap-3 rounded-xl border px-3 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={prefs.soundEnabled}
+                  onChange={(event) => onPrefsChange({ soundEnabled: event.target.checked })}
+                  className="size-4"
+                />
+                Sound cues
               </label>
             </div>
           </fieldset>

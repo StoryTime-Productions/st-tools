@@ -10,6 +10,7 @@ export const DEFAULT_TIMER_PREFS: TimerPrefs = {
   interpolatePhaseColors: true,
   autoStartBreaks: false,
   autoStartFocus: false,
+  soundEnabled: true,
 };
 
 const listeners = new Set<() => void>();
@@ -25,6 +26,7 @@ function parse(raw: string | null): TimerPrefs {
       interpolatePhaseColors: stored.interpolatePhaseColors !== false,
       autoStartBreaks: stored.autoStartBreaks === true,
       autoStartFocus: stored.autoStartFocus === true,
+      soundEnabled: stored.soundEnabled !== false,
     };
   } catch {
     return DEFAULT_TIMER_PREFS;
@@ -47,6 +49,10 @@ function subscribe(listener: () => void) {
     listeners.delete(listener);
     window.removeEventListener("storage", listener);
   };
+}
+
+export function readTimerPrefs(): TimerPrefs {
+  return typeof window === "undefined" ? DEFAULT_TIMER_PREFS : getSnapshot();
 }
 
 // Server snapshot is the defaults, so SSR and the first client render match.
