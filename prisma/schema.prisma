@@ -43,7 +43,6 @@ model User {
   focusSessionMemberships      PomodoroFocusSessionMember[]
   sentFocusSessionRequests     PomodoroFocusSessionRequest[] @relation("PomodoroFocusSessionRequestRequester")
   receivedFocusSessionRequests PomodoroFocusSessionRequest[] @relation("PomodoroFocusSessionRequestTarget")
-  minigameLeaderboardEntries   MinigameLeaderboardEntry[]
   pages                        Page[]
 
   @@map("users")
@@ -179,7 +178,7 @@ model CardChecklistItem {
   @@map("card_checklist_items")
 }
 
-// ─── Pomodoro & Leaderboard ────────────────────────────────────────────────────
+// ─── Pomodoro ─────────────────────────────────────────────────────────────────
 
 model PomodoroSession {
   id          String   @id @default(uuid())
@@ -248,23 +247,6 @@ model PomodoroFocusSessionRequest {
   @@index([requesterId, status])
   @@index([targetUserId, status])
   @@map("pomodoro_focus_session_requests")
-}
-
-model MinigameLeaderboardEntry {
-  id           String   @id @default(uuid())
-  gameKey      String
-  allTimeScore Int      @default(0)
-  bestScore    Int      @default(0)
-  plays        Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([gameKey, userId])
-  @@index([gameKey, allTimeScore])
-  @@map("minigame_leaderboard_entries")
 }
 
 // ─── Knowledge Base ────────────────────────────────────────────────────────────
