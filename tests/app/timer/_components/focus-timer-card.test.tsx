@@ -109,3 +109,69 @@ describe("FocusTimerCard", () => {
     expect(screen.getByText("Saving session…")).toBeInTheDocument();
   });
 });
+
+describe("FocusTimerCard Space shortcut", () => {
+  function pressSpace(target: Element = document.body, init: KeyboardEventInit = {}) {
+    return fireEvent.keyDown(target, { code: "Space", key: " ", ...init });
+  }
+
+  it("starts, pauses or resumes depending on the timer state", () => {
+    const idle = renderCard();
+    pressSpace();
+    expect(idle.onStart).toHaveBeenCalledTimes(1);
+  });
+
+  it("pauses a running timer", () => {
+    const { onPause } = renderCard({ isRunning: true });
+    pressSpace();
+    expect(onPause).toHaveBeenCalledTimes(1);
+  });
+
+  it("resumes a paused timer", () => {
+    const { onResume } = renderCard({ canResume: true });
+    pressSpace();
+    expect(onResume).toHaveBeenCalledTimes(1);
+  });
+
+  it("prevents the page from scrolling when it acts", () => {
+    renderCard();
+    expect(pressSpace()).toBe(false);
+  });
+
+  it("does nothing while typing or when a control has focus", () => {
+    const { onStart } = renderCard();
+    const field = document.createElement("input");
+    document.body.appendChild(field);
+
+    pressSpace(field);
+    pressSpace(screen.getByRole("button", { name: "Skip" }));
+
+    expect(onStart).not.toHaveBeenCalled();
+    field.remove();
+  });
+
+  it("ignores modifier keys, key repeat and other keys", () => {
+    const { onStart } = renderCard();
+
+    pressSpace(document.body, { ctrlKey: true });
+    pressSpace(document.body, { shiftKey: true });
+    pressSpace(document.body, { repeat: true });
+    fireEvent.keyDown(document.body, { code: "KeyS", key: "s" });
+
+    expect(onStart).not.toHaveBeenCalled();
+  });
+
+  it("is disabled for non-owners of a shared session", () => {
+    const { onStart } = renderCard({ controlledBy: "Alex" });
+    pressSpace();
+    expect(onStart).not.toHaveBeenCalled();
+  });
+
+  it("advertises the shortcut on the primary button", () => {
+    renderCard();
+    expect(screen.getByRole("button", { name: "Start" })).toHaveAttribute(
+      "aria-keyshortcuts",
+      "Space"
+    );
+  });
+});
