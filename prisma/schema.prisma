@@ -175,6 +175,7 @@ model CardChecklistItem {
   cardId String
   card   Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
 
+  @@index([cardId])
   @@map("card_checklist_items")
 }
 
@@ -206,9 +207,13 @@ model PomodoroFocusSession {
   members  PomodoroFocusSessionMember[]
   requests PomodoroFocusSessionRequest[]
 
+  @@index([isActive, createdAt])
   @@map("pomodoro_focus_sessions")
 }
 
+// DO NOT DROP "pomodoro_focus_session_members_one_active_per_user_idx": a partial
+// unique index (userId WHERE isActive = true) created in raw SQL. Prisma cannot
+// declare it yet, so `prisma migrate diff` proposes dropping it; remove that line.
 model PomodoroFocusSessionMember {
   id       String    @id @default(uuid())
   isActive Boolean   @default(true)
@@ -227,6 +232,9 @@ model PomodoroFocusSessionMember {
   @@map("pomodoro_focus_session_members")
 }
 
+// DO NOT DROP "pomodoro_focus_session_requests_one_pending_per_session_target_idx":
+// a partial unique index (sessionId, targetUserId WHERE status = 'PENDING') created
+// in raw SQL. Prisma cannot declare it yet, so generated diffs propose dropping it.
 model PomodoroFocusSessionRequest {
   id          String                    @id @default(uuid())
   status      FocusSessionRequestStatus @default(PENDING)
