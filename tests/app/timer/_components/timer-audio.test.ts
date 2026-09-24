@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { playCompletionTone, playUiCue } from "@/app/timer/_components/timer-audio";
 
 function installFakeAudioContext() {
@@ -34,6 +34,10 @@ function installFakeAudioContext() {
 }
 
 describe("timer-audio", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
@@ -71,5 +75,18 @@ describe("timer-audio", () => {
     window.AudioContext = globalThis.AudioContext;
 
     await expect(playUiCue("pause")).resolves.toBeUndefined();
+  });
+
+  it("plays nothing when sound cues are turned off", async () => {
+    const { oscillators } = installFakeAudioContext();
+    window.localStorage.setItem(
+      "timer-color-preferences-v1",
+      JSON.stringify({ soundEnabled: false })
+    );
+
+    await playUiCue("play");
+    await playCompletionTone();
+
+    expect(oscillators).toHaveLength(0);
   });
 });

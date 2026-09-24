@@ -1,3 +1,5 @@
+import { readTimerPrefs } from "./timer-prefs";
+
 type Note = { freq: number; at: number; dur: number; gain: number };
 
 const PARTIALS = [
@@ -32,7 +34,7 @@ const COMPLETION_CUE: Note[] = [523.25, 659.25, 783.99, 1046.5].map((freq, index
 }));
 
 function playNotes(notes: Note[]) {
-  if (typeof window === "undefined") {
+  if (typeof window === "undefined" || !readTimerPrefs().soundEnabled) {
     return;
   }
 

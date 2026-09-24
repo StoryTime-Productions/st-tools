@@ -831,13 +831,7 @@ export function TimerClient({
             }}
             onSave={onSaveTimerPreferences}
             isSaving={isSavingPreferences}
-            prefs={{
-              focusColor,
-              breakColor,
-              interpolatePhaseColors,
-              autoStartBreaks,
-              autoStartFocus,
-            }}
+            prefs={timerPrefs}
             onPrefsChange={onTimerPrefsChange}
           />
         ) : null}

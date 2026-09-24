@@ -63,4 +63,13 @@ describe("useTimerPrefs", () => {
       JSON.parse(window.localStorage.getItem("timer-color-preferences-v1") ?? "{}").autoStartBreaks
     ).toBe(true);
   });
+
+  it("defaults sound cues on and honours a stored off", () => {
+    render(<Probe />);
+    expect(JSON.parse(screen.getByTestId("prefs").textContent ?? "{}").soundEnabled).toBe(true);
+
+    act(() => writeTimerPrefs({ ...DEFAULT_TIMER_PREFS, soundEnabled: false }));
+
+    expect(JSON.parse(screen.getByTestId("prefs").textContent ?? "{}").soundEnabled).toBe(false);
+  });
 });
