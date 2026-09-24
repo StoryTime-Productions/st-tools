@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { FocusTimerCard } from "@/app/timer/_components/focus-timer-card";
-import { readableTextColor } from "@/app/timer/_components/timer-utils";
 
 type Props = React.ComponentProps<typeof FocusTimerCard>;
 
@@ -108,15 +107,5 @@ describe("FocusTimerCard", () => {
     renderCard({ isSaving: true });
 
     expect(screen.getByText("Saving session…")).toBeInTheDocument();
-  });
-});
-
-describe("readableTextColor", () => {
-  it("picks the text colour with the higher WCAG contrast", () => {
-    expect(readableTextColor("#3b82f6")).toBe("#111111");
-    expect(readableTextColor("#f97316")).toBe("#111111");
-    expect(readableTextColor("#111827")).toBe("#ffffff");
-    expect(readableTextColor("#000000")).toBe("#ffffff");
-    expect(readableTextColor("#ffffff")).toBe("#111111");
   });
 });

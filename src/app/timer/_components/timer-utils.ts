@@ -46,18 +46,8 @@ export function initialsFromName(name: string | null, email: string): string {
     return "?";
   }
 
-  const parts = source
-    .split(/\s+/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  if (parts.length === 0) {
-    return source.slice(0, 2).toUpperCase();
-  }
-
-  const first = parts[0]?.[0] ?? "";
-  const second = parts.length > 1 ? (parts[1]?.[0] ?? "") : "";
-  return `${first}${second}`.toUpperCase() || source.slice(0, 2).toUpperCase();
+  const [first, second] = source.split(/\s+/);
+  return `${first[0]}${second?.[0] ?? ""}`.toUpperCase();
 }
 
 export function normalizeHexColor(value: string | null | undefined, fallback: string): string {
