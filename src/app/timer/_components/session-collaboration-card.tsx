@@ -51,7 +51,7 @@ function PersonAvatar({
   return (
     <Avatar size="sm" className="shrink-0">
       <AvatarImage src={avatarUrl ?? undefined} alt={getDisplayName(name, email)} />
-      <AvatarFallback className="text-foreground">{initialsFromName(name, email)}</AvatarFallback>
+      <AvatarFallback>{initialsFromName(name, email)}</AvatarFallback>
     </Avatar>
   );
 }
