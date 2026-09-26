@@ -38,6 +38,7 @@ export type FocusSessionTimerSnapshot = {
   completionCount: number;
   lastCompletedPhase: "work" | "shortBreak" | "longBreak" | null;
   lastCompletedDurationMin: number | null;
+  lastCompletedSet: boolean;
   workMinutes: number;
   shortBreakMinutes: number;
   longBreakMinutes: number;
@@ -203,6 +204,7 @@ function parseSessionTimerState(raw: unknown): FocusSessionTimerSnapshot | null 
     completionCount,
     lastCompletedPhase,
     lastCompletedDurationMin,
+    lastCompletedSet: value.lastCompletedSet === true,
     workMinutes,
     shortBreakMinutes,
     longBreakMinutes,
@@ -624,4 +626,15 @@ export async function getPomodoroCollaborationSnapshot(
     outgoingRequests,
     incomingRequests,
   };
+}
+
+export async function getPointsLeaderboard(since?: Date) {
+  const rows = await prisma.pomodoroSession.groupBy({
+    by: ["userId"],
+    where: since ? { completedAt: { gte: since } } : undefined,
+    _sum: { points: true },
+    orderBy: { _sum: { points: "desc" } },
+  });
+
+  return rows.map((row) => ({ userId: row.userId, points: row._sum.points ?? 0 }));
 }

@@ -543,6 +543,7 @@ describe("TimerClient", () => {
           completionCount: 1,
           lastCompletedPhase: "work",
           lastCompletedDurationMin: 25,
+          lastCompletedSet: false,
           workMinutes: 25,
           shortBreakMinutes: 5,
           longBreakMinutes: 15,

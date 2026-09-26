@@ -3,11 +3,13 @@ import {
   FOCUS_SESSION_IDLE_TTL_MS,
   getPomodoroCollaborationSnapshot,
   getPomodoroStatsSnapshot,
+  getPointsLeaderboard,
 } from "@/lib/pomodoro";
 
 const prismaMocks = vi.hoisted(() => ({
   pomodoroSessionCount: vi.fn(),
   pomodoroSessionFindMany: vi.fn(),
+  pomodoroSessionGroupBy: vi.fn(),
   focusSessionMemberFindMany: vi.fn(),
   focusSessionMemberUpdateMany: vi.fn(),
   focusSessionMemberFindFirst: vi.fn(),
@@ -22,6 +24,7 @@ vi.mock("@/lib/prisma", () => ({
     pomodoroSession: {
       count: prismaMocks.pomodoroSessionCount,
       findMany: prismaMocks.pomodoroSessionFindMany,
+      groupBy: prismaMocks.pomodoroSessionGroupBy,
     },
     pomodoroFocusSessionMember: {
       findMany: prismaMocks.focusSessionMemberFindMany,
@@ -45,6 +48,27 @@ vi.mock("@/lib/prisma", () => ({
 describe("pomodoro library", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("sums points per user, optionally from a start date", async () => {
+    prismaMocks.pomodoroSessionGroupBy.mockResolvedValue([
+      { userId: "u-1", _sum: { points: 7 } },
+      { userId: "u-2", _sum: { points: null } },
+    ]);
+    const since = new Date("2026-09-21T00:00:00.000Z");
+
+    await expect(getPointsLeaderboard(since)).resolves.toEqual([
+      { userId: "u-1", points: 7 },
+      { userId: "u-2", points: 0 },
+    ]);
+    expect(prismaMocks.pomodoroSessionGroupBy).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { completedAt: { gte: since } } })
+    );
+
+    await getPointsLeaderboard();
+    expect(prismaMocks.pomodoroSessionGroupBy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ where: undefined })
+    );
   });
 
   it("builds stats snapshot with 7-day chart bins", async () => {
@@ -128,6 +152,7 @@ describe("pomodoro library", () => {
           completionCount: 42,
           lastCompletedPhase: "shortBreak",
           lastCompletedDurationMin: 300,
+          lastCompletedSet: true,
           startedAt: "invalid-date",
           workMinutes: 120,
           shortBreakMinutes: 0,
@@ -184,6 +209,7 @@ describe("pomodoro library", () => {
       completionCount: 42,
       lastCompletedPhase: "shortBreak",
       lastCompletedDurationMin: 180,
+      lastCompletedSet: true,
       workMinutes: 90,
       shortBreakMinutes: 1,
       longBreakMinutes: 5,
