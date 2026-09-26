@@ -183,6 +183,7 @@ export function TimerClient({
         completionCount: state.completionCount,
         lastCompletedPhase: state.lastCompletedPhase,
         lastCompletedDurationMin: state.lastCompletedDurationMin,
+        lastCompletedSet: state.lastCompletedSet,
         isRunning: state.isRunning,
         workMinutes: state.durations.workMinutes,
         shortBreakMinutes: state.durations.shortBreakMinutes,
@@ -408,6 +409,7 @@ export function TimerClient({
       startPersistingSession(async () => {
         const result = await recordPomodoroSessionAction({
           durationMin: lastCompletedDurationMin,
+          completedSet: useTimerStore.getState().lastCompletedSet,
         });
 
         if ("error" in result) {
@@ -479,6 +481,7 @@ export function TimerClient({
         startPersistingSession(async () => {
           const result = await recordPomodoroSessionAction({
             durationMin,
+            completedSet: sharedTimer.lastCompletedSet,
           });
 
           if ("error" in result) {
@@ -651,6 +654,8 @@ export function TimerClient({
         lastCompletedAt: null,
         lastCompletedDurationMin: null,
         completionCount: 0,
+        setSkipped: false,
+        lastCompletedSet: false,
         durations: {
           workMinutes: initialWorkMinutes,
           shortBreakMinutes: initialShortBreakMinutes,

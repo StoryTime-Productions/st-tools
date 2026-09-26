@@ -114,6 +114,26 @@ describe("timer store", () => {
     expect(state.phase).toBe("longBreak");
     expect(state.secondsLeft).toBe(180);
     expect(state.sessionCount).toBe(4);
+    expect(state.lastCompletedSet).toBe(true);
+  });
+
+  it("does not mark a set complete when a work phase was skipped, then starts a clean set", () => {
+    useTimerStore.setState({
+      phase: "work",
+      secondsLeft: 60,
+      sessionCount: 3,
+      setSkipped: true,
+      durations: { workMinutes: 1, shortBreakMinutes: 2, longBreakMinutes: 3 },
+    });
+
+    useTimerStore.getState().start();
+    vi.setSystemTime(new Date(initialNow.getTime() + 61_000));
+    useTimerStore.getState().reconcileWithNow();
+
+    const state = useTimerStore.getState();
+    expect(state.sessionCount).toBe(4);
+    expect(state.lastCompletedSet).toBe(false);
+    expect(state.setSkipped).toBe(false);
   });
 
   it("supports skip and reset actions", () => {
@@ -128,6 +148,7 @@ describe("timer store", () => {
 
     expect(useTimerStore.getState().phase).toBe("shortBreak");
     expect(useTimerStore.getState().sessionCount).toBe(0);
+    expect(useTimerStore.getState().setSkipped).toBe(true);
 
     useTimerStore.getState().reset();
 
@@ -136,5 +157,6 @@ describe("timer store", () => {
     expect(state.secondsLeft).toBe(60);
     expect(state.sessionCount).toBe(0);
     expect(state.completionCount).toBe(0);
+    expect(state.setSkipped).toBe(false);
   });
 });

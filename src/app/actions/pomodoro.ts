@@ -8,6 +8,7 @@ import {
   getPomodoroCollaborationSnapshot,
   type PomodoroCollaborationSnapshot,
 } from "@/lib/pomodoro";
+import { calculateSessionPoints } from "@/lib/points";
 import { prisma } from "@/lib/prisma";
 
 export type PomodoroActionResult = { error: string } | { success: true };
@@ -51,12 +52,8 @@ const recordSessionSchema = z.object({
     .int("Session duration must be a whole number")
     .min(1, "Session duration must be at least 1 minute")
     .max(180, "Session duration must be 180 minutes or fewer"),
-  points: z
-    .number()
-    .int("Points must be a whole number")
-    .min(1, "Points must be at least 1")
-    .max(10, "Points must be 10 or fewer")
-    .default(1),
+  // ponytail: client-asserted, so a crafted request can claim the set bonus; verify recent sessions server-side if it matters
+  completedSet: z.boolean().default(false),
 });
 
 const startSessionSchema = z.object({
@@ -125,6 +122,7 @@ const syncFocusSessionTimerStateSchema = z.object({
     .max(180, "Completed duration must be 180 minutes or fewer")
     .nullable()
     .optional(),
+  lastCompletedSet: z.boolean().optional(),
   isRunning: z.boolean(),
   workMinutes: z
     .number()
@@ -329,7 +327,7 @@ export async function recordPomodoroSessionAction(
     data: {
       userId: user.id,
       durationMin: parsed.data.durationMin,
-      points: parsed.data.points,
+      points: calculateSessionPoints(parsed.data.durationMin, parsed.data.completedSet),
     },
   });
 
@@ -503,6 +501,7 @@ export async function syncFocusSessionTimerStateAction(
         completionCount: parsed.data.completionCount ?? 0,
         lastCompletedPhase: parsed.data.lastCompletedPhase ?? null,
         lastCompletedDurationMin: parsed.data.lastCompletedDurationMin ?? null,
+        lastCompletedSet: parsed.data.lastCompletedSet === true,
         isRunning: parsed.data.isRunning,
         startedAt: parsed.data.isRunning ? new Date().toISOString() : null,
         workMinutes: parsed.data.workMinutes,

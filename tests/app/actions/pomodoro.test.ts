@@ -170,6 +170,24 @@ describe("pomodoro actions", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/dashboard");
   });
 
+  it("computes points on the server, adding the set bonus", async () => {
+    const { recordPomodoroSessionAction, getCurrentUser, tx } = await loadPomodoroActionsModule();
+
+    getCurrentUser.mockResolvedValueOnce({ id: "11111111-1111-4111-8111-111111111111" });
+
+    await expect(
+      recordPomodoroSessionAction({ durationMin: 50, completedSet: true })
+    ).resolves.toEqual({ success: true });
+
+    expect(tx.pomodoroSession.create).toHaveBeenCalledWith({
+      data: {
+        userId: "11111111-1111-4111-8111-111111111111",
+        durationMin: 50,
+        points: 4,
+      },
+    });
+  });
+
   it("validates session recording payloads", async () => {
     const { recordPomodoroSessionAction, getCurrentUser } = await loadPomodoroActionsModule();
 

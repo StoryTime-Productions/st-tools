@@ -28,6 +28,8 @@ type TimerStoreState = {
   lastCompletedAt: number | null;
   lastCompletedDurationMin: number | null;
   completionCount: number;
+  setSkipped: boolean;
+  lastCompletedSet: boolean;
   targetEndsAt: number | null;
   intervalId: number | null;
   visibilityListenerAttached: boolean;
@@ -125,6 +127,8 @@ function initialState() {
     lastCompletedAt: null,
     lastCompletedDurationMin: null,
     completionCount: 0,
+    setSkipped: false,
+    lastCompletedSet: false,
     targetEndsAt: null,
     intervalId: null,
     visibilityListenerAttached: false,
@@ -217,6 +221,7 @@ export const useTimerStore = create<TimerStoreState>((set, get) => ({
       phase: next.nextPhase,
       secondsLeft: next.nextSecondsLeft,
       sessionCount: next.nextSessionCount,
+      setSkipped: state.setSkipped || state.phase === "work",
       isRunning: false,
       targetEndsAt: null,
       intervalId: null,
@@ -238,6 +243,8 @@ export const useTimerStore = create<TimerStoreState>((set, get) => ({
       lastCompletedAt: null,
       lastCompletedDurationMin: null,
       completionCount: 0,
+      setSkipped: false,
+      lastCompletedSet: false,
     });
   },
 
@@ -278,6 +285,7 @@ export const useTimerStore = create<TimerStoreState>((set, get) => ({
         durations: state.durations,
         countWorkSession: state.phase === "work",
       });
+      const completedSet = state.phase === "work" && next.nextSessionCount % LONG_BREAK_CYCLE === 0;
 
       set({
         phase: next.nextPhase,
@@ -290,6 +298,8 @@ export const useTimerStore = create<TimerStoreState>((set, get) => ({
         lastCompletedAt: now,
         lastCompletedDurationMin: minutesForPhase(state.phase, state.durations),
         completionCount: state.completionCount + 1,
+        lastCompletedSet: completedSet && !state.setSkipped,
+        setSkipped: completedSet ? false : state.setSkipped,
       });
 
       return;
