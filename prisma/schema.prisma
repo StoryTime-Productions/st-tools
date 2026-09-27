@@ -90,10 +90,14 @@ model Board {
   ownerId String
   owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
   columns        Column[]
   members        BoardMember[]
   cardActivities CardActivity[]
 
+  @@index([projectId])
   @@map("boards")
 }
 
@@ -149,9 +153,72 @@ model Tag {
   name      String   @unique
   createdAt DateTime @default(now())
 
-  cards Card[]
+  cards    Card[]
+  projects Project[]
 
   @@map("tags")
+}
+
+// ─── Hub ───────────────────────────────────────────────────────────────────────
+
+model Initiative {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projects Project[]
+
+  @@map("initiatives")
+}
+
+model Project {
+  id                String    @id @default(uuid())
+  title             String
+  description       String?
+  coverImageUrl     String?
+  startQuarter      String?
+  endQuarter        String?
+  currentPhaseIndex Int?
+  finishedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  initiativeId String?
+  initiative   Initiative? @relation(fields: [initiativeId], references: [id], onDelete: SetNull)
+
+  phases ProjectPhase[]
+  links  ProjectLink[]
+  tags   Tag[]
+  boards Board[]
+
+  @@index([initiativeId])
+  @@map("projects")
+}
+
+model ProjectPhase {
+  id       String @id @default(uuid())
+  name     String
+  position Int
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("project_phases")
+}
+
+model ProjectLink {
+  id       String @id @default(uuid())
+  label    String
+  url      String
+  position Int
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("project_links")
 }
 
 model CardActivity {
