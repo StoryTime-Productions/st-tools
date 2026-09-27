@@ -12,6 +12,9 @@ import { calculateSessionPoints } from "@/lib/points";
 import { prisma } from "@/lib/prisma";
 
 export type PomodoroActionResult = { error: string } | { success: true };
+
+const MINUTE_MS = 60_000;
+const SET_BREAK_ALLOWANCE_MIN = 30;
 export type PomodoroCollaborationActionResult =
   | { error: string }
   | { success: true; snapshot: PomodoroCollaborationSnapshot };
@@ -52,7 +55,6 @@ const recordSessionSchema = z.object({
     .int("Session duration must be a whole number")
     .min(1, "Session duration must be at least 1 minute")
     .max(180, "Session duration must be 180 minutes or fewer"),
-  // ponytail: client-asserted, so a crafted request can claim the set bonus; verify recent sessions server-side if it matters
   completedSet: z.boolean().default(false),
 });
 
@@ -323,11 +325,31 @@ export async function recordPomodoroSessionAction(
     return { error: "Not authenticated" };
   }
 
+  const { durationMin } = parsed.data;
+  const recent = await prisma.pomodoroSession.findMany({
+    where: { userId: user.id },
+    orderBy: { completedAt: "desc" },
+    take: 3,
+    select: { completedAt: true },
+  });
+
+  const now = Date.now();
+  if (recent[0] && now - recent[0].completedAt.getTime() < (durationMin - 1) * MINUTE_MS) {
+    return { error: "Session recorded too soon after the previous one" };
+  }
+
+  // ponytail: set = 3 prior sessions within a generous window, not an exact replay of the set
+  const completedSet =
+    parsed.data.completedSet &&
+    recent.length === 3 &&
+    now - recent[2].completedAt.getTime() <=
+      3 * (durationMin + SET_BREAK_ALLOWANCE_MIN) * MINUTE_MS;
+
   await prisma.pomodoroSession.create({
     data: {
       userId: user.id,
-      durationMin: parsed.data.durationMin,
-      points: calculateSessionPoints(parsed.data.durationMin, parsed.data.completedSet),
+      durationMin,
+      points: calculateSessionPoints(durationMin, completedSet),
     },
   });
 

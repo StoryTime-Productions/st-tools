@@ -12,6 +12,7 @@ async function loadPomodoroActionsModule() {
     },
     pomodoroSession: {
       create: vi.fn(),
+      findMany: vi.fn().mockResolvedValue([]),
     },
     pomodoroFocusSession: {
       create: vi.fn(),
@@ -174,6 +175,9 @@ describe("pomodoro actions", () => {
     const { recordPomodoroSessionAction, getCurrentUser, tx } = await loadPomodoroActionsModule();
 
     getCurrentUser.mockResolvedValueOnce({ id: "11111111-1111-4111-8111-111111111111" });
+    tx.pomodoroSession.findMany.mockResolvedValueOnce(
+      [60, 120, 180].map((min) => ({ completedAt: new Date(Date.now() - min * 60_000) }))
+    );
 
     await expect(
       recordPomodoroSessionAction({ durationMin: 50, completedSet: true })
@@ -186,6 +190,41 @@ describe("pomodoro actions", () => {
         points: 4,
       },
     });
+  });
+
+  it("ignores a set claim without three recent prior sessions", async () => {
+    const { recordPomodoroSessionAction, getCurrentUser, tx } = await loadPomodoroActionsModule();
+
+    getCurrentUser.mockResolvedValueOnce({ id: "11111111-1111-4111-8111-111111111111" });
+    tx.pomodoroSession.findMany.mockResolvedValueOnce(
+      [30, 60, 600].map((min) => ({ completedAt: new Date(Date.now() - min * 60_000) }))
+    );
+
+    await expect(
+      recordPomodoroSessionAction({ durationMin: 25, completedSet: true })
+    ).resolves.toEqual({ success: true });
+
+    expect(tx.pomodoroSession.create).toHaveBeenCalledWith({
+      data: {
+        userId: "11111111-1111-4111-8111-111111111111",
+        durationMin: 25,
+        points: 1,
+      },
+    });
+  });
+
+  it("rejects a session recorded faster than its duration", async () => {
+    const { recordPomodoroSessionAction, getCurrentUser, tx } = await loadPomodoroActionsModule();
+
+    getCurrentUser.mockResolvedValueOnce({ id: "11111111-1111-4111-8111-111111111111" });
+    tx.pomodoroSession.findMany.mockResolvedValueOnce([
+      { completedAt: new Date(Date.now() - 5 * 60_000) },
+    ]);
+
+    await expect(recordPomodoroSessionAction({ durationMin: 25 })).resolves.toEqual({
+      error: "Session recorded too soon after the previous one",
+    });
+    expect(tx.pomodoroSession.create).not.toHaveBeenCalled();
   });
 
   it("validates session recording payloads", async () => {
