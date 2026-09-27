@@ -21,6 +21,7 @@ function buildUser(overrides: Partial<TestUser> = {}): TestUser {
 async function loadBoardDetailsModule() {
   const findFirst = vi.fn();
   const findMany = vi.fn();
+  const findTags = vi.fn().mockResolvedValue([{ name: "ops" }, { name: "priority" }]);
   const getAccessibleBoardWhere = vi.fn();
   const sortUsersByDisplayName = vi.fn((users: unknown[]) => users);
 
@@ -31,6 +32,9 @@ async function loadBoardDetailsModule() {
       },
       user: {
         findMany,
+      },
+      tag: {
+        findMany: findTags,
       },
     },
   }));
@@ -139,7 +143,7 @@ describe("getBoardDetailsData", () => {
               description: "Follow-up",
               position: 2,
               dueDate: null,
-              labels: ["ops"],
+              tags: [{ name: "ops" }],
               assigneeId: null,
               assignee: null,
               checklistItems: [
@@ -186,7 +190,7 @@ describe("getBoardDetailsData", () => {
               description: null,
               position: 1,
               dueDate: new Date("2026-03-20T00:00:00.000Z"),
-              labels: ["frontend", "priority"],
+              tags: [{ name: "frontend" }, { name: "priority" }],
               assigneeId: memberA.id,
               assignee: memberA,
               checklistItems: [],
@@ -240,6 +244,8 @@ describe("getBoardDetailsData", () => {
       memberB.id,
     ]);
     expect(result?.activeMembers.find((member) => member.id === owner.id)?.isOwner).toBe(true);
+    expect(result?.tagOptions).toEqual(["ops", "priority"]);
+    expect(result?.canCreateTags).toBe(true);
 
     // Columns and cards are position-sorted.
     expect(result?.columns.map((column) => column.id)).toEqual(["col-1", "col-2"]);
@@ -320,6 +326,7 @@ describe("getBoardDetailsData", () => {
     expect(result?.canManage).toBe(false);
     expect(result?.activeMembers.map((member) => member.id)).toEqual([owner.id, invited.id]);
     expect(result?.activeMembers.find((member) => member.id === owner.id)?.isOwner).toBe(true);
+    expect(result?.canCreateTags).toBe(false);
     expect(result?.activeMembers.find((member) => member.id === outsider.id)).toBeUndefined();
   });
 });
