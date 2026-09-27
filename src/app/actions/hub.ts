@@ -4,10 +4,10 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { z } from "zod";
 import { Prisma, Role } from "@prisma/client";
+import { uploadCover } from "@/lib/cover-upload";
 import { sendDiscordDm } from "@/lib/discord";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
 
 export type HubActionResult = { error: string } | { success: true };
 export type CreateInitiativeResult =
@@ -16,8 +16,6 @@ export type CreateInitiativeResult =
 export type CreateProjectResult = { error: string } | { success: true; projectId: string };
 
 const FORBIDDEN = "Forbidden: Admin access required";
-const COVER_MIME = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-const MAX_COVER_BYTES = 5 * 1024 * 1024;
 
 const nameSchema = z
   .string()
@@ -333,26 +331,13 @@ export async function uploadProjectCoverAction(formData: FormData): Promise<HubA
   const projectId = z.string().uuid().safeParse(formData.get("projectId"));
   if (!projectId.success) return { error: "Invalid project" };
 
-  const file = formData.get("cover");
-  if (!(file instanceof File) || file.size === 0) return { error: "No file provided" };
-  if (!COVER_MIME.includes(file.type)) {
-    return { error: "Only JPEG, PNG, WebP and GIF images are allowed" };
-  }
-  if (file.size > MAX_COVER_BYTES) return { error: "File must be smaller than 5 MB" };
+  const cover = await uploadCover(
+    formData.get("cover"),
+    `${admin.id}/project-covers/${projectId.data}`
+  );
+  if ("error" in cover) return cover;
 
-  const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
-  const path = `${admin.id}/project-covers/${projectId.data}.${extension}`;
-  const supabase = await createClient();
-  const { error } = await supabase.storage
-    .from("avatars")
-    .upload(path, await file.arrayBuffer(), { contentType: file.type, upsert: true });
-  if (error) return { error: error.message };
-
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from("avatars").getPublicUrl(path);
-
-  return saveProjectCover(projectId.data, `${publicUrl}?v=${Date.now()}`);
+  return saveProjectCover(projectId.data, cover.url);
 }
 
 export async function setBoardProjectAction(

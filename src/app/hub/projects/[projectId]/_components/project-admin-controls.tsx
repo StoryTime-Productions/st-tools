@@ -126,7 +126,7 @@ function ProjectEditorForm({
     <>
       <div className="flex-1 space-y-6 overflow-y-auto px-4 pb-4">
         <ProjectCoverEditor
-          projectId={project.id}
+          id={project.id}
           title={project.title}
           coverImageUrl={project.coverImageUrl}
         />

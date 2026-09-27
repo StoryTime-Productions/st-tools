@@ -21,6 +21,15 @@ const PROJECT: ProjectDetail = {
   finished: true,
 };
 
+const HANGOUT = {
+  id: "h1",
+  title: "Beach day",
+  coverImageUrl: null,
+  status: "COLLECTING",
+  description: "Bring sunscreen",
+  discordThreadUrl: "https://discord.com/channels/1/2",
+};
+
 async function loadHub() {
   const redirect = vi.fn(() => {
     throw new Error("REDIRECT");
@@ -42,6 +51,15 @@ async function loadHub() {
     getStandaloneBoardOptions: vi.fn().mockResolvedValue([{ id: "b9", title: "Loose" }]),
     getCalendarCards: vi.fn().mockResolvedValue([{ id: "c1" }]),
   };
+  const hangouts = {
+    HANGOUT_STATUS_LABEL: {
+      COLLECTING: "Collecting availability",
+      SCHEDULED: "Scheduled",
+      CANCELLED: "Cancelled",
+    },
+    getHangoutSummaries: vi.fn().mockResolvedValue([]),
+    getHangoutDetail: vi.fn().mockResolvedValue(HANGOUT),
+  };
   const tagFindMany = vi.fn().mockResolvedValue([{ name: "web" }]);
   const workspaceShell = vi.fn(({ children }: { children: React.ReactNode }) => (
     <div data-testid="shell">{children}</div>
@@ -50,6 +68,18 @@ async function loadHub() {
   vi.doMock("next/navigation", () => ({ redirect, notFound }));
   vi.doMock("@/lib/get-current-user", () => ({ getCurrentUser }));
   vi.doMock("@/lib/hub", () => lib);
+  vi.doMock("@/lib/hangouts", () => hangouts);
+  vi.doMock("@/app/hub/_components/hangout-dialog", () => ({
+    HangoutDialog: ({ hangout }: { hangout?: { title: string } }) => (
+      <button type="button">{hangout ? `Edit ${hangout.title}` : "New hangout"}</button>
+    ),
+    CancelHangoutButton: () => <button type="button">Cancel hangout</button>,
+  }));
+  vi.doMock("@/app/hub/projects/[projectId]/_components/project-cover-editor", () => ({
+    ProjectCoverEditor: ({ kind }: { kind: string }) => (
+      <div data-testid="cover-editor">{kind}</div>
+    ),
+  }));
   vi.doMock("@/lib/prisma", () => ({ prisma: { tag: { findMany: tagFindMany } } }));
   vi.doMock("@/components/layout/workspace-shell", () => ({ WorkspaceShell: workspaceShell }));
   vi.doMock("@/app/hub/_components/new-project-dialog", () => ({
@@ -90,7 +120,10 @@ async function loadHub() {
   const { default: CalendarPage } = await import("@/app/hub/calendar/page");
   const { default: HubPage } = await import("@/app/hub/page");
   const { default: ProjectPage } = await import("@/app/hub/projects/[projectId]/page");
+  const { default: HangoutPage } = await import("@/app/hub/hangouts/[hangoutId]/page");
   return {
+    HangoutPage,
+    hangouts,
     HubLayout,
     HubPage,
     CalendarPage,
@@ -261,5 +294,65 @@ describe("hub pages", () => {
     );
     expect(screen.getByText("Due Oct 1")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Undated/ })).not.toHaveTextContent("Due");
+  });
+
+  it("lists hangouts on the hub with a create button for admins", async () => {
+    const { HubPage, getCurrentUser, hangouts } = await loadHub();
+    getCurrentUser.mockResolvedValue(member);
+
+    const { unmount } = render(await HubPage());
+    expect(screen.getByText("No hangouts planned yet.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "New hangout" })).not.toBeInTheDocument();
+    unmount();
+
+    getCurrentUser.mockResolvedValue(admin);
+    hangouts.getHangoutSummaries.mockResolvedValue([HANGOUT]);
+    render(await HubPage());
+    expect(screen.getByRole("button", { name: "New hangout" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Beach day/ })).toHaveAttribute(
+      "href",
+      "/hub/hangouts/h1"
+    );
+    expect(screen.getByText("Collecting availability")).toBeInTheDocument();
+  });
+
+  it("renders a hangout for members, admins and after cancelling", async () => {
+    const { HangoutPage, getCurrentUser, hangouts } = await loadHub();
+    const params = () => ({ params: Promise.resolve({ hangoutId: "h1" }) });
+
+    getCurrentUser.mockResolvedValue(null);
+    await expect(HangoutPage(params())).rejects.toThrow("REDIRECT");
+
+    getCurrentUser.mockResolvedValue(member);
+    const members = render(await HangoutPage(params()));
+    expect(screen.getByRole("heading", { name: "Beach day" })).toBeInTheDocument();
+    expect(screen.getByText("Bring sunscreen")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Discord thread" })).toHaveAttribute(
+      "href",
+      "https://discord.com/channels/1/2"
+    );
+    expect(screen.queryByRole("button", { name: "Cancel hangout" })).not.toBeInTheDocument();
+    members.unmount();
+
+    getCurrentUser.mockResolvedValue(admin);
+    const admins = render(await HangoutPage(params()));
+    expect(screen.getByRole("button", { name: "Edit Beach day" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel hangout" })).toBeInTheDocument();
+    expect(screen.getByTestId("cover-editor")).toHaveTextContent("hangout");
+    admins.unmount();
+
+    hangouts.getHangoutDetail.mockResolvedValueOnce({
+      ...HANGOUT,
+      status: "CANCELLED",
+      description: null,
+      discordThreadUrl: null,
+    });
+    render(await HangoutPage(params()));
+    expect(screen.getByText("Cancelled")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancel hangout" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Discord thread" })).not.toBeInTheDocument();
+
+    hangouts.getHangoutDetail.mockResolvedValueOnce(null);
+    await expect(HangoutPage(params())).rejects.toThrow("NOT_FOUND");
   });
 });
