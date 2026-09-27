@@ -606,7 +606,7 @@ describe("hub actions", () => {
         expect.objectContaining({
           author: { name: "alice@x" },
           title: "Board access request",
-          description: "**alice@x** wants to join **Art** in **St-tools**.",
+          description: "alice@x wants to join Art in St-tools.",
           url,
         }),
       ],

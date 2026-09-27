@@ -455,7 +455,7 @@ async function notifyAdminsOfAccessRequest(
           {
             author: { name, ...(requester.avatarUrl ? { icon_url: requester.avatarUrl } : {}) },
             title: "Board access request",
-            description: `**${name}** wants to join **${boardTitle}** in **${project.title}**.`,
+            description: `${name} wants to join ${boardTitle} in ${project.title}.`,
             url,
             color: 0xf59e0b,
             footer: { text: "st-tools · approve or decline on the project page" },
