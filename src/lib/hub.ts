@@ -11,9 +11,13 @@ export interface ProjectSummary {
   title: string;
   coverImageUrl: string | null;
   initiativeName: string | null;
+  startQuarter: string | null;
+  endQuarter: string | null;
   quarterLabel: string | null;
   currentPhase: string | null;
   finished: boolean;
+  linkUrls: string[];
+  participants: ProjectParticipant[];
 }
 
 export interface ProjectDetail {
@@ -52,6 +56,14 @@ export async function getProjectSummaries(): Promise<ProjectSummary[]> {
       finishedAt: true,
       initiative: { select: { name: true } },
       phases: { select: { name: true }, orderBy: { position: "asc" } },
+      links: { select: { url: true }, orderBy: { position: "asc" } },
+      boards: {
+        select: {
+          members: {
+            select: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+          },
+        },
+      },
     },
   });
 
@@ -60,13 +72,33 @@ export async function getProjectSummaries(): Promise<ProjectSummary[]> {
     title: project.title,
     coverImageUrl: project.coverImageUrl,
     initiativeName: project.initiative?.name ?? null,
+    startQuarter: project.startQuarter,
+    endQuarter: project.endQuarter,
     quarterLabel: formatQuarterRange(project.startQuarter, project.endQuarter),
     currentPhase:
       project.currentPhaseIndex === null
         ? null
         : (project.phases[project.currentPhaseIndex]?.name ?? null),
     finished: project.finishedAt !== null,
+    linkUrls: project.links.map((link) => link.url),
+    participants: uniqueParticipants(
+      project.boards.flatMap((board) => board.members.map((member) => member.user))
+    ),
   }));
+}
+
+function uniqueParticipants(
+  users: Array<{ id: string; name: string | null; email: string; avatarUrl: string | null }>
+): ProjectParticipant[] {
+  const byId = new Map<string, ProjectParticipant>();
+  for (const user of users) {
+    byId.set(user.id, {
+      id: user.id,
+      name: user.name?.trim() || user.email,
+      avatarUrl: user.avatarUrl,
+    });
+  }
+  return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function getProjectDetail(projectId: string): Promise<ProjectDetail | null> {
@@ -173,20 +205,12 @@ export async function getProjectWork(
   });
 
   const isAdmin = viewer.role === "ADMIN";
-  const participants = new Map<string, ProjectParticipant>();
   const accessRequests: BoardAccessRequestItem[] = [];
   const availableTasks: AvailableTask[] = [];
   const projectBoards = boards.map((board) => {
     const accessible = isAdmin || board.members.some(({ user }) => user.id === viewer.id);
     const cards = board.columns.flatMap((column) => column.cards);
 
-    for (const { user } of board.members) {
-      participants.set(user.id, {
-        id: user.id,
-        name: user.name?.trim() || user.email,
-        avatarUrl: user.avatarUrl,
-      });
-    }
     if (accessible) {
       for (const card of cards) {
         if (card.assigneeId) continue;
@@ -225,7 +249,9 @@ export async function getProjectWork(
 
   return {
     boards: projectBoards,
-    participants: [...participants.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    participants: uniqueParticipants(
+      boards.flatMap((board) => board.members.map((member) => member.user))
+    ),
     availableTasks,
     accessRequests,
   };

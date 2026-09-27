@@ -54,6 +54,15 @@ async function loadHub() {
   vi.doMock("@/app/hub/_components/new-project-dialog", () => ({
     NewProjectDialog: () => <button type="button">New project</button>,
   }));
+  vi.doMock("@/app/hub/_components/project-overview", () => ({
+    ProjectOverview: ({ projects }: { projects: Array<{ title: string }> }) => (
+      <ul data-testid="overview">
+        {projects.map((project) => (
+          <li key={project.title}>{project.title}</li>
+        ))}
+      </ul>
+    ),
+  }));
   vi.doMock("@/app/hub/_components/manage-initiatives-dialog", () => ({
     ManageInitiativesDialog: () => <button type="button">Manage initiatives</button>,
   }));
@@ -135,14 +144,7 @@ describe("hub pages", () => {
     render(await HubPage());
 
     expect(screen.getByRole("button", { name: "New project" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /St-tools/ })).toHaveAttribute(
-      "href",
-      "/hub/projects/p1"
-    );
-    expect(screen.getByText("Internal Tools · Q3 2026")).toBeInTheDocument();
-    expect(screen.getByText("Build")).toBeInTheDocument();
-    expect(screen.getByText("No initiative")).toBeInTheDocument();
-    expect(screen.getByText("Finished")).toBeInTheDocument();
+    expect(screen.getByTestId("overview")).toHaveTextContent("St-toolsOld game");
   });
 
   it("renders a project for members and 404s unknown ids", async () => {
