@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
@@ -299,6 +301,40 @@ export async function updateAvatarAction(formData: FormData): Promise<ProfileAct
     data: { avatarUrl: cacheBustedAvatarUrl },
   });
 
+  revalidatePath("/settings/profile");
+  return { success: true };
+}
+
+// ─── Discord account link ──────────────────────────────────────────────────────
+export async function connectDiscordAction(): Promise<ProfileActionResult> {
+  const supabase = await createClient();
+  const origin = (await headers()).get("origin") ?? process.env.NEXT_PUBLIC_SITE_URL ?? "";
+  const { data, error } = await supabase.auth.linkIdentity({
+    provider: "discord",
+    options: {
+      redirectTo: `${origin}/auth/callback?next=/settings/profile`,
+      skipBrowserRedirect: true,
+    },
+  });
+  if (error || !data.url) return { error: error?.message ?? "Could not start Discord linking" };
+
+  redirect(data.url);
+}
+
+export async function disconnectDiscordAction(): Promise<ProfileActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const identity = user.identities?.find((item) => item.provider === "discord");
+  if (identity) {
+    const { error } = await supabase.auth.unlinkIdentity(identity);
+    if (error) return { error: error.message };
+  }
+
+  await prisma.user.update({ where: { id: user.id }, data: { discordId: null } });
   revalidatePath("/settings/profile");
   return { success: true };
 }

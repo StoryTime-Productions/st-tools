@@ -44,11 +44,20 @@ async function loadHubModule() {
       deleteMany: vi.fn(),
     },
     board: { findUnique: vi.fn(), update: vi.fn() },
-    boardAccessRequest: { createMany: vi.fn(), findUnique: vi.fn(), deleteMany: vi.fn() },
+    user: { findMany: vi.fn().mockResolvedValue([]) },
+    boardAccessRequest: {
+      createMany: vi.fn().mockResolvedValue({ count: 1 }),
+      findUnique: vi.fn(),
+      deleteMany: vi.fn(),
+    },
     $transaction: vi.fn(async (fn: (client: typeof tx) => Promise<unknown>) => fn(tx)),
   };
 
+  const sendDiscordDm = vi.fn().mockResolvedValue(true);
+  const requestHeaders = new Headers({ origin: "https://tools.test" });
   vi.doMock("next/cache", () => ({ revalidatePath }));
+  vi.doMock("next/headers", () => ({ headers: vi.fn(async () => requestHeaders) }));
+  vi.doMock("@/lib/discord", () => ({ sendDiscordDm }));
   vi.doMock("@/lib/get-current-user", () => ({ getCurrentUser }));
   const storage = {
     upload: vi.fn().mockResolvedValue({ error: null }),
@@ -60,7 +69,16 @@ async function loadHubModule() {
   vi.doMock("@/lib/supabase/server", () => ({ createClient }));
 
   const hub = await import("@/app/actions/hub");
-  return { ...hub, revalidatePath, getCurrentUser, prisma, tx, storage };
+  return {
+    ...hub,
+    revalidatePath,
+    getCurrentUser,
+    prisma,
+    tx,
+    storage,
+    sendDiscordDm,
+    requestHeaders,
+  };
 }
 
 function projectUpdate(overrides: Record<string, unknown> = {}) {
@@ -498,24 +516,34 @@ describe("hub actions", () => {
       error: "Board not found",
     });
 
-    hub.prisma.board.findUnique.mockResolvedValueOnce({ projectId: null, members: [{ id: "m" }] });
+    hub.prisma.board.findUnique.mockResolvedValueOnce({ project: null, members: [{ id: "m" }] });
     await expect(hub.requestBoardAccessAction(IDS.board)).resolves.toEqual({
       error: "You already have access to this board",
     });
 
-    hub.prisma.board.findUnique.mockResolvedValueOnce({ projectId: IDS.project, members: [] });
+    const boardWithProject = {
+      title: "Art",
+      project: { id: IDS.project, title: "St-tools" },
+      members: [],
+    };
+    hub.prisma.board.findUnique.mockResolvedValueOnce(boardWithProject);
     await expect(hub.requestBoardAccessAction(IDS.board)).resolves.toEqual({ success: true });
+    expect(hub.sendDiscordDm).not.toHaveBeenCalled();
     expect(hub.prisma.boardAccessRequest.createMany).toHaveBeenCalledWith({
       data: [{ boardId: IDS.board, userId: member.id }],
       skipDuplicates: true,
     });
     expect(hub.revalidatePath).toHaveBeenCalledWith(`/hub/projects/${IDS.project}`);
 
-    hub.prisma.board.findUnique.mockResolvedValueOnce({ projectId: null, members: [] });
+    hub.prisma.board.findUnique.mockResolvedValueOnce({
+      title: "Loose",
+      project: null,
+      members: [],
+    });
     await expect(hub.requestBoardAccessAction(IDS.board)).resolves.toEqual({ success: true });
 
     hub.getCurrentUser.mockResolvedValue(admin);
-    hub.prisma.board.findUnique.mockResolvedValueOnce({ projectId: null, members: [] });
+    hub.prisma.board.findUnique.mockResolvedValueOnce({ project: null, members: [] });
     await expect(hub.requestBoardAccessAction(IDS.board)).resolves.toEqual({
       error: "You already have access to this board",
     });
@@ -555,5 +583,52 @@ describe("hub actions", () => {
     expect(hub.prisma.boardAccessRequest.deleteMany).toHaveBeenCalledWith({
       where: { id: IDS.request },
     });
+  });
+
+  it("DMs every admin with a linked Discord account about a new request", async () => {
+    const hub = await loadHubModule();
+    const requester = { ...member, name: " ", email: "alice@x", avatarUrl: null };
+    hub.getCurrentUser.mockResolvedValue(requester);
+    const board = { title: "Art", project: { id: IDS.project, title: "St-tools" }, members: [] };
+    hub.prisma.board.findUnique.mockResolvedValue(board);
+    hub.prisma.user.findMany.mockResolvedValue([{ discordId: "111" }, { discordId: "222" }]);
+
+    await expect(hub.requestBoardAccessAction(IDS.board)).resolves.toEqual({ success: true });
+
+    expect(hub.prisma.user.findMany).toHaveBeenCalledWith({
+      where: { role: "ADMIN", discordId: { not: null } },
+      select: { discordId: true },
+    });
+    expect(hub.sendDiscordDm).toHaveBeenCalledTimes(2);
+    const url = `https://tools.test/hub/projects/${IDS.project}`;
+    expect(hub.sendDiscordDm).toHaveBeenCalledWith("111", {
+      embeds: [
+        expect.objectContaining({
+          author: { name: "alice@x" },
+          title: "Board access request",
+          description: "alice@x wants to join Art in St-tools.",
+          url,
+        }),
+      ],
+      linkButton: { label: "Review request", url },
+    });
+
+    hub.sendDiscordDm.mockClear();
+    hub.getCurrentUser.mockResolvedValue({ ...requester, name: "Alice", avatarUrl: "https://a" });
+    hub.requestHeaders.delete("origin");
+    process.env.NEXT_PUBLIC_SITE_URL = "https://site.test";
+    await hub.requestBoardAccessAction(IDS.board);
+    expect(hub.sendDiscordDm.mock.calls[0][1].embeds[0]).toMatchObject({
+      author: { name: "Alice", icon_url: "https://a" },
+      url: `https://site.test/hub/projects/${IDS.project}`,
+    });
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+
+    hub.sendDiscordDm.mockClear();
+    hub.prisma.boardAccessRequest.createMany.mockResolvedValueOnce({ count: 0 });
+    await hub.requestBoardAccessAction(IDS.board);
+    hub.prisma.user.findMany.mockResolvedValueOnce([]);
+    await hub.requestBoardAccessAction(IDS.board);
+    expect(hub.sendDiscordDm).not.toHaveBeenCalled();
   });
 });

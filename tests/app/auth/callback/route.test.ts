@@ -118,9 +118,41 @@ describe("GET /auth/callback", () => {
       create: {
         id: "22222222-2222-4222-8222-222222222222",
         email: "member@example.com",
+        discordId: null,
       },
     });
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("https://example.test/boards");
+  });
+
+  it("stores the Discord id after linking a Discord identity", async () => {
+    createClientMock.mockResolvedValueOnce({
+      auth: {
+        exchangeCodeForSession: vi.fn().mockResolvedValue({
+          data: {
+            user: {
+              id: "33333333-3333-4333-8333-333333333333",
+              email: "admin@example.com",
+              user_metadata: {},
+              identities: [
+                { provider: "email", identity_data: { sub: "33333333" } },
+                { provider: "discord", identity_data: { sub: "123456789012345678" } },
+              ],
+            },
+          },
+          error: null,
+        }),
+      },
+    });
+    prismaUserUpsertMock.mockResolvedValueOnce({});
+
+    const response = await GET(
+      new Request("https://example.test/auth/callback?code=link&next=/settings/profile") as never
+    );
+
+    expect(prismaUserUpsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({ update: { discordId: "123456789012345678" } })
+    );
+    expect(response.headers.get("location")).toBe("https://example.test/settings/profile");
   });
 });

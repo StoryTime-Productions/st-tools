@@ -9,6 +9,12 @@ async function loadProfileSettingsPageModule() {
   const profileForm = vi.fn(() => <div data-testid="profile-form" />);
   const appearanceForm = vi.fn(() => <div data-testid="appearance-form" />);
   const pomodoroPreferencesForm = vi.fn(() => <div data-testid="pomodoro-preferences-form" />);
+  const discordLink = vi.fn(({ connected }: { connected: boolean }) => (
+    <div data-testid="discord-link">{connected ? "connected" : "not connected"}</div>
+  ));
+  vi.doMock("@/app/settings/profile/_components/discord-link", () => ({
+    DiscordLink: discordLink,
+  }));
 
   vi.doMock("next/navigation", () => ({ redirect }));
   vi.doMock("@/lib/get-current-user", () => ({ getCurrentUser }));
@@ -86,6 +92,7 @@ describe("ProfileSettingsPage", () => {
       pomodoroWorkMin: 25,
       pomodoroShortBreakMin: 5,
       pomodoroLongBreakMin: 15,
+      discordId: "123",
     };
 
     getCurrentUser.mockResolvedValueOnce(user);
@@ -94,6 +101,7 @@ describe("ProfileSettingsPage", () => {
     render(output);
 
     expect(screen.getByText("Profile settings")).toBeInTheDocument();
+    expect(screen.getByTestId("discord-link")).toHaveTextContent("connected");
     expect(screen.getByText("nirav@example.com")).toBeInTheDocument();
     expect(screen.getByText("ADMIN")).toBeInTheDocument();
     expect(screen.getByText(/2026/)).toBeInTheDocument();

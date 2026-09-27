@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { z } from "zod";
 import { Prisma, Role } from "@prisma/client";
+import { sendDiscordDm } from "@/lib/discord";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
@@ -407,7 +409,8 @@ export async function requestBoardAccessAction(boardId: string): Promise<HubActi
   const board = await prisma.board.findUnique({
     where: { id: parsed.data },
     select: {
-      projectId: true,
+      title: true,
+      project: { select: { id: true, title: true } },
       members: { where: { userId: currentUser.id }, select: { id: true } },
     },
   });
@@ -416,13 +419,53 @@ export async function requestBoardAccessAction(boardId: string): Promise<HubActi
     return { error: "You already have access to this board" };
   }
 
-  await prisma.boardAccessRequest.createMany({
+  const created = await prisma.boardAccessRequest.createMany({
     data: [{ boardId: parsed.data, userId: currentUser.id }],
     skipDuplicates: true,
   });
 
-  if (board.projectId) revalidateHub(board.projectId);
+  if (board.project) {
+    revalidateHub(board.project.id);
+    if (created.count > 0) {
+      await notifyAdminsOfAccessRequest(currentUser, board.title, board.project);
+    }
+  }
   return { success: true };
+}
+
+async function notifyAdminsOfAccessRequest(
+  requester: { name: string | null; email: string; avatarUrl: string | null },
+  boardTitle: string,
+  project: { id: string; title: string }
+) {
+  const admins = await prisma.user.findMany({
+    where: { role: Role.ADMIN, discordId: { not: null } },
+    select: { discordId: true },
+  });
+  if (admins.length === 0) return;
+
+  const origin = (await headers()).get("origin") ?? process.env.NEXT_PUBLIC_SITE_URL ?? "";
+  const url = `${origin}/hub/projects/${project.id}`;
+  const name = requester.name?.trim() || requester.email;
+
+  await Promise.all(
+    admins.map((admin) =>
+      sendDiscordDm(admin.discordId!, {
+        embeds: [
+          {
+            author: { name, ...(requester.avatarUrl ? { icon_url: requester.avatarUrl } : {}) },
+            title: "Board access request",
+            description: `${name} wants to join ${boardTitle} in ${project.title}.`,
+            url,
+            color: 0xf59e0b,
+            footer: { text: "st-tools · approve or decline on the project page" },
+            timestamp: new Date().toISOString(),
+          },
+        ],
+        linkButton: { label: "Review request", url },
+      })
+    )
+  );
 }
 
 export async function approveBoardAccessAction(requestId: string): Promise<HubActionResult> {

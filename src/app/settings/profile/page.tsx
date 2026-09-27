@@ -6,6 +6,7 @@ import { ProfileForm } from "./_components/profile-form";
 import { AvatarForm } from "./_components/avatar-form";
 import { AppearanceForm } from "./_components/appearance-form";
 import { PomodoroPreferencesForm } from "./_components/pomodoro-preferences-form";
+import { DiscordLink } from "./_components/discord-link";
 
 export const metadata = { title: "Profile – Settings" };
 
@@ -33,6 +34,15 @@ export default async function ProfileSettingsPage() {
           </CardHeader>
           <CardContent>
             <ProfileForm initialName={user.name} />
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
+          <CardHeader>
+            <CardTitle className="text-base">Discord</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <DiscordLink connected={Boolean(user.discordId)} />
           </CardContent>
         </Card>
 

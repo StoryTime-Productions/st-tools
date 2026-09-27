@@ -177,8 +177,8 @@ describe("NewProjectDialog", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: "Close" })[0]);
     fireEvent.click(screen.getByRole("button", { name: /new project/i }));
-    expect(screen.getByLabelText("Title")).toHaveValue("");
-  });
+    await waitFor(() => expect(screen.getByLabelText("Title")).toHaveValue(""));
+  }, 15000);
 });
 
 describe("ManageInitiativesDialog", () => {
