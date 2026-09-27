@@ -127,13 +127,12 @@ Migrations run automatically via GitHub Actions before each deploy.
 
 ## Contributing
 
-Use issue-linked branches and conventional commits for all contributions.
+Use conventional commits for all contributions. Linking an issue is optional.
 
 All contributions must:
 
-- Be linked to an existing GitHub issue
-- Follow `<type>/<issue-number>-<description>` branch naming
-- Use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0-beta.4/) with a `Refs: #N` or `Closes: #N` footer
+- Follow `<type>/<description>` branch naming, optionally with the issue number: `<type>/<issue-number>-<description>`
+- Use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0-beta.4/); a `Refs: #N` or `Closes: #N` footer is optional, and any referenced issue must exist
 - Pass all three CI checks: `validate`, `quality`, `test`
 
 ## License

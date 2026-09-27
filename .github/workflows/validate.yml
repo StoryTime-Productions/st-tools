@@ -23,10 +23,10 @@ jobs:
             echo "Protected branch — skipping pattern check."
             exit 0
           fi
-          PATTERN='^(feat|fix|docs|style|refactor|perf|test|chore|ci|revert)\/[0-9]+-[a-z0-9-]+$'
+          PATTERN='^(feat|fix|docs|style|refactor|perf|test|chore|ci|revert)\/([0-9]+-)?[a-z0-9-]+$'
           if ! [[ "$BRANCH" =~ $PATTERN ]]; then
-            echo "::error::Branch '$BRANCH' does not match required pattern: <type>/<issue-number>-<short-description>"
-            echo "Examples: feat/14-kanban-drag-drop, fix/27-timer-bug, chore/31-upgrade-deps"
+            echo "::error::Branch '$BRANCH' does not match required pattern: <type>/[<issue-number>-]<short-description>"
+            echo "Examples: feat/hub-overview, fix/27-timer-bug, chore/upgrade-deps"
             exit 1
           fi
           echo "Branch name is valid."
@@ -81,8 +81,8 @@ jobs:
           ISSUE_NUMS=$(printf "%s\n%s\n" "$FOOTER_ISSUES" "$INLINE_ISSUES" | grep -E '^[0-9]+$' | sort -u || true)
 
           if [ -z "$ISSUE_NUMS" ]; then
-            echo "::error::No issue reference found in commits. Add either 'Refs: #N'/'Closes: #N' footer or include '#N' in commit text."
-            exit 1
+            echo "No issue references in commits; nothing to verify."
+            exit 0
           fi
 
           FAILED=0
