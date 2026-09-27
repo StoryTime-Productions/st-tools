@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
 
 interface CreateBoardDialogProps {
   triggerLabel?: string;
@@ -33,14 +32,10 @@ export function CreateBoardDialog({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
-  const [collaborative, setCollaborative] = useState(false);
-  const [openToWorkspace, setOpenToWorkspace] = useState(true);
   const [isPending, startTransition] = useTransition();
 
   function reset() {
     setTitle("");
-    setCollaborative(false);
-    setOpenToWorkspace(true);
   }
 
   function handleOpenChange(nextOpen: boolean) {
@@ -55,18 +50,14 @@ export function CreateBoardDialog({
     event.preventDefault();
 
     startTransition(async () => {
-      const result = await createBoardAction({
-        title,
-        collaborative,
-        openToWorkspace,
-      });
+      const result = await createBoardAction({ title });
 
       if ("error" in result) {
         toast.error(result.error);
         return;
       }
 
-      toast.success(collaborative ? "Collaborative board created" : "Personal board created");
+      toast.success("Board created");
       reset();
       setOpen(false);
 
@@ -90,7 +81,7 @@ export function CreateBoardDialog({
         <DialogHeader>
           <DialogTitle>Create a board</DialogTitle>
           <DialogDescription>
-            Start with a private personal board or open a collaborative board for the team.
+            You become its first member. Add teammates from the board.
           </DialogDescription>
         </DialogHeader>
 
@@ -101,75 +92,11 @@ export function CreateBoardDialog({
               id="board-title"
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              placeholder={collaborative ? "Production planning" : "Personal planning"}
+              placeholder="Production planning"
               maxLength={120}
               autoFocus
             />
           </div>
-
-          <div className="space-y-2">
-            <Label>Board type</Label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setCollaborative(false)}
-                className={cn(
-                  "rounded-2xl border px-4 py-3 text-left transition-colors",
-                  !collaborative
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border hover:bg-muted/50"
-                )}
-              >
-                <div className="text-sm font-medium">Personal</div>
-                <div
-                  className={cn(
-                    "text-xs",
-                    !collaborative ? "text-background/70" : "text-muted-foreground"
-                  )}
-                >
-                  Visible only to you.
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setCollaborative(true)}
-                className={cn(
-                  "rounded-2xl border px-4 py-3 text-left transition-colors",
-                  collaborative
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border hover:bg-muted/50"
-                )}
-              >
-                <div className="text-sm font-medium">Collaborative</div>
-                <div
-                  className={cn(
-                    "text-xs",
-                    collaborative ? "text-background/70" : "text-muted-foreground"
-                  )}
-                >
-                  Shared with teammates.
-                </div>
-              </button>
-            </div>
-          </div>
-
-          {collaborative ? (
-            <label className="flex items-start gap-3 rounded-2xl border px-4 py-3">
-              <input
-                type="checkbox"
-                checked={openToWorkspace}
-                onChange={(event) => setOpenToWorkspace(event.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded border"
-              />
-              <div className="space-y-1">
-                <div className="text-sm font-medium">Open to the full workspace</div>
-                <p className="text-muted-foreground text-xs leading-5">
-                  Turn this off if you want to invite specific teammates instead of making the board
-                  visible to everyone.
-                </p>
-              </div>
-            </label>
-          ) : null}
 
           <DialogFooter showCloseButton>
             <Button type="submit" disabled={isPending || title.trim().length === 0}>

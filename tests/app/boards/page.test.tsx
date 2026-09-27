@@ -108,9 +108,8 @@ describe("BoardsPage", () => {
         id: "board-1",
         title: "Team roadmap",
         ownerId: "owner-id",
-        isPersonal: false,
-        isOpenToWorkspace: false,
         createdAt: new Date("2026-03-18T00:00:00.000Z"),
+        _count: { members: 3 },
         owner: {
           name: "Olivia Owner",
           email: "owner@example.com",
@@ -119,11 +118,10 @@ describe("BoardsPage", () => {
       },
       {
         id: "board-2",
-        title: "Private notes",
+        title: "Admin notes",
         ownerId: "admin-id",
-        isPersonal: true,
-        isOpenToWorkspace: false,
         createdAt: new Date("2026-03-19T00:00:00.000Z"),
+        _count: { members: 1 },
         owner: {
           name: null,
           email: "admin@example.com",
@@ -147,17 +145,15 @@ describe("BoardsPage", () => {
       title: "Team roadmap",
       cardCount: 5,
       ownerLabel: "Owned by Olivia Owner",
-      scopeLabel: "Collaborative",
-      accessDescription: "Shared with selected teammates.",
+      memberLabel: "3 members",
       canManage: true,
     });
     expect(mappedBoards[1]).toMatchObject({
       id: "board-2",
-      title: "Private notes",
+      title: "Admin notes",
       cardCount: 1,
       ownerLabel: "Owned by you",
-      scopeLabel: "Private",
-      accessDescription: "Visible only to your account.",
+      memberLabel: "1 member",
       canManage: true,
     });
   });

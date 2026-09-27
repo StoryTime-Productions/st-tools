@@ -31,7 +31,7 @@ describe("CreateBoardDialog", () => {
     vi.clearAllMocks();
   });
 
-  it("creates a personal board and navigates to the new board", async () => {
+  it("creates a board and navigates to it", async () => {
     actionMocks.createBoardAction.mockResolvedValue({
       success: true,
       boardId: "11111111-1111-4111-8111-111111111111",
@@ -41,53 +41,17 @@ describe("CreateBoardDialog", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /new board/i }));
     fireEvent.change(screen.getByLabelText("Board name"), {
-      target: { value: "Personal board" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /create board/i }));
-
-    await waitFor(() => {
-      expect(actionMocks.createBoardAction).toHaveBeenCalledWith({
-        title: "Personal board",
-        collaborative: false,
-        openToWorkspace: true,
-      });
-    });
-
-    expect(toastMocks.success).toHaveBeenCalledWith("Personal board created");
-    expect(routerMocks.push).toHaveBeenCalledWith("/boards/11111111-1111-4111-8111-111111111111");
-    expect(routerMocks.refresh).toHaveBeenCalled();
-  });
-
-  it("creates a collaborative board with workspace access disabled", async () => {
-    actionMocks.createBoardAction.mockResolvedValue({
-      success: true,
-      boardId: "22222222-2222-4222-8222-222222222222",
-    });
-
-    render(<CreateBoardDialog />);
-
-    fireEvent.click(screen.getByRole("button", { name: /new board/i }));
-    fireEvent.click(screen.getByRole("button", { name: /collaborative/i }));
-
-    const workspaceCheckbox = screen.getByRole("checkbox");
-    expect(workspaceCheckbox).toBeChecked();
-    fireEvent.click(workspaceCheckbox);
-    expect(workspaceCheckbox).not.toBeChecked();
-
-    fireEvent.change(screen.getByLabelText("Board name"), {
       target: { value: "Team board" },
     });
     fireEvent.click(screen.getByRole("button", { name: /create board/i }));
 
     await waitFor(() => {
-      expect(actionMocks.createBoardAction).toHaveBeenCalledWith({
-        title: "Team board",
-        collaborative: true,
-        openToWorkspace: false,
-      });
+      expect(actionMocks.createBoardAction).toHaveBeenCalledWith({ title: "Team board" });
     });
 
-    expect(toastMocks.success).toHaveBeenCalledWith("Collaborative board created");
+    expect(toastMocks.success).toHaveBeenCalledWith("Board created");
+    expect(routerMocks.push).toHaveBeenCalledWith("/boards/11111111-1111-4111-8111-111111111111");
+    expect(routerMocks.refresh).toHaveBeenCalled();
   });
 
   it("shows error toast and keeps dialog open when creation fails", async () => {
@@ -116,14 +80,11 @@ describe("CreateBoardDialog", () => {
     fireEvent.change(screen.getByLabelText("Board name"), {
       target: { value: "Temporary title" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /collaborative/i }));
-
     fireEvent.click(screen.getAllByRole("button", { name: "Close" })[0]);
 
     fireEvent.click(screen.getByRole("button", { name: /new board/i }));
 
     const boardNameInput = screen.getByLabelText("Board name") as HTMLInputElement;
     expect(boardNameInput.value).toBe("");
-    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 });

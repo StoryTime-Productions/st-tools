@@ -19,7 +19,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { type QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Globe2, GripVertical, Lock, Plus, Trash2, UserPlus, Users } from "lucide-react";
+import { GripVertical, Plus, Trash2, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import {
   addBoardMemberAction,
@@ -33,7 +33,6 @@ import {
   removeBoardMemberAction,
   renameColumnAction,
   reorderColumnsAction,
-  updateBoardAccessAction,
   updateCardAction,
 } from "@/app/actions/boards";
 import { CardDetailSheet } from "@/app/boards/[boardId]/_components/card-detail-sheet";
@@ -481,6 +480,7 @@ function ColumnContainer({
             variant="ghost"
             onClick={() => onDelete(column.id)}
             disabled={isPending}
+            aria-label="Delete column"
           >
             <Trash2 className="size-4" />
           </Button>
@@ -586,8 +586,7 @@ export function BoardView({ board }: BoardViewProps) {
   const boardState = boardQuery.data ?? board;
   const columns = boardState.columns;
   const columnLookup = Object.fromEntries(columns.map((column) => [column.id, column.title]));
-  const showMemberManagementControls = !board.isPersonal && board.canManage;
-  const showInviteControls = showMemberManagementControls && !board.isOpenToWorkspace;
+  const showInviteControls = board.canManage;
 
   const selectedCard = selectedCardId ? findCardById(columns, selectedCardId) : null;
   const inviteableMembers = boardState.allMembers.filter(
@@ -618,10 +617,6 @@ export function BoardView({ board }: BoardViewProps) {
   }, [board, board.id, queryClient]);
 
   useEffect(() => {
-    if (board.isPersonal) {
-      return;
-    }
-
     const supabase = createClient();
 
     function invalidateIfRelevant(payload: {
@@ -711,7 +706,7 @@ export function BoardView({ board }: BoardViewProps) {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [board.id, board.isPersonal, queryClient]);
+  }, [board.id, queryClient]);
 
   function handleAddColumn() {
     const optimisticColumn = createOptimisticColumn(columns.length);
@@ -922,20 +917,6 @@ export function BoardView({ board }: BoardViewProps) {
     });
   }
 
-  function handleToggleWorkspaceAccess(nextValue: boolean) {
-    startTransition(async () => {
-      const result = await updateBoardAccessAction(board.id, nextValue);
-      if ("error" in result) {
-        toast.error(result.error);
-        void invalidateBoardQuery(queryClient, board.id);
-        return;
-      }
-
-      toast.success(nextValue ? "Board is now open to the workspace" : "Board is now invite-only");
-      await invalidateBoardQuery(queryClient, board.id);
-    });
-  }
-
   function handleInviteMember() {
     if (!inviteMemberId) {
       return;
@@ -1089,17 +1070,7 @@ export function BoardView({ board }: BoardViewProps) {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline">{board.isPersonal ? "Private" : "Collaborative"}</Badge>
-            {board.isPersonal ? null : board.isOpenToWorkspace ? (
-              <Badge variant="secondary">Open to workspace</Badge>
-            ) : (
-              <Badge variant="outline">Invite only</Badge>
-            )}
-          </div>
-          <h2 className="text-2xl font-semibold tracking-tight">{board.title}</h2>
-        </div>
+        <h2 className="text-2xl font-semibold tracking-tight">{board.title}</h2>
 
         {board.canManage ? (
           <Button type="button" variant="ghost" onClick={handleDeleteBoard} disabled={isPending}>
@@ -1131,30 +1102,7 @@ export function BoardView({ board }: BoardViewProps) {
             ) : null}
           </AvatarGroup>
         </CardHeader>
-        <CardContent className={cn("space-y-4", showMemberManagementControls ? "pt-6" : "pt-3")}>
-          {showMemberManagementControls ? (
-            <label className="flex items-start gap-3 rounded-2xl border px-4 py-3">
-              {board.isOpenToWorkspace ? (
-                <Globe2 className="mt-0.5 size-4" />
-              ) : (
-                <Lock className="mt-0.5 size-4" />
-              )}
-              <div className="space-y-1">
-                <div className="text-sm font-medium">Open to the full workspace</div>
-                <p className="text-muted-foreground text-xs leading-5">
-                  Leave this enabled for a fully open team board, or switch it off to manage members
-                  explicitly.
-                </p>
-                <input
-                  type="checkbox"
-                  checked={board.isOpenToWorkspace}
-                  onChange={(event) => handleToggleWorkspaceAccess(event.target.checked)}
-                  className="mt-2 h-4 w-4 rounded border"
-                />
-              </div>
-            </label>
-          ) : null}
-
+        <CardContent className={cn("space-y-4", showInviteControls ? "pt-6" : "pt-3")}>
           {showInviteControls ? (
             <div className="grid gap-3 rounded-2xl border px-4 py-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
               <div className="space-y-2">
@@ -1210,7 +1158,7 @@ export function BoardView({ board }: BoardViewProps) {
                 </div>
                 {member.isOwner ? (
                   <Badge variant="secondary">Owner</Badge>
-                ) : board.canManage && !board.isOpenToWorkspace ? (
+                ) : board.canManage ? (
                   <Button
                     type="button"
                     size="sm"
@@ -1281,13 +1229,7 @@ export function BoardView({ board }: BoardViewProps) {
         }}
         card={selectedCard}
         columnLookup={columnLookup}
-        members={
-          board.isPersonal
-            ? board.activeMembers
-            : board.isOpenToWorkspace
-              ? board.allMembers
-              : board.activeMembers
-        }
+        members={board.activeMembers}
         isPending={isPending}
         onSave={handleSaveCard}
         onAddComment={handleAddComment}

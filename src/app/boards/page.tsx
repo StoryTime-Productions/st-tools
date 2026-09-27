@@ -31,9 +31,12 @@ export default async function BoardsPage() {
       id: true,
       title: true,
       ownerId: true,
-      isPersonal: true,
-      isOpenToWorkspace: true,
       createdAt: true,
+      _count: {
+        select: {
+          members: true,
+        },
+      },
       owner: {
         select: {
           name: true,
@@ -61,18 +64,13 @@ export default async function BoardsPage() {
       createdAtLabel: formatDate(board.createdAt),
       cardCount: board.columns.reduce((total, column) => total + column._count.cards, 0),
       ownerLabel: isOwner ? "Owned by you" : `Owned by ${getUserDisplayName(board.owner)}`,
-      scopeLabel: board.isPersonal ? "Private" : "Collaborative",
-      accessDescription: board.isPersonal
-        ? "Visible only to your account."
-        : board.isOpenToWorkspace
-          ? "Open to the whole workspace."
-          : "Shared with selected teammates.",
+      memberLabel: `${board._count.members} ${board._count.members === 1 ? "member" : "members"}`,
       canManage: user.role === "ADMIN" || isOwner,
     };
   });
 
   const totalCards = boards.reduce((total, board) => total + board.cardCount, 0);
-  const collaborativeBoards = boardRows.filter((board) => !board.isPersonal).length;
+  const ownedBoards = boardRows.filter((board) => board.ownerId === user.id).length;
 
   return (
     <div className="space-y-6">
@@ -95,9 +93,9 @@ export default async function BoardsPage() {
         <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
           <CardHeader className="space-y-2">
             <CardDescription className="text-xs tracking-[0.24em] uppercase">
-              Collaborative boards
+              Owned by you
             </CardDescription>
-            <CardTitle className="text-3xl tracking-tight">{collaborativeBoards}</CardTitle>
+            <CardTitle className="text-3xl tracking-tight">{ownedBoards}</CardTitle>
           </CardHeader>
         </Card>
 
@@ -120,8 +118,7 @@ export default async function BoardsPage() {
             <div className="space-y-2">
               <h3 className="text-xl font-semibold tracking-tight">No boards yet</h3>
               <p className="text-muted-foreground max-w-md text-sm leading-6">
-                Create your first private or collaborative board to start organising work with
-                columns and cards.
+                Create your first board to start organising work with columns and cards.
               </p>
             </div>
             <CreateBoardDialog triggerLabel="Create your first board" />

@@ -92,50 +92,31 @@ function mapCardActivity(activity: {
   };
 }
 
-function getActiveMembers(
-  board: {
-    ownerId: string;
-    isPersonal: boolean;
-    isOpenToWorkspace: boolean;
-    owner: {
+function getActiveMembers(board: {
+  ownerId: string;
+  owner: {
+    id: string;
+    name: string | null;
+    email: string;
+    avatarUrl: string | null;
+    role: BoardMemberSummary["role"];
+  };
+  members: Array<{
+    user: {
       id: string;
       name: string | null;
       email: string;
       avatarUrl: string | null;
       role: BoardMemberSummary["role"];
     };
-    members: Array<{
-      user: {
-        id: string;
-        name: string | null;
-        email: string;
-        avatarUrl: string | null;
-        role: BoardMemberSummary["role"];
-      };
-    }>;
-  },
-  allMembers: BoardMemberSummary[]
-): BoardMemberSummary[] {
+  }>;
+}): BoardMemberSummary[] {
   const memberMap = new Map<string, BoardMemberSummary>();
 
   memberMap.set(board.owner.id, {
     ...mapMember(board.owner),
     isOwner: true,
   });
-
-  if (board.isPersonal) {
-    return Array.from(memberMap.values());
-  }
-
-  if (board.isOpenToWorkspace) {
-    allMembers.forEach((member) => {
-      memberMap.set(
-        member.id,
-        member.id === board.owner.id ? { ...member, isOwner: true } : member
-      );
-    });
-    return Array.from(memberMap.values());
-  }
 
   board.members.forEach(({ user }) => {
     memberMap.set(
@@ -152,8 +133,6 @@ function normaliseBoardData(
     id: string;
     title: string;
     ownerId: string;
-    isPersonal: boolean;
-    isOpenToWorkspace: boolean;
     owner: {
       id: string;
       name: string | null;
@@ -214,13 +193,11 @@ function normaliseBoardData(
   allMembers: BoardMemberSummary[],
   actor: BoardDataActor
 ): BoardDetailsData {
-  const activeMembers = getActiveMembers(board, allMembers);
+  const activeMembers = getActiveMembers(board);
 
   return {
     id: board.id,
     title: board.title,
-    isPersonal: board.isPersonal,
-    isOpenToWorkspace: board.isOpenToWorkspace,
     ownerId: board.ownerId,
     canManage: actor.role === "ADMIN" || board.ownerId === actor.id,
     activeMembers,

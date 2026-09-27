@@ -13,8 +13,6 @@ const IDS = {
 type MockBoardAccess = {
   id: string;
   ownerId: string;
-  isPersonal: boolean;
-  isOpenToWorkspace: boolean;
   members: Array<{ userId: string }>;
 };
 
@@ -34,8 +32,6 @@ function makeBoardAccess(overrides: Partial<MockBoardAccess> = {}): MockBoardAcc
   return {
     id: IDS.board,
     ownerId: IDS.actor,
-    isPersonal: false,
-    isOpenToWorkspace: false,
     members: [{ userId: IDS.member }],
     ...overrides,
   };
@@ -213,34 +209,25 @@ describe("boards actions", () => {
     const { createBoardAction, getCurrentUser } = await loadBoardsModule();
     getCurrentUser.mockResolvedValue(null);
 
-    const result = await createBoardAction({
-      title: "Team board",
-      collaborative: true,
-      openToWorkspace: true,
-    });
+    const result = await createBoardAction({ title: "Team board" });
 
     expect(result).toEqual({ error: "Not authenticated" });
   });
 
-  it("creates a collaborative board and revalidates views", async () => {
+  it("creates a board with the owner as its first member and revalidates views", async () => {
     const { createBoardAction, getCurrentUser, prisma, revalidatePath } = await loadBoardsModule();
     getCurrentUser.mockResolvedValue(makeCurrentUser());
     prisma.board.create.mockResolvedValue({ id: IDS.board });
 
-    const result = await createBoardAction({
-      title: "Team board",
-      collaborative: true,
-      openToWorkspace: true,
-    });
+    const result = await createBoardAction({ title: "Team board" });
 
     expect(result).toEqual({ success: true, boardId: IDS.board });
     expect(prisma.board.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           title: "Team board",
-          isPersonal: false,
-          isOpenToWorkspace: true,
           ownerId: IDS.actor,
+          members: { create: { userId: IDS.actor } },
         }),
       })
     );
@@ -262,27 +249,13 @@ describe("boards actions", () => {
     await expect(renameBoardAction(IDS.board, "Renamed")).resolves.toEqual({ success: true });
   });
 
-  it("updates collaborative board access and rejects personal boards", async () => {
-    const { updateBoardAccessAction, getCurrentUser, prisma } = await loadBoardsModule();
-    getCurrentUser.mockResolvedValue(makeCurrentUser());
-
-    prisma.board.findFirst.mockResolvedValueOnce(makeBoardAccess({ isPersonal: true }));
-    await expect(updateBoardAccessAction(IDS.board, true)).resolves.toEqual({
-      error: "Collaborative board not found",
-    });
-
-    prisma.board.findFirst.mockResolvedValueOnce(makeBoardAccess({ isPersonal: false }));
-    prisma.board.update.mockResolvedValue({ id: IDS.board });
-    await expect(updateBoardAccessAction(IDS.board, true)).resolves.toEqual({ success: true });
-  });
-
-  it("adds members and validates collaborative constraints", async () => {
+  it("adds members and validates membership constraints", async () => {
     const { addBoardMemberAction, getCurrentUser, prisma } = await loadBoardsModule();
     getCurrentUser.mockResolvedValue(makeCurrentUser());
 
-    prisma.board.findFirst.mockResolvedValueOnce(makeBoardAccess({ isOpenToWorkspace: true }));
+    prisma.board.findFirst.mockResolvedValueOnce(null);
     await expect(addBoardMemberAction(IDS.board, IDS.member)).resolves.toEqual({
-      error: "This board is already open to the whole workspace",
+      error: "Board not found",
     });
 
     prisma.board.findFirst.mockResolvedValueOnce(makeBoardAccess({ ownerId: IDS.member }));
@@ -583,34 +556,13 @@ describe("boards actions", () => {
     expect(prisma.board.delete).toHaveBeenCalledWith({ where: { id: IDS.board } });
   });
 
-  it("creates personal board via helper action", async () => {
-    const { createPersonalBoardAction, getCurrentUser, prisma } = await loadBoardsModule();
-    getCurrentUser.mockResolvedValue(makeCurrentUser());
-    prisma.board.create.mockResolvedValue({ id: IDS.board });
-
-    await expect(createPersonalBoardAction({ title: "My board" })).resolves.toEqual({
-      success: true,
-      boardId: IDS.board,
-    });
-
-    expect(prisma.board.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          title: "My board",
-          isPersonal: true,
-          isOpenToWorkspace: false,
-        }),
-      })
-    );
-  });
-
-  it("returns not found when collaborative access update targets missing board", async () => {
-    const { updateBoardAccessAction, getCurrentUser, prisma } = await loadBoardsModule();
+  it("returns board not found when removing a member from a missing board", async () => {
+    const { removeBoardMemberAction, getCurrentUser, prisma } = await loadBoardsModule();
     getCurrentUser.mockResolvedValue(makeCurrentUser());
     prisma.board.findFirst.mockResolvedValueOnce(null);
 
-    await expect(updateBoardAccessAction(IDS.board, true)).resolves.toEqual({
-      error: "Collaborative board not found",
+    await expect(removeBoardMemberAction(IDS.board, IDS.member)).resolves.toEqual({
+      error: "Board not found",
     });
   });
 
