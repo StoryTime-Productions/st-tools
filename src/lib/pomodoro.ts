@@ -627,14 +627,3 @@ export async function getPomodoroCollaborationSnapshot(
     incomingRequests,
   };
 }
-
-export async function getPointsLeaderboard(since?: Date) {
-  const rows = await prisma.pomodoroSession.groupBy({
-    by: ["userId"],
-    where: since ? { completedAt: { gte: since } } : undefined,
-    _sum: { points: true },
-    orderBy: { _sum: { points: "desc" } },
-  });
-
-  return rows.map((row) => ({ userId: row.userId, points: row._sum.points ?? 0 }));
-}
