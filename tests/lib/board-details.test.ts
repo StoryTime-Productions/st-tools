@@ -43,6 +43,11 @@ async function loadBoardDetailsModule() {
     getAccessibleBoardWhere,
     sortUsersByDisplayName,
   }));
+  const fetchGithubIssueState = vi.fn().mockResolvedValue("open");
+  vi.doMock("@/lib/github", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@/lib/github")>()),
+    fetchGithubIssueState,
+  }));
 
   const { getBoardDetailsData } = await import("@/lib/board-details");
 
@@ -52,6 +57,7 @@ async function loadBoardDetailsModule() {
     findMany,
     getAccessibleBoardWhere,
     sortUsersByDisplayName,
+    fetchGithubIssueState,
   };
 }
 
@@ -143,6 +149,7 @@ describe("getBoardDetailsData", () => {
               description: "Follow-up",
               position: 2,
               dueDate: null,
+              githubIssueUrl: "https://github.com/org/repo/issues/3",
               tags: [{ name: "ops" }],
               assigneeId: null,
               assignee: null,
@@ -225,6 +232,14 @@ describe("getBoardDetailsData", () => {
     expect(result).not.toBeNull();
     expect(result?.id).toBe("board-2");
     expect(result?.canManage).toBe(true);
+    const issueCard = result?.columns
+      .flatMap((column) => column.cards)
+      .find((card) => card.githubIssue);
+    expect(issueCard?.githubIssue).toEqual({
+      url: "https://github.com/org/repo/issues/3",
+      label: "repo#3",
+      state: "open",
+    });
 
     expect(sortUsersByDisplayName).toHaveBeenCalledWith([
       expect.objectContaining({ id: memberB.id }),

@@ -45,6 +45,7 @@ function makeCard(overrides: Partial<BoardCardData> = {}): BoardCardData {
     position: 0,
     dueDate: "2026-03-20",
     labels: ["design", "qa"],
+    githubIssue: null,
     assigneeId: MEMBERS[1].id,
     assignee: MEMBERS[1],
     checklistItems: [
@@ -122,6 +123,7 @@ function renderSheet({
   onOpenChange = vi.fn(),
   onSave = vi.fn(),
   onAddComment = vi.fn(async () => true),
+  onSetGithubIssue = vi.fn(async () => true),
   onDelete = vi.fn(),
 }: {
   card?: BoardCardData | null;
@@ -138,6 +140,7 @@ function renderSheet({
     checklistItems: Array<{ content: string; completed: boolean }>;
   }) => void;
   onAddComment?: (values: { cardId: string; content: string }) => Promise<boolean>;
+  onSetGithubIssue?: (cardId: string, url: string | null) => Promise<boolean>;
   onDelete?: (cardId: string) => void;
 }) {
   render(
@@ -152,11 +155,12 @@ function renderSheet({
       isPending={isPending}
       onSave={onSave}
       onAddComment={onAddComment}
+      onSetGithubIssue={onSetGithubIssue}
       onDelete={onDelete}
     />
   );
 
-  return { onOpenChange, onSave, onAddComment, onDelete };
+  return { onOpenChange, onSave, onAddComment, onSetGithubIssue, onDelete };
 }
 
 describe("CardDetailSheet", () => {
@@ -220,6 +224,7 @@ describe("CardDetailSheet", () => {
         isPending={false}
         onSave={vi.fn()}
         onAddComment={vi.fn(async () => true)}
+        onSetGithubIssue={vi.fn(async () => true)}
         onDelete={vi.fn()}
       />
     );
@@ -383,6 +388,7 @@ describe("CardDetailSheet", () => {
         isPending={false}
         onSave={onSave}
         onAddComment={vi.fn(async () => true)}
+        onSetGithubIssue={vi.fn(async () => true)}
         onDelete={vi.fn()}
       />
     );
@@ -421,5 +427,21 @@ describe("CardDetailSheet", () => {
     expect(screen.getByText("No checklist items yet.")).toBeInTheDocument();
     expect(screen.getByText("No timeline entries match the selected filters.")).toBeInTheDocument();
     expect(screen.getByText("Showing 0 of 0 timeline entries")).toBeInTheDocument();
+  });
+
+  it("links a GitHub issue to the card", async () => {
+    const { onSetGithubIssue } = renderSheet({});
+
+    fireEvent.change(screen.getByLabelText("GitHub issue URL"), {
+      target: { value: "https://github.com/org/repo/issues/9" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Link" }));
+
+    await waitFor(() =>
+      expect(onSetGithubIssue).toHaveBeenCalledWith(
+        "33333333-3333-4333-8333-333333333333",
+        "https://github.com/org/repo/issues/9"
+      )
+    );
   });
 });

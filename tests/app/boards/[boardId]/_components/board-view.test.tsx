@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { BoardView } from "@/app/boards/[boardId]/_components/board-view";
 import type { BoardDetailsData } from "@/app/boards/types";
 
@@ -17,6 +17,7 @@ const actionMocks = vi.hoisted(() => ({
   renameColumnAction: vi.fn(),
   reorderColumnsAction: vi.fn(),
   updateCardAction: vi.fn(),
+  setCardGithubIssueAction: vi.fn(),
 }));
 
 const routerMocks = vi.hoisted(() => ({
@@ -123,6 +124,11 @@ function makeBoard(): BoardDetailsData {
             position: 0,
             dueDate: "2026-03-20",
             labels: ["design"],
+            githubIssue: {
+              url: "https://github.com/org/repo/issues/7",
+              label: "repo#7",
+              state: "open",
+            },
             assigneeId: IDS.member,
             assignee: member,
             checklistItems: [
@@ -351,5 +357,25 @@ describe("BoardView", () => {
     await waitFor(() => {
       expect(actionMocks.createCardAction).not.toHaveBeenCalled();
     });
+  });
+
+  it("shows the linked issue on the card and unlinks it from the sheet", async () => {
+    actionMocks.setCardGithubIssueAction
+      .mockResolvedValueOnce({ error: "Paste a GitHub issue link" })
+      .mockResolvedValueOnce({
+        success: true,
+        card: { ...makeBoard().columns[0].cards[0], githubIssue: null },
+      });
+    renderBoard(makeBoard(), IDS.card);
+
+    expect(screen.getAllByText(/repo#7/)[0]).toHaveTextContent("repo#7 · open");
+
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Unlink GitHub issue" }));
+    await waitFor(() => expect(toastMocks.error).toHaveBeenCalledWith("Paste a GitHub issue link"));
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Unlink GitHub issue" }));
+    await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("GitHub issue unlinked"));
+    expect(actionMocks.setCardGithubIssueAction).toHaveBeenCalledWith(IDS.card, null);
   });
 });

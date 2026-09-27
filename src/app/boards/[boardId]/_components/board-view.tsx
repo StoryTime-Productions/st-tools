@@ -19,11 +19,12 @@ import { CSS } from "@dnd-kit/utilities";
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { type QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
-import { GripVertical, Plus, Trash2, UserPlus, Users } from "lucide-react";
+import { Github, GripVertical, Plus, Trash2, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import {
   addBoardMemberAction,
   addCardCommentAction,
+  setCardGithubIssueAction,
   createCardAction,
   createColumnAction,
   deleteBoardAction,
@@ -155,6 +156,7 @@ function createOptimisticCard(title: string, position: number): BoardCardData {
     position,
     dueDate: null,
     labels: [],
+    githubIssue: null,
     assigneeId: null,
     assignee: null,
     checklistItems: [],
@@ -326,6 +328,13 @@ function CardItem({
               </Badge>
             ))}
             {card.dueDate ? <Badge variant="secondary">Due {card.dueDate}</Badge> : null}
+            {card.githubIssue ? (
+              <Badge variant="outline" className="gap-1">
+                <Github className="size-3" aria-hidden="true" />
+                {card.githubIssue.label}
+                {card.githubIssue.state ? ` · ${card.githubIssue.state}` : ""}
+              </Badge>
+            ) : null}
           </div>
 
           <div className="flex items-center justify-between gap-3">
@@ -896,6 +905,27 @@ export function BoardView({ board, initialCardId }: BoardViewProps) {
     });
   }
 
+  function handleSetGithubIssue(cardId: string, url: string | null): Promise<boolean> {
+    return new Promise((resolve) => {
+      startTransition(async () => {
+        const result = await setCardGithubIssueAction(cardId, url);
+        if ("error" in result || !result.card) {
+          toast.error("error" in result ? result.error : "Unable to update the GitHub issue");
+          resolve(false);
+          return;
+        }
+
+        updateBoardCache((current) => ({
+          ...current,
+          columns: replaceCard(current.columns, result.card!),
+        }));
+        toast.success(url ? "GitHub issue linked" : "GitHub issue unlinked");
+        void invalidateBoardQuery(queryClient, board.id);
+        resolve(true);
+      });
+    });
+  }
+
   function handleDeleteCard(cardId: string) {
     const previousBoard = queryClient.getQueryData<BoardDetailsData>(boardQueryKey);
 
@@ -1236,6 +1266,7 @@ export function BoardView({ board, initialCardId }: BoardViewProps) {
         isPending={isPending}
         onSave={handleSaveCard}
         onAddComment={handleAddComment}
+        onSetGithubIssue={handleSetGithubIssue}
         onDelete={handleDeleteCard}
       />
     </div>

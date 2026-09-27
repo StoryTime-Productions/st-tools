@@ -7,6 +7,7 @@ import type {
   BoardMemberSummary,
 } from "@/app/boards/types";
 import { getAccessibleBoardWhere, sortUsersByDisplayName } from "@/lib/boards";
+import { fetchGithubIssueState, githubIssueRef } from "@/lib/github";
 import { prisma } from "@/lib/prisma";
 
 const CARD_ACTIVITY_RECENT_LIMIT = 50;
@@ -159,6 +160,7 @@ function normaliseBoardData(
         description: string | null;
         position: number;
         dueDate: Date | null;
+        githubIssueUrl: string | null;
         tags: Array<{ name: string }>;
         assigneeId: string | null;
         assignee: {
@@ -220,6 +222,7 @@ function normaliseBoardData(
             position: card.position,
             dueDate: card.dueDate ? card.dueDate.toISOString().slice(0, 10) : null,
             labels: card.tags.map((tag) => tag.name),
+            githubIssue: githubIssueRef(card.githubIssueUrl),
             assigneeId: card.assigneeId,
             assignee: card.assignee ? mapMember(card.assignee) : null,
             checklistItems: card.checklistItems
@@ -342,10 +345,20 @@ export async function getBoardDetailsData(
   }
 
   const allMembers = sortUsersByDisplayName(workspaceUsers.map(mapMember));
-  return normaliseBoardData(
+  const data = normaliseBoardData(
     board,
     allMembers,
     tags.map((tag) => tag.name),
     actor
   );
+
+  const issues = data.columns
+    .flatMap((column) => column.cards)
+    .flatMap((card) => card.githubIssue ?? []);
+  await Promise.all(
+    issues.map(async (issue) => {
+      issue.state = await fetchGithubIssueState(issue.url);
+    })
+  );
+  return data;
 }

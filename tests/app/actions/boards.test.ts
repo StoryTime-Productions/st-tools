@@ -44,6 +44,7 @@ function makeCardRecord(cardId = IDS.card) {
     description: "Card description",
     position: 0,
     dueDate: new Date("2026-03-19T00:00:00.000Z"),
+    githubIssueUrl: "https://github.com/org/repo/issues/4",
     tags: [{ name: "feature" }],
     assigneeId: IDS.member,
     assignee: {
@@ -683,5 +684,68 @@ describe("boards actions", () => {
     ).resolves.toEqual({ success: true });
 
     expect(tx.cardActivity.createMany).not.toHaveBeenCalled();
+  });
+
+  it("links and unlinks a GitHub issue on a card", async () => {
+    const { setCardGithubIssueAction, getCurrentUser, prisma } = await loadBoardsModule();
+
+    getCurrentUser.mockResolvedValueOnce(null);
+    await expect(setCardGithubIssueAction(IDS.card, null)).resolves.toEqual({
+      error: "Not authenticated",
+    });
+
+    getCurrentUser.mockResolvedValue(makeCurrentUser());
+    await expect(setCardGithubIssueAction("bad", null)).resolves.toEqual({
+      error: "Invalid UUID",
+    });
+    await expect(
+      setCardGithubIssueAction(IDS.card, "https://github.com/org/repo/pull/4")
+    ).resolves.toEqual({
+      error: "Paste a GitHub issue link like https://github.com/owner/repo/issues/12",
+    });
+
+    prisma.card.findUnique.mockResolvedValueOnce(null);
+    await expect(setCardGithubIssueAction(IDS.card, null)).resolves.toEqual({
+      error: "Card not found",
+    });
+
+    const cardWithBoard = { id: IDS.card, column: { boardId: IDS.board } };
+    prisma.card.findUnique.mockResolvedValueOnce(cardWithBoard);
+    prisma.board.findFirst.mockResolvedValueOnce(null);
+    await expect(setCardGithubIssueAction(IDS.card, null)).resolves.toEqual({
+      error: "Board not found",
+    });
+
+    prisma.board.findFirst.mockResolvedValue(makeBoardAccess());
+    prisma.card.findUnique.mockResolvedValueOnce(cardWithBoard).mockResolvedValueOnce(null);
+    await expect(setCardGithubIssueAction(IDS.card, " ")).resolves.toEqual({
+      error: "Card not found",
+    });
+    expect(prisma.card.update).toHaveBeenLastCalledWith({
+      where: { id: IDS.card },
+      data: { githubIssueUrl: null },
+    });
+
+    prisma.card.findUnique
+      .mockResolvedValueOnce(cardWithBoard)
+      .mockResolvedValueOnce(makeCardRecord());
+    const result = await setCardGithubIssueAction(
+      IDS.card,
+      " https://github.com/org/repo/issues/4 "
+    );
+    expect(prisma.card.update).toHaveBeenLastCalledWith({
+      where: { id: IDS.card },
+      data: { githubIssueUrl: "https://github.com/org/repo/issues/4" },
+    });
+    expect(result).toMatchObject({
+      success: true,
+      card: {
+        githubIssue: {
+          url: "https://github.com/org/repo/issues/4",
+          label: "repo#4",
+          state: null,
+        },
+      },
+    });
   });
 });

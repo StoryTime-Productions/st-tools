@@ -13,6 +13,7 @@ import type {
 } from "@prisma/client";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { getAccessibleBoardWhere, getManageableBoardWhere } from "@/lib/boards";
+import { githubIssueRef, parseGithubIssueUrl } from "@/lib/github";
 import { prisma } from "@/lib/prisma";
 import type {
   BoardCardActivityData,
@@ -233,6 +234,7 @@ function mapCard(card: CardRecord): BoardCardData {
     position: card.position,
     dueDate: card.dueDate ? card.dueDate.toISOString().slice(0, 10) : null,
     labels: card.tags.map((tag) => tag.name),
+    githubIssue: githubIssueRef(card.githubIssueUrl),
     assigneeId: card.assigneeId,
     assignee: card.assignee,
     checklistItems: card.checklistItems
@@ -1286,4 +1288,37 @@ export async function moveCardsAction(
 
   revalidateBoardViews(board.id);
   return { success: true };
+}
+
+export async function setCardGithubIssueAction(
+  cardId: string,
+  url: string | null
+): Promise<CardActionResult> {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) return { error: "Not authenticated" };
+
+  const parsedId = z.string().uuid().safeParse(cardId);
+  if (!parsedId.success) return { error: parsedId.error.issues[0].message };
+
+  const githubIssueUrl = url?.trim() || null;
+  if (githubIssueUrl && !parseGithubIssueUrl(githubIssueUrl)) {
+    return { error: "Paste a GitHub issue link like https://github.com/owner/repo/issues/12" };
+  }
+
+  const card = await getCardWithBoard(parsedId.data);
+  if (!card) return { error: "Card not found" };
+
+  const board = await getAccessibleBoard(
+    { id: currentUser.id, role: currentUser.role },
+    card.column.boardId
+  );
+  if (!board) return { error: "Board not found" };
+
+  await prisma.card.update({ where: { id: card.id }, data: { githubIssueUrl } });
+
+  const updatedCard = await getCardRecord(card.id);
+  if (!updatedCard) return { error: "Card not found" };
+
+  revalidateBoardViews(board.id);
+  return { success: true, card: mapCard(updatedCard) };
 }
