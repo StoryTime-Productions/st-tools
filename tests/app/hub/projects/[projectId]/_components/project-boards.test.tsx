@@ -75,6 +75,7 @@ describe("ProjectBoards", () => {
     fireEvent.click(attach);
     await waitFor(() => expect(toastMocks.error).toHaveBeenCalledWith("Board not found"));
 
+    await waitFor(() => expect(attach).toBeEnabled());
     fireEvent.click(attach);
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Board attached"));
     expect(actionMocks.setBoardProjectAction).toHaveBeenLastCalledWith("b9", "p1");

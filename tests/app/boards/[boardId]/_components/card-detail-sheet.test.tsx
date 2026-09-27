@@ -280,7 +280,7 @@ describe("CardDetailSheet", () => {
 
     expect(screen.getByText("No timeline entries match the selected filters.")).toBeInTheDocument();
     expect(screen.getByText("Showing 0 of 6 timeline entries")).toBeInTheDocument();
-  }, 15000);
+  });
 
   it("adds comments and closes the sheet", async () => {
     const onAddComment = vi

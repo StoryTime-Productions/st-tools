@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { playCompletionTone, playUiCue } from "@/app/timer/_components/timer-audio";
 

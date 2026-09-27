@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useTimerStore } from "@/stores/timer-store";
 
