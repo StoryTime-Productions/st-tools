@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Prisma, Role } from "@prisma/client";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { prisma } from "@/lib/prisma";
+import { createClient } from "@/lib/supabase/server";
 
 export type HubActionResult = { error: string } | { success: true };
 export type CreateInitiativeResult =
@@ -13,6 +14,8 @@ export type CreateInitiativeResult =
 export type CreateProjectResult = { error: string } | { success: true; projectId: string };
 
 const FORBIDDEN = "Forbidden: Admin access required";
+const COVER_MIME = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const MAX_COVER_BYTES = 5 * 1024 * 1024;
 
 const nameSchema = z
   .string()
@@ -286,4 +289,66 @@ export async function deleteProjectAction(projectId: string): Promise<HubActionR
   revalidateHub();
   revalidatePath("/boards");
   return { success: true };
+}
+
+async function saveProjectCover(projectId: string, coverImageUrl: string | null) {
+  const result = await prisma.project.updateMany({
+    where: { id: projectId },
+    data: { coverImageUrl },
+  });
+  if (result.count === 0) return { error: "Project not found" };
+
+  revalidateHub(projectId);
+  return { success: true } as const;
+}
+
+export async function setProjectCoverUrlAction(
+  projectId: string,
+  url: string | null
+): Promise<HubActionResult> {
+  if (!(await requireAdmin())) return { error: FORBIDDEN };
+
+  const parsed = z
+    .object({
+      projectId: z.string().uuid(),
+      url: z
+        .string()
+        .trim()
+        .url("Enter a full image URL")
+        .refine((value) => /^https?:\/\//i.test(value), "Image URLs must start with http(s)://")
+        .nullable(),
+    })
+    .safeParse({ projectId, url });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  return saveProjectCover(parsed.data.projectId, parsed.data.url);
+}
+
+export async function uploadProjectCoverAction(formData: FormData): Promise<HubActionResult> {
+  const admin = await requireAdmin();
+  if (!admin) return { error: FORBIDDEN };
+
+  const projectId = z.string().uuid().safeParse(formData.get("projectId"));
+  if (!projectId.success) return { error: "Invalid project" };
+
+  const file = formData.get("cover");
+  if (!(file instanceof File) || file.size === 0) return { error: "No file provided" };
+  if (!COVER_MIME.includes(file.type)) {
+    return { error: "Only JPEG, PNG, WebP and GIF images are allowed" };
+  }
+  if (file.size > MAX_COVER_BYTES) return { error: "File must be smaller than 5 MB" };
+
+  const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
+  const path = `${admin.id}/project-covers/${projectId.data}.${extension}`;
+  const supabase = await createClient();
+  const { error } = await supabase.storage
+    .from("avatars")
+    .upload(path, await file.arrayBuffer(), { contentType: file.type, upsert: true });
+  if (error) return { error: error.message };
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from("avatars").getPublicUrl(path);
+
+  return saveProjectCover(projectId.data, `${publicUrl}?v=${Date.now()}`);
 }

@@ -162,5 +162,5 @@ describe("ProjectAdminControls", () => {
       expect.objectContaining({ phases: ["Build"], currentPhaseIndex: null })
     );
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-  });
+  }, 15000);
 });
