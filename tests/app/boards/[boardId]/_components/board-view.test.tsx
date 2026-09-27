@@ -3,6 +3,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { BoardView } from "@/app/boards/[boardId]/_components/board-view";
 import type { BoardDetailsData } from "@/app/boards/types";
+import type { ComponentProps } from "react";
+import type { CardDetailSheet } from "@/app/boards/[boardId]/_components/card-detail-sheet";
+
+type CardDetailSheetProps = ComponentProps<typeof CardDetailSheet>;
 
 const actionMocks = vi.hoisted(() => ({
   addBoardMemberAction: vi.fn(),
@@ -63,6 +67,54 @@ vi.mock("sonner", () => ({
 
 vi.mock("@/lib/supabase/client", () => ({
   createClient: supabaseMocks.createClient,
+}));
+
+vi.mock("@/app/boards/[boardId]/_components/card-detail-sheet", () => ({
+  CardDetailSheet: ({
+    open,
+    card,
+    onOpenChange,
+    onSave,
+    onAddComment,
+    onSetGithubIssue,
+    onDelete,
+  }: CardDetailSheetProps) =>
+    open && card ? (
+      <div role="dialog">
+        <p>{card.title}</p>
+        <button
+          type="button"
+          onClick={() =>
+            onSave({
+              cardId: card.id,
+              title: "Seed card updated",
+              description: null,
+              labels: [],
+              assigneeId: null,
+              dueDate: null,
+              checklistItems: [],
+            })
+          }
+        >
+          Save card
+        </button>
+        <button
+          type="button"
+          onClick={() => onAddComment({ cardId: card.id, content: "Comment from test" })}
+        >
+          Comment
+        </button>
+        <button type="button" onClick={() => onSetGithubIssue(card.id, null)}>
+          Unlink GitHub issue
+        </button>
+        <button type="button" onClick={() => onDelete(card.id)}>
+          Delete card
+        </button>
+        <button type="button" onClick={() => onOpenChange(false)}>
+          Close
+        </button>
+      </div>
+    ) : null,
 }));
 
 const IDS = {
@@ -253,25 +305,26 @@ describe("BoardView", () => {
     await waitFor(() => {
       expect(actionMocks.createCardAction).toHaveBeenCalledWith(IDS.column, "New task");
     });
+  });
+
+  it("wires the card sheet to save, comment and delete", async () => {
+    renderBoard();
 
     fireEvent.click(screen.getByRole("button", { name: /seed card/i }));
-    expect(await screen.findByRole("button", { name: /save changes/i })).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog");
 
-    const titleField = await screen.findByLabelText("Title");
-    fireEvent.change(titleField, { target: { value: "Seed card updated" } });
-    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save card" }));
+    await waitFor(() => expect(actionMocks.updateCardAction).toHaveBeenCalled());
 
-    await waitFor(() => {
-      expect(actionMocks.updateCardAction).toHaveBeenCalled();
-    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Comment" }));
+    await waitFor(() =>
+      expect(actionMocks.addCardCommentAction).toHaveBeenCalledWith(IDS.card, "Comment from test")
+    );
 
-    const commentField = await screen.findByLabelText("Add comment");
-    fireEvent.change(commentField, { target: { value: "Comment from test" } });
-    fireEvent.click(screen.getByRole("button", { name: /^add comment$/i }));
-
-    await waitFor(() => {
-      expect(actionMocks.addCardCommentAction).toHaveBeenCalledWith(IDS.card, "Comment from test");
-    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete card" }));
+    await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Card deleted"));
+    expect(actionMocks.deleteCardAction).toHaveBeenCalledWith(IDS.card);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("opens the card from a deep link", () => {
