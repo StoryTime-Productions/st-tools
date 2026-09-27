@@ -70,11 +70,11 @@ type QuarterRange =
   | { ok: true; startQuarter: string | null; endQuarter: string | null };
 
 function normaliseQuarters(start: string | null, end: string | null): QuarterRange {
-  if (!start && end) {
-    return { ok: false, error: "Set a start quarter before an end quarter" };
+  if (!start) {
+    return { ok: true, startQuarter: null, endQuarter: null };
   }
   const endQuarter = end ?? start;
-  if (start && endQuarter && endQuarter < start) {
+  if (endQuarter < start) {
     return { ok: false, error: "End quarter must not be before the start quarter" };
   }
   return { ok: true, startQuarter: start, endQuarter };

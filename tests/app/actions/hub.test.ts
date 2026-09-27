@@ -177,9 +177,6 @@ describe("hub actions", () => {
     await expect(hub.createProjectAction({ ...base, startQuarter: "Q3 2026" })).resolves.toEqual({
       error: "Quarter must look like 2026-Q3",
     });
-    await expect(hub.createProjectAction({ ...base, endQuarter: "2026-Q4" })).resolves.toEqual({
-      error: "Set a start quarter before an end quarter",
-    });
     await expect(
       hub.createProjectAction({ ...base, startQuarter: "2026-Q4", endQuarter: "2026-Q1" })
     ).resolves.toEqual({ error: "End quarter must not be before the start quarter" });
@@ -214,9 +211,6 @@ describe("hub actions", () => {
     await expect(
       hub.updateProjectAction(projectUpdate({ links: [{ label: "X", url: "ftp://x.org" }] }))
     ).resolves.toEqual({ error: "Links must start with http(s)://" });
-    await expect(
-      hub.updateProjectAction(projectUpdate({ startQuarter: null, endQuarter: "2026-Q3" }))
-    ).resolves.toEqual({ error: "Set a start quarter before an end quarter" });
     await expect(hub.updateProjectAction(projectUpdate({ currentPhaseIndex: 2 }))).resolves.toEqual(
       { error: "Current phase must be one of the project's phases" }
     );
@@ -278,6 +272,8 @@ describe("hub actions", () => {
       hub.updateProjectAction(
         projectUpdate({
           initiativeId: null,
+          startQuarter: null,
+          endQuarter: "2026-Q3",
           tags: [],
           phases: [],
           currentPhaseIndex: null,
@@ -286,6 +282,11 @@ describe("hub actions", () => {
       )
     ).resolves.toEqual({ success: true });
     expect(hub.prisma.initiative.findUnique).not.toHaveBeenCalled();
+    expect(hub.tx.project.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ startQuarter: null, endQuarter: null }),
+      })
+    );
     expect(hub.tx.tag.createMany).not.toHaveBeenCalled();
     expect(hub.tx.projectPhase.deleteMany).toHaveBeenCalled();
     expect(hub.tx.projectPhase.createMany).not.toHaveBeenCalled();

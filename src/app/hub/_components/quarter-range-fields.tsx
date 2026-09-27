@@ -71,7 +71,11 @@ export function QuarterRangeFields({ start, end, onChange, disabled }: QuarterRa
         label="From quarter"
         value={start}
         options={options}
-        onChange={(next) => onChange({ start: next, end: next && end && end < next ? next : end })}
+        onChange={(next) =>
+          onChange(
+            next ? { start: next, end: end && end < next ? next : end } : { start: null, end: null }
+          )
+        }
         disabled={disabled}
       />
       <QuarterSelect
