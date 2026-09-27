@@ -1,3 +1,5 @@
+import { getAccessibleBoardWhere, type BoardActor } from "@/lib/boards";
+import { fetchGithubIssueState } from "@/lib/github";
 import { formatQuarterRange } from "@/lib/hub-format";
 import { prisma } from "@/lib/prisma";
 
@@ -255,6 +257,68 @@ export async function getProjectWork(
     availableTasks,
     accessRequests,
   };
+}
+
+export interface CalendarCard {
+  id: string;
+  title: string;
+  dueDate: string;
+  boardId: string;
+  boardTitle: string;
+  projectId: string;
+  projectTitle: string;
+  assigneeName: string | null;
+  finished: boolean;
+}
+
+export async function getCalendarCards(viewer: BoardActor): Promise<CalendarCard[]> {
+  const cards = await prisma.card.findMany({
+    where: {
+      dueDate: { not: null },
+      column: { board: { projectId: { not: null }, ...getAccessibleBoardWhere(viewer) } },
+    },
+    orderBy: [{ dueDate: "asc" }, { title: "asc" }],
+    select: {
+      id: true,
+      title: true,
+      dueDate: true,
+      githubIssueUrl: true,
+      assignee: { select: { name: true, email: true } },
+      column: {
+        select: {
+          id: true,
+          board: {
+            select: {
+              id: true,
+              title: true,
+              project: { select: { id: true, title: true } },
+              columns: { select: { id: true }, orderBy: { position: "desc" }, take: 1 },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return Promise.all(
+    cards.map(async (card) => {
+      const { board } = card.column;
+      const issueState = card.githubIssueUrl
+        ? await fetchGithubIssueState(card.githubIssueUrl)
+        : null;
+      return {
+        id: card.id,
+        title: card.title,
+        dueDate: card.dueDate!.toISOString().slice(0, 10),
+        boardId: board.id,
+        boardTitle: board.title,
+        projectId: board.project!.id,
+        projectTitle: board.project!.title,
+        assigneeName: card.assignee ? card.assignee.name?.trim() || card.assignee.email : null,
+        finished: board.columns[0]?.id === card.column.id || issueState === "closed",
+      };
+    })
+  );
 }
 
 export async function getStandaloneBoardOptions(): Promise<Array<{ id: string; title: string }>> {

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Compass } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { HubTabs } from "@/app/hub/_components/hub-tabs";
 import { ManageInitiativesDialog } from "@/app/hub/_components/manage-initiatives-dialog";
 import { NewProjectDialog } from "@/app/hub/_components/new-project-dialog";
 import { ProjectOverview } from "@/app/hub/_components/project-overview";
@@ -19,6 +20,7 @@ export default async function HubPage() {
 
   return (
     <div className="space-y-6">
+      <HubTabs active="/hub" />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <h2 className="text-2xl font-semibold tracking-tight">Projects</h2>
         {isAdmin ? (

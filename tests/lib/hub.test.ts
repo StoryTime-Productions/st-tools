@@ -5,10 +5,13 @@ async function loadHubLib() {
     initiative: { findMany: vi.fn() },
     project: { findMany: vi.fn(), findUnique: vi.fn() },
     board: { findMany: vi.fn() },
+    card: { findMany: vi.fn() },
   };
+  const fetchGithubIssueState = vi.fn();
   vi.doMock("@/lib/prisma", () => ({ prisma }));
+  vi.doMock("@/lib/github", () => ({ fetchGithubIssueState }));
   const lib = await import("@/lib/hub");
-  return { ...lib, prisma };
+  return { ...lib, prisma, fetchGithubIssueState };
 }
 
 describe("hub data loaders", () => {
@@ -254,5 +257,49 @@ describe("hub data loaders", () => {
     expect(prisma.board.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { projectId: null } })
     );
+  });
+
+  it("loads dated cards on accessible project boards and marks finished ones", async () => {
+    const { getCalendarCards, prisma, fetchGithubIssueState } = await loadHubLib();
+    const board = {
+      id: "b1",
+      title: "Art",
+      project: { id: "p1", title: "St-tools" },
+      columns: [{ id: "done" }],
+    };
+    const card = (id: string, columnId: string, extra: object = {}) => ({
+      id,
+      title: `Card ${id}`,
+      dueDate: new Date("2026-10-03T00:00:00Z"),
+      githubIssueUrl: null,
+      assignee: null,
+      column: { id: columnId, board },
+      ...extra,
+    });
+    prisma.card.findMany.mockResolvedValue([
+      card("c1", "todo", { assignee: { name: " ", email: "al@x" } }),
+      card("c2", "done", { assignee: { name: "Bea", email: "b@x" } }),
+      card("c3", "todo", { githubIssueUrl: "https://github.com/o/r/issues/1" }),
+    ]);
+    fetchGithubIssueState.mockResolvedValue("closed");
+
+    const cards = await getCalendarCards({ id: "u1", role: "MEMBER" });
+
+    expect(cards.map((c) => [c.id, c.dueDate, c.assigneeName, c.finished])).toEqual([
+      ["c1", "2026-10-03", "al@x", false],
+      ["c2", "2026-10-03", "Bea", true],
+      ["c3", "2026-10-03", null, true],
+    ]);
+    expect(cards[0]).toMatchObject({ boardId: "b1", projectId: "p1", projectTitle: "St-tools" });
+    expect(fetchGithubIssueState).toHaveBeenCalledTimes(1);
+    expect(prisma.card.findMany.mock.calls[0][0].where).toEqual({
+      dueDate: { not: null },
+      column: {
+        board: {
+          projectId: { not: null },
+          OR: [{ ownerId: "u1" }, { members: { some: { userId: "u1" } } }],
+        },
+      },
+    });
   });
 });
