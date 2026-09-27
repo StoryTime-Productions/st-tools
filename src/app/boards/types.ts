@@ -59,4 +59,6 @@ export interface BoardDetailsData {
   columns: BoardColumnData[];
   activeMembers: BoardMemberSummary[];
   allMembers: BoardMemberSummary[];
+  tagOptions: string[];
+  canCreateTags: boolean;
 }

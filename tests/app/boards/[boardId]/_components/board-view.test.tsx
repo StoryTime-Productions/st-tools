@@ -108,6 +108,8 @@ function makeBoard(): BoardDetailsData {
     canManage: true,
     activeMembers: [owner, member],
     allMembers: [owner, member, invitee],
+    tagOptions: ["feature"],
+    canCreateTags: false,
     columns: [
       {
         id: IDS.column,

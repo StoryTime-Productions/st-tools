@@ -44,7 +44,7 @@ function makeCardRecord(cardId = IDS.card) {
     description: "Card description",
     position: 0,
     dueDate: new Date("2026-03-19T00:00:00.000Z"),
-    labels: ["feature"],
+    tags: [{ name: "feature" }],
     assigneeId: IDS.member,
     assignee: {
       id: IDS.member,
@@ -104,6 +104,9 @@ function createPrismaMock() {
       deleteMany: vi.fn(),
       createMany: vi.fn(),
     },
+    tag: {
+      createMany: vi.fn(),
+    },
   };
 
   const prisma = {
@@ -145,6 +148,9 @@ function createPrismaMock() {
     },
     user: {
       findUnique: vi.fn(),
+    },
+    tag: {
+      findMany: vi.fn().mockResolvedValue([]),
     },
     $transaction: vi.fn(async (input: unknown) => {
       if (typeof input === "function") {
@@ -394,7 +400,7 @@ describe("boards actions", () => {
         title: "Card title",
         description: null,
         dueDate: null,
-        labels: [],
+        tags: [],
         assigneeId: null,
         position: 0,
         columnId: IDS.column,
@@ -429,7 +435,7 @@ describe("boards actions", () => {
       title: "Task",
       description: null,
       dueDate: null,
-      labels: [],
+      tags: [],
       assigneeId: null,
       position: 0,
       columnId: IDS.column,
@@ -456,7 +462,7 @@ describe("boards actions", () => {
         title: "Task",
         description: null,
         dueDate: null,
-        labels: [],
+        tags: [],
         assigneeId: null,
         position: 0,
         columnId: IDS.column,
@@ -468,6 +474,7 @@ describe("boards actions", () => {
     prisma.board.findFirst.mockResolvedValueOnce(
       makeBoardAccess({ members: [{ userId: IDS.member }] })
     );
+    prisma.tag.findMany.mockResolvedValueOnce([{ name: "feature" }, { name: "urgent" }]);
 
     await expect(
       updateCardAction({
@@ -481,8 +488,70 @@ describe("boards actions", () => {
       })
     ).resolves.toMatchObject({ success: true });
 
-    expect(tx.card.update).toHaveBeenCalled();
+    expect(tx.card.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tags: { set: [{ name: "feature" }, { name: "urgent" }] },
+        }),
+      })
+    );
+    expect(tx.tag.createMany).not.toHaveBeenCalled();
     expect(tx.cardChecklistItem.deleteMany).toHaveBeenCalled();
+  });
+
+  it("only lets admins create new tags while updating a card", async () => {
+    const { updateCardAction, getCurrentUser, prisma, tx } = await loadBoardsModule();
+    const cardWithBoard = {
+      id: IDS.card,
+      title: "Task",
+      description: null,
+      dueDate: null,
+      tags: [],
+      assigneeId: null,
+      position: 0,
+      columnId: IDS.column,
+      checklistItems: [],
+      column: { boardId: IDS.board },
+    };
+    const values = {
+      cardId: IDS.card,
+      title: "Task",
+      description: null,
+      labels: ["feature", " launch ", "launch"],
+      assigneeId: null,
+      dueDate: null,
+      checklistItems: [],
+    };
+
+    getCurrentUser.mockResolvedValue(makeCurrentUser("MEMBER"));
+    prisma.card.findUnique.mockResolvedValueOnce(cardWithBoard);
+    prisma.board.findFirst.mockResolvedValueOnce(makeBoardAccess());
+    prisma.tag.findMany.mockResolvedValueOnce([{ name: "feature" }]);
+
+    await expect(updateCardAction(values)).resolves.toEqual({
+      error: "Only admins can create tags: launch",
+    });
+    expect(tx.card.update).not.toHaveBeenCalled();
+
+    getCurrentUser.mockResolvedValue(makeCurrentUser("ADMIN"));
+    prisma.card.findUnique
+      .mockResolvedValueOnce(cardWithBoard)
+      .mockResolvedValueOnce(makeCardRecord());
+    prisma.board.findFirst.mockResolvedValueOnce(makeBoardAccess());
+    prisma.tag.findMany.mockResolvedValueOnce([{ name: "feature" }]);
+
+    await expect(updateCardAction(values)).resolves.toMatchObject({ success: true });
+    expect(tx.tag.createMany).toHaveBeenCalledWith({
+      data: [{ name: "launch" }],
+      skipDuplicates: true,
+    });
+    expect(tx.card.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tags: { set: [{ name: "feature" }, { name: "launch" }] },
+        }),
+      })
+    );
   });
 
   it("deletes cards and reindexes remaining positions", async () => {
@@ -494,7 +563,7 @@ describe("boards actions", () => {
       title: "Task",
       description: null,
       dueDate: null,
-      labels: [],
+      tags: [],
       assigneeId: null,
       position: 0,
       columnId: IDS.column,

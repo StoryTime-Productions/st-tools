@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import type { BoardCardActivityData, BoardCardData, BoardMemberSummary } from "@/app/boards/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,6 +30,8 @@ interface CardDetailSheetProps {
   card: BoardCardData | null;
   columnLookup: Record<string, string>;
   members: BoardMemberSummary[];
+  tagOptions: string[];
+  canCreateTags: boolean;
   isPending: boolean;
   onSave: (values: {
     cardId: string;
@@ -178,6 +179,8 @@ function CardDetailSheetBody({
   card,
   columnLookup,
   members,
+  tagOptions,
+  canCreateTags,
   isPending,
   onOpenChange,
   onSave,
@@ -187,6 +190,8 @@ function CardDetailSheetBody({
   card: BoardCardData;
   columnLookup: Record<string, string>;
   members: BoardMemberSummary[];
+  tagOptions: string[];
+  canCreateTags: boolean;
   isPending: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: CardDetailSheetProps["onSave"];
@@ -195,7 +200,8 @@ function CardDetailSheetBody({
 }) {
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description ?? "");
-  const [labels, setLabels] = useState(card.labels.join(", "));
+  const [labels, setLabels] = useState<string[]>(card.labels);
+  const [newTag, setNewTag] = useState("");
   const [assigneeId, setAssigneeId] = useState<string | null>(card.assigneeId);
   const [dueDate, setDueDate] = useState(card.dueDate ?? "");
   const [checklistItems, setChecklistItems] = useState<EditableChecklistItem[]>(
@@ -215,27 +221,32 @@ function CardDetailSheetBody({
   );
 
   const selectedAssignee = members.find((member) => member.id === assigneeId) ?? null;
-  const labelPreview = labels
-    .split(",")
-    .map((label) => label.trim())
-    .filter(Boolean)
-    .slice(0, 6);
+  const visibleTags = Array.from(new Set([...tagOptions, ...labels])).sort((left, right) =>
+    left.localeCompare(right)
+  );
+
+  function toggleLabel(label: string) {
+    setLabels((current) =>
+      current.includes(label) ? current.filter((item) => item !== label) : [...current, label]
+    );
+  }
+
+  function handleAddTag() {
+    const name = newTag.trim();
+    if (name.length === 0) {
+      return;
+    }
+
+    setLabels((current) => (current.includes(name) ? current : [...current, name]));
+    setNewTag("");
+  }
 
   function handleSave() {
-    const nextLabels = Array.from(
-      new Set(
-        labels
-          .split(",")
-          .map((label) => label.trim())
-          .filter(Boolean)
-      )
-    );
-
     onSave({
       cardId: card.id,
       title: title.trim(),
       description: description.trim() ? description.trim() : null,
-      labels: nextLabels,
+      labels,
       assigneeId,
       dueDate: dueDate || null,
       checklistItems: checklistItems
@@ -371,25 +382,61 @@ function CardDetailSheetBody({
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="card-labels">Labels</Label>
-          <Input
-            id="card-labels"
-            value={labels}
-            onChange={(event) => setLabels(event.target.value)}
-            placeholder="design, backend, blocker"
-            disabled={isPending}
-          />
-          {labelPreview.length > 0 ? (
-            <div className="flex flex-wrap gap-2 pt-1">
-              {labelPreview.map((label, index) => (
-                <Badge key={`${label}-${index}`} variant="outline">
-                  {label}
-                </Badge>
-              ))}
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium">Tags</legend>
+          {visibleTags.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {visibleTags.map((tag) => {
+                const selected = labels.includes(tag);
+                return (
+                  <Button
+                    key={tag}
+                    type="button"
+                    size="sm"
+                    variant={selected ? "default" : "outline"}
+                    aria-pressed={selected}
+                    onClick={() => toggleLabel(tag)}
+                    disabled={isPending}
+                    className="rounded-full"
+                  >
+                    {tag}
+                  </Button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-xs">
+              {canCreateTags ? "No tags yet. Create the first one below." : "No tags yet."}
+            </p>
+          )}
+          {canCreateTags ? (
+            <div className="flex gap-2 pt-1">
+              <Input
+                aria-label="New tag name"
+                value={newTag}
+                onChange={(event) => setNewTag(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    handleAddTag();
+                  }
+                }}
+                placeholder="New tag"
+                maxLength={40}
+                disabled={isPending}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleAddTag}
+                disabled={isPending || newTag.trim().length === 0}
+              >
+                <Plus className="size-4" />
+                Add
+              </Button>
             </div>
           ) : null}
-        </div>
+        </fieldset>
 
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
@@ -588,6 +635,8 @@ export function CardDetailSheet({
   card,
   columnLookup,
   members,
+  tagOptions,
+  canCreateTags,
   isPending,
   onSave,
   onAddComment,
@@ -599,7 +648,7 @@ export function CardDetailSheet({
         <SheetHeader>
           <SheetTitle>{card?.title ?? "Card details"}</SheetTitle>
           <SheetDescription>
-            Update task details, labels, assignee, due date, checklist, and comments.
+            Update task details, tags, assignee, due date, checklist, and comments.
           </SheetDescription>
         </SheetHeader>
 
@@ -609,6 +658,8 @@ export function CardDetailSheet({
             card={card}
             columnLookup={columnLookup}
             members={members}
+            tagOptions={tagOptions}
+            canCreateTags={canCreateTags}
             isPending={isPending}
             onOpenChange={onOpenChange}
             onSave={onSave}

@@ -1230,6 +1230,8 @@ export function BoardView({ board }: BoardViewProps) {
         card={selectedCard}
         columnLookup={columnLookup}
         members={board.activeMembers}
+        tagOptions={boardState.tagOptions}
+        canCreateTags={boardState.canCreateTags}
         isPending={isPending}
         onSave={handleSaveCard}
         onAddComment={handleAddComment}

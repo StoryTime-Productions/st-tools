@@ -113,8 +113,11 @@ function makeCard(overrides: Partial<BoardCardData> = {}): BoardCardData {
   };
 }
 
+const TAG_OPTIONS = ["backend", "design", "qa"];
+
 function renderSheet({
   card = makeCard(),
+  canCreateTags = false,
   isPending = false,
   onOpenChange = vi.fn(),
   onSave = vi.fn(),
@@ -122,6 +125,7 @@ function renderSheet({
   onDelete = vi.fn(),
 }: {
   card?: BoardCardData | null;
+  canCreateTags?: boolean;
   isPending?: boolean;
   onOpenChange?: (open: boolean) => void;
   onSave?: (values: {
@@ -143,6 +147,8 @@ function renderSheet({
       card={card}
       columnLookup={COLUMN_LOOKUP}
       members={MEMBERS}
+      tagOptions={TAG_OPTIONS}
+      canCreateTags={canCreateTags}
       isPending={isPending}
       onSave={onSave}
       onAddComment={onAddComment}
@@ -166,6 +172,61 @@ describe("CardDetailSheet", () => {
     expect(screen.queryByLabelText("Title")).not.toBeInTheDocument();
   });
 
+  it("shows existing tags as toggles and hides tag creation for members", () => {
+    renderSheet({});
+
+    expect(screen.getByRole("button", { name: "design" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "backend" })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
+    expect(screen.queryByLabelText("New tag name")).not.toBeInTheDocument();
+  });
+
+  it("lets admins add a new tag to the card", async () => {
+    const onSave = vi.fn();
+    renderSheet({ canCreateTags: true, onSave });
+
+    const input = screen.getByLabelText("New tag name");
+    fireEvent.change(input, { target: { value: "  launch  " } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.change(input, { target: { value: "design" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    expect(screen.getByRole("button", { name: "launch" })).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ labels: ["design", "qa", "launch"] })
+      );
+    });
+  });
+
+  it.each([
+    [false, "No tags yet."],
+    [true, "No tags yet. Create the first one below."],
+  ])("explains an empty tag list (canCreateTags=%s)", (canCreateTags, message) => {
+    render(
+      <CardDetailSheet
+        open
+        onOpenChange={vi.fn()}
+        card={makeCard({ labels: [] })}
+        columnLookup={COLUMN_LOOKUP}
+        members={MEMBERS}
+        tagOptions={[]}
+        canCreateTags={canCreateTags}
+        isPending={false}
+        onSave={vi.fn()}
+        onAddComment={vi.fn(async () => true)}
+        onDelete={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(message)).toBeInTheDocument();
+  });
+
   it("saves edited fields and applies timeline filters", async () => {
     const onSave = vi.fn();
     renderSheet({ onSave });
@@ -176,9 +237,8 @@ describe("CardDetailSheet", () => {
     fireEvent.change(screen.getByLabelText("Description"), {
       target: { value: "  Updated description  " },
     });
-    fireEvent.change(screen.getByLabelText("Labels"), {
-      target: { value: "design, backend, design,   " },
-    });
+    fireEvent.click(screen.getByRole("button", { name: "qa" }));
+    fireEvent.click(screen.getByRole("button", { name: "backend" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Teammate" }));
     fireEvent.click(screen.getByRole("button", { name: "Unassigned" }));
@@ -318,6 +378,8 @@ describe("CardDetailSheet", () => {
         card={fallbackCard}
         columnLookup={COLUMN_LOOKUP}
         members={fallbackMembers}
+        tagOptions={[]}
+        canCreateTags={false}
         isPending={false}
         onSave={onSave}
         onAddComment={vi.fn(async () => true)}

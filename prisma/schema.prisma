@@ -128,7 +128,6 @@ model Card {
   description String?
   position    Int
   dueDate     DateTime?
-  labels      String[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -140,8 +139,19 @@ model Card {
 
   checklistItems CardChecklistItem[]
   activities     CardActivity[]
+  tags           Tag[]
 
   @@map("cards")
+}
+
+model Tag {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  cards Card[]
+
+  @@map("tags")
 }
 
 model CardActivity {

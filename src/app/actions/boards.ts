@@ -145,6 +145,7 @@ type CardActivityRecord = PrismaCardActivity & {
   actorUser: UserSummaryRecord | null;
 };
 type CardRecord = PrismaCard & {
+  tags: Array<{ name: string }>;
   assignee: UserSummaryRecord | null;
   checklistItems: ChecklistItemRecord[];
   activities: CardActivityRecord[];
@@ -231,7 +232,7 @@ function mapCard(card: CardRecord): BoardCardData {
     description: card.description,
     position: card.position,
     dueDate: card.dueDate ? card.dueDate.toISOString().slice(0, 10) : null,
-    labels: card.labels,
+    labels: card.tags.map((tag) => tag.name),
     assigneeId: card.assigneeId,
     assignee: card.assignee,
     checklistItems: card.checklistItems
@@ -449,7 +450,7 @@ async function getCardWithBoard(cardId: string) {
       title: true,
       description: true,
       dueDate: true,
-      labels: true,
+      tags: { select: { name: true } },
       assigneeId: true,
       position: true,
       columnId: true,
@@ -476,6 +477,10 @@ async function getCardRecord(cardId: string) {
   return prisma.card.findUnique({
     where: { id: cardId },
     include: {
+      tags: {
+        select: { name: true },
+        orderBy: { name: "asc" },
+      },
       assignee: {
         select: {
           id: true,
@@ -712,6 +717,10 @@ export async function createColumnAction(boardId: string): Promise<ColumnActionR
     include: {
       cards: {
         include: {
+          tags: {
+            select: { name: true },
+            orderBy: { name: "asc" },
+          },
           assignee: {
             select: {
               id: true,
@@ -912,7 +921,6 @@ export async function createCardAction(columnId: string, title: string): Promise
         columnId: column.id,
         title: parsed.data.title,
         position,
-        labels: [],
       },
       select: {
         id: true,
@@ -974,7 +982,18 @@ export async function updateCardAction(
     }
   }
 
-  const labels = parsed.data.labels.map((label) => label.trim()).filter(Boolean);
+  const labels = Array.from(
+    new Set(parsed.data.labels.map((label) => label.trim()).filter(Boolean))
+  );
+  const existingTags = await prisma.tag.findMany({
+    where: { name: { in: labels } },
+    select: { name: true },
+  });
+  const newTagNames = labels.filter((label) => !existingTags.some((tag) => tag.name === label));
+  if (newTagNames.length > 0 && currentUser.role !== "ADMIN") {
+    return { error: `Only admins can create tags: ${newTagNames.join(", ")}` };
+  }
+
   const nextDescription = normaliseDescription(parsed.data.description);
   const checklistItems = parsed.data.checklistItems.map((item) => ({
     content: item.content.trim(),
@@ -986,7 +1005,7 @@ export async function updateCardAction(
       title: card.title,
       description: card.description,
       dueDate: card.dueDate,
-      labels: card.labels,
+      labels: card.tags.map((tag) => tag.name),
       assigneeId: card.assigneeId,
       position: card.position,
       columnId: card.columnId,
@@ -1003,12 +1022,19 @@ export async function updateCardAction(
   });
 
   await prisma.$transaction(async (tx) => {
+    if (newTagNames.length > 0) {
+      await tx.tag.createMany({
+        data: newTagNames.map((name) => ({ name })),
+        skipDuplicates: true,
+      });
+    }
+
     await tx.card.update({
       where: { id: card.id },
       data: {
         title: parsed.data.title,
         description: nextDescription,
-        labels,
+        tags: { set: labels.map((name) => ({ name })) },
         assigneeId: parsed.data.assigneeId,
         dueDate,
       },

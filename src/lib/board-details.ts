@@ -159,7 +159,7 @@ function normaliseBoardData(
         description: string | null;
         position: number;
         dueDate: Date | null;
-        labels: string[];
+        tags: Array<{ name: string }>;
         assigneeId: string | null;
         assignee: {
           id: string;
@@ -191,6 +191,7 @@ function normaliseBoardData(
     }>;
   },
   allMembers: BoardMemberSummary[],
+  tagOptions: string[],
   actor: BoardDataActor
 ): BoardDetailsData {
   const activeMembers = getActiveMembers(board);
@@ -202,6 +203,8 @@ function normaliseBoardData(
     canManage: actor.role === "ADMIN" || board.ownerId === actor.id,
     activeMembers,
     allMembers,
+    tagOptions,
+    canCreateTags: actor.role === "ADMIN",
     columns: board.columns
       .sort((left, right) => left.position - right.position)
       .map((column) => ({
@@ -216,7 +219,7 @@ function normaliseBoardData(
             description: card.description,
             position: card.position,
             dueDate: card.dueDate ? card.dueDate.toISOString().slice(0, 10) : null,
-            labels: card.labels,
+            labels: card.tags.map((tag) => tag.name),
             assigneeId: card.assigneeId,
             assignee: card.assignee ? mapMember(card.assignee) : null,
             checklistItems: card.checklistItems
@@ -239,7 +242,7 @@ export async function getBoardDetailsData(
   boardId: string,
   actor: BoardDataActor
 ): Promise<BoardDetailsData | null> {
-  const [board, workspaceUsers] = await Promise.all([
+  const [board, workspaceUsers, tags] = await Promise.all([
     prisma.board.findFirst({
       where: {
         id: boardId,
@@ -278,6 +281,10 @@ export async function getBoardDetailsData(
                 position: "asc",
               },
               include: {
+                tags: {
+                  select: { name: true },
+                  orderBy: { name: "asc" },
+                },
                 assignee: {
                   select: {
                     id: true,
@@ -324,6 +331,10 @@ export async function getBoardDetailsData(
         role: true,
       },
     }),
+    prisma.tag.findMany({
+      select: { name: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   if (!board) {
@@ -331,5 +342,10 @@ export async function getBoardDetailsData(
   }
 
   const allMembers = sortUsersByDisplayName(workspaceUsers.map(mapMember));
-  return normaliseBoardData(board, allMembers, actor);
+  return normaliseBoardData(
+    board,
+    allMembers,
+    tags.map((tag) => tag.name),
+    actor
+  );
 }
