@@ -388,3 +388,78 @@ export async function setBoardProjectAction(
   revalidatePath("/boards");
   return { success: true };
 }
+
+async function revalidateBoardProject(boardId: string) {
+  const board = await prisma.board.findUnique({
+    where: { id: boardId },
+    select: { projectId: true },
+  });
+  if (board?.projectId) revalidateHub(board.projectId);
+}
+
+export async function requestBoardAccessAction(boardId: string): Promise<HubActionResult> {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) return { error: "You must be signed in" };
+
+  const parsed = z.string().uuid().safeParse(boardId);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const board = await prisma.board.findUnique({
+    where: { id: parsed.data },
+    select: {
+      projectId: true,
+      members: { where: { userId: currentUser.id }, select: { id: true } },
+    },
+  });
+  if (!board) return { error: "Board not found" };
+  if (currentUser.role === Role.ADMIN || board.members.length > 0) {
+    return { error: "You already have access to this board" };
+  }
+
+  await prisma.boardAccessRequest.createMany({
+    data: [{ boardId: parsed.data, userId: currentUser.id }],
+    skipDuplicates: true,
+  });
+
+  if (board.projectId) revalidateHub(board.projectId);
+  return { success: true };
+}
+
+export async function approveBoardAccessAction(requestId: string): Promise<HubActionResult> {
+  if (!(await requireAdmin())) return { error: FORBIDDEN };
+
+  const parsed = z.string().uuid().safeParse(requestId);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const request = await prisma.boardAccessRequest.findUnique({
+    where: { id: parsed.data },
+    select: { boardId: true, userId: true },
+  });
+  if (!request) return { error: "Request not found" };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.boardMember.createMany({ data: [request], skipDuplicates: true });
+    await tx.boardAccessRequest.deleteMany({ where: { id: parsed.data } });
+  });
+
+  await revalidateBoardProject(request.boardId);
+  revalidatePath("/boards");
+  return { success: true };
+}
+
+export async function declineBoardAccessAction(requestId: string): Promise<HubActionResult> {
+  if (!(await requireAdmin())) return { error: FORBIDDEN };
+
+  const parsed = z.string().uuid().safeParse(requestId);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const request = await prisma.boardAccessRequest.findUnique({
+    where: { id: parsed.data },
+    select: { boardId: true },
+  });
+  if (!request) return { error: "Request not found" };
+
+  await prisma.boardAccessRequest.deleteMany({ where: { id: parsed.data } });
+  await revalidateBoardProject(request.boardId);
+  return { success: true };
+}

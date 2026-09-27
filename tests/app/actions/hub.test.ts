@@ -6,6 +6,7 @@ const IDS = {
   project: "22222222-2222-4222-8222-222222222222",
   board: "55555555-5555-4555-8555-555555555555",
   otherProject: "66666666-6666-4666-8666-666666666666",
+  request: "77777777-7777-4777-8777-777777777777",
 };
 
 const admin = { id: "33333333-3333-4333-8333-333333333333", role: "ADMIN" };
@@ -26,6 +27,8 @@ async function loadHubModule() {
     project: { update: vi.fn() },
     projectPhase: { deleteMany: vi.fn(), createMany: vi.fn() },
     projectLink: { deleteMany: vi.fn(), createMany: vi.fn() },
+    boardMember: { createMany: vi.fn() },
+    boardAccessRequest: { deleteMany: vi.fn() },
   };
   const prisma = {
     initiative: {
@@ -41,6 +44,7 @@ async function loadHubModule() {
       deleteMany: vi.fn(),
     },
     board: { findUnique: vi.fn(), update: vi.fn() },
+    boardAccessRequest: { createMany: vi.fn(), findUnique: vi.fn(), deleteMany: vi.fn() },
     $transaction: vi.fn(async (fn: (client: typeof tx) => Promise<unknown>) => fn(tx)),
   };
 
@@ -102,6 +106,8 @@ describe("hub actions", () => {
     await expect(hub.setProjectFinishedAction(IDS.project, true)).resolves.toEqual(forbidden);
     await expect(hub.deleteProjectAction(IDS.project)).resolves.toEqual(forbidden);
     await expect(hub.setBoardProjectAction(IDS.board, IDS.project)).resolves.toEqual(forbidden);
+    await expect(hub.approveBoardAccessAction(IDS.request)).resolves.toEqual(forbidden);
+    await expect(hub.declineBoardAccessAction(IDS.request)).resolves.toEqual(forbidden);
     expect(hub.prisma.initiative.create).not.toHaveBeenCalled();
   });
 
@@ -473,6 +479,81 @@ describe("hub actions", () => {
     expect(hub.prisma.board.update).toHaveBeenLastCalledWith({
       where: { id: IDS.board },
       data: { projectId: null },
+    });
+  });
+
+  it("records board access requests from non-members", async () => {
+    const hub = await loadHubModule();
+
+    hub.getCurrentUser.mockResolvedValueOnce(null);
+    await expect(hub.requestBoardAccessAction(IDS.board)).resolves.toEqual({
+      error: "You must be signed in",
+    });
+
+    hub.getCurrentUser.mockResolvedValue(member);
+    await expect(hub.requestBoardAccessAction("bad")).resolves.toEqual({ error: "Invalid UUID" });
+
+    hub.prisma.board.findUnique.mockResolvedValueOnce(null);
+    await expect(hub.requestBoardAccessAction(IDS.board)).resolves.toEqual({
+      error: "Board not found",
+    });
+
+    hub.prisma.board.findUnique.mockResolvedValueOnce({ projectId: null, members: [{ id: "m" }] });
+    await expect(hub.requestBoardAccessAction(IDS.board)).resolves.toEqual({
+      error: "You already have access to this board",
+    });
+
+    hub.prisma.board.findUnique.mockResolvedValueOnce({ projectId: IDS.project, members: [] });
+    await expect(hub.requestBoardAccessAction(IDS.board)).resolves.toEqual({ success: true });
+    expect(hub.prisma.boardAccessRequest.createMany).toHaveBeenCalledWith({
+      data: [{ boardId: IDS.board, userId: member.id }],
+      skipDuplicates: true,
+    });
+    expect(hub.revalidatePath).toHaveBeenCalledWith(`/hub/projects/${IDS.project}`);
+
+    hub.prisma.board.findUnique.mockResolvedValueOnce({ projectId: null, members: [] });
+    await expect(hub.requestBoardAccessAction(IDS.board)).resolves.toEqual({ success: true });
+
+    hub.getCurrentUser.mockResolvedValue(admin);
+    hub.prisma.board.findUnique.mockResolvedValueOnce({ projectId: null, members: [] });
+    await expect(hub.requestBoardAccessAction(IDS.board)).resolves.toEqual({
+      error: "You already have access to this board",
+    });
+  });
+
+  it("approves and declines access requests", async () => {
+    const hub = await loadHubModule();
+
+    await expect(hub.approveBoardAccessAction("bad")).resolves.toEqual({ error: "Invalid UUID" });
+    await expect(hub.declineBoardAccessAction("bad")).resolves.toEqual({ error: "Invalid UUID" });
+
+    hub.prisma.boardAccessRequest.findUnique.mockResolvedValue(null);
+    await expect(hub.approveBoardAccessAction(IDS.request)).resolves.toEqual({
+      error: "Request not found",
+    });
+    await expect(hub.declineBoardAccessAction(IDS.request)).resolves.toEqual({
+      error: "Request not found",
+    });
+
+    hub.prisma.boardAccessRequest.findUnique.mockResolvedValue({
+      boardId: IDS.board,
+      userId: member.id,
+    });
+    hub.prisma.board.findUnique.mockResolvedValue({ projectId: IDS.project });
+    await expect(hub.approveBoardAccessAction(IDS.request)).resolves.toEqual({ success: true });
+    expect(hub.tx.boardMember.createMany).toHaveBeenCalledWith({
+      data: [{ boardId: IDS.board, userId: member.id }],
+      skipDuplicates: true,
+    });
+    expect(hub.tx.boardAccessRequest.deleteMany).toHaveBeenCalledWith({
+      where: { id: IDS.request },
+    });
+    expect(hub.revalidatePath).toHaveBeenCalledWith(`/hub/projects/${IDS.project}`);
+
+    hub.prisma.board.findUnique.mockResolvedValue(null);
+    await expect(hub.declineBoardAccessAction(IDS.request)).resolves.toEqual({ success: true });
+    expect(hub.prisma.boardAccessRequest.deleteMany).toHaveBeenCalledWith({
+      where: { id: IDS.request },
     });
   });
 });

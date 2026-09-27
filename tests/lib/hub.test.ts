@@ -162,6 +162,7 @@ describe("hub data loaders", () => {
         id: "b1",
         title: "Art",
         members: [{ user: alice }, { user: bob }],
+        accessRequests: [],
         columns: [
           {
             cards: [
@@ -176,6 +177,10 @@ describe("hub data loaders", () => {
         id: "b2",
         title: "Secret",
         members: [{ user: bob }],
+        accessRequests: [
+          { id: "r1", userId: "u1", user: { name: "Alice", email: "a@x" } },
+          { id: "r2", userId: "u3", user: { name: null, email: "carol@x" } },
+        ],
         columns: [{ cards: [{ id: "c4", title: "Hidden", dueDate: null, assigneeId: null }] }],
       },
     ]);
@@ -186,9 +191,10 @@ describe("hub data loaders", () => {
       expect.objectContaining({ where: { projectId: "p1" } })
     );
     expect(work.boards).toEqual([
-      { id: "b1", title: "Art", cardCount: 3, accessible: true },
-      { id: "b2", title: "Secret", cardCount: 1, accessible: false },
+      { id: "b1", title: "Art", cardCount: 3, accessible: true, requested: false },
+      { id: "b2", title: "Secret", cardCount: 1, accessible: false, requested: true },
     ]);
+    expect(work.accessRequests).toEqual([]);
     expect(work.participants).toEqual([
       { id: "u1", name: "Alice", avatarUrl: "https://a.png" },
       { id: "u2", name: "bob@x", avatarUrl: null },
@@ -205,6 +211,10 @@ describe("hub data loaders", () => {
     const adminWork = await getProjectWork("p1", { id: "admin", role: "ADMIN" });
     expect(adminWork.boards.every((board) => board.accessible)).toBe(true);
     expect(adminWork.availableTasks.map((task) => task.id)).toEqual(["c3", "c1", "c4"]);
+    expect(adminWork.accessRequests).toEqual([
+      { id: "r1", boardTitle: "Secret", userName: "Alice" },
+      { id: "r2", boardTitle: "Secret", userName: "carol@x" },
+    ]);
   });
 
   it("lists standalone boards", async () => {

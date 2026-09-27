@@ -156,6 +156,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
               projectId={project.id}
               boards={work.boards}
               standaloneBoards={standaloneBoards}
+              accessRequests={work.accessRequests}
             />
           </CardContent>
         </Card>

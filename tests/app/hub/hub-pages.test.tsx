@@ -37,6 +37,7 @@ async function loadHub() {
       boards: [],
       participants: [],
       availableTasks: [],
+      accessRequests: [],
     }),
     getStandaloneBoardOptions: vi.fn().mockResolvedValue([{ id: "b9", title: "Loose" }]),
   };
@@ -212,6 +213,7 @@ describe("hub pages", () => {
         },
         { id: "c2", title: "Undated", boardId: "b1", boardTitle: "Art", dueDate: null },
       ],
+      accessRequests: [],
     });
 
     render(await ProjectPage({ params: Promise.resolve({ projectId: "p1" }) }));
