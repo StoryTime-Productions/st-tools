@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { makeUser } from "../../../helpers/fixtures";
 
 async function loadProfileSettingsPageModule() {
   const redirect = vi.fn();
@@ -74,8 +75,7 @@ describe("ProfileSettingsPage", () => {
       pomodoroPreferencesForm,
     } = await loadProfileSettingsPageModule();
 
-    const user = {
-      id: "11111111-1111-4111-8111-111111111111",
+    const user = makeUser({
       name: "Nirav Patel",
       email: "nirav@example.com",
       avatarUrl: "https://example.com/avatar.png",
@@ -85,15 +85,8 @@ describe("ProfileSettingsPage", () => {
       secondaryColor: "#abcdef",
       backgroundMode: "COLOR",
       backgroundColor: "#112233",
-      backgroundImageUrl: null,
-      backgroundImageStyle: "STRETCH",
-      backgroundPatternScale: 100,
-      backgroundImageOpacity: 45,
-      pomodoroWorkMin: 25,
-      pomodoroShortBreakMin: 5,
-      pomodoroLongBreakMin: 15,
       discordId: "123",
-    };
+    });
 
     getCurrentUser.mockResolvedValueOnce(user);
 
