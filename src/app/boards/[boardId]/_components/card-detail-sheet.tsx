@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CardGithubIssue } from "@/app/boards/[boardId]/_components/card-github-issue";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Sheet,
@@ -43,6 +44,7 @@ interface CardDetailSheetProps {
     checklistItems: Array<{ content: string; completed: boolean }>;
   }) => void;
   onAddComment: (values: { cardId: string; content: string }) => Promise<boolean>;
+  onSetGithubIssue: (cardId: string, url: string | null) => Promise<boolean>;
   onDelete: (cardId: string) => void;
 }
 
@@ -185,6 +187,7 @@ function CardDetailSheetBody({
   onOpenChange,
   onSave,
   onAddComment,
+  onSetGithubIssue,
   onDelete,
 }: {
   card: BoardCardData;
@@ -196,6 +199,7 @@ function CardDetailSheetBody({
   onOpenChange: (open: boolean) => void;
   onSave: CardDetailSheetProps["onSave"];
   onAddComment: CardDetailSheetProps["onAddComment"];
+  onSetGithubIssue: CardDetailSheetProps["onSetGithubIssue"];
   onDelete: CardDetailSheetProps["onDelete"];
 }) {
   const [title, setTitle] = useState(card.title);
@@ -438,6 +442,12 @@ function CardDetailSheetBody({
           ) : null}
         </fieldset>
 
+        <CardGithubIssue
+          issue={card.githubIssue}
+          isPending={isPending}
+          onSet={(url) => onSetGithubIssue(card.id, url)}
+        />
+
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -640,6 +650,7 @@ export function CardDetailSheet({
   isPending,
   onSave,
   onAddComment,
+  onSetGithubIssue,
   onDelete,
 }: CardDetailSheetProps) {
   return (
@@ -664,6 +675,7 @@ export function CardDetailSheet({
             onOpenChange={onOpenChange}
             onSave={onSave}
             onAddComment={onAddComment}
+            onSetGithubIssue={onSetGithubIssue}
             onDelete={onDelete}
           />
         ) : null}

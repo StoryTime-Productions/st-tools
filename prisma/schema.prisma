@@ -144,13 +144,14 @@ model Column {
 }
 
 model Card {
-  id          String    @id @default(uuid())
-  title       String
-  description String?
-  position    Int
-  dueDate     DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id             String    @id @default(uuid())
+  title          String
+  description    String?
+  position       Int
+  dueDate        DateTime?
+  githubIssueUrl String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   columnId String
   column   Column @relation(fields: [columnId], references: [id], onDelete: Cascade)

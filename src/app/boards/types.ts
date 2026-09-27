@@ -1,4 +1,5 @@
 import type { CardActivityEvent, Role } from "@prisma/client";
+import type { GithubIssueRef } from "@/lib/github";
 
 export interface BoardMemberSummary {
   id: string;
@@ -38,6 +39,7 @@ export interface BoardCardData {
   position: number;
   dueDate: string | null;
   labels: string[];
+  githubIssue: GithubIssueRef | null;
   assigneeId: string | null;
   assignee: BoardMemberSummary | null;
   checklistItems: BoardChecklistItemData[];
