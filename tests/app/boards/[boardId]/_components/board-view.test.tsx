@@ -272,7 +272,7 @@ describe("BoardView", () => {
     await waitFor(() => {
       expect(actionMocks.addCardCommentAction).toHaveBeenCalledWith(IDS.card, "Comment from test");
     });
-  }, 15000);
+  });
 
   it("opens the card from a deep link", () => {
     renderBoard(makeBoard(), IDS.card);
@@ -371,10 +371,12 @@ describe("BoardView", () => {
     expect(screen.getAllByText(/repo#7/)[0]).toHaveTextContent("repo#7 · open");
 
     const dialog = screen.getByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Unlink GitHub issue" }));
+    const unlink = within(dialog).getByRole("button", { name: "Unlink GitHub issue" });
+    fireEvent.click(unlink);
     await waitFor(() => expect(toastMocks.error).toHaveBeenCalledWith("Paste a GitHub issue link"));
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "Unlink GitHub issue" }));
+    await waitFor(() => expect(unlink).toBeEnabled());
+    fireEvent.click(unlink);
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("GitHub issue unlinked"));
     expect(actionMocks.setCardGithubIssueAction).toHaveBeenCalledWith(IDS.card, null);
   });

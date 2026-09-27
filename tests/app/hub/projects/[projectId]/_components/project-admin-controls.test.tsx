@@ -141,7 +141,7 @@ describe("ProjectAdminControls", () => {
     });
     expect(routerMocks.refresh).toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  }, 15000);
+  });
 
   it("clears the current phase, tracks it through removals and reports save errors", async () => {
     actionMocks.updateProjectAction.mockResolvedValueOnce({ error: "Links must be full URLs" });
@@ -162,5 +162,5 @@ describe("ProjectAdminControls", () => {
       expect.objectContaining({ phases: ["Build"], currentPhaseIndex: null })
     );
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-  }, 15000);
+  });
 });

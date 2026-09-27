@@ -5,12 +5,29 @@ import path from "path";
 export default defineConfig({
   plugins: [react()],
   test: {
-    environment: "jsdom",
     globals: true,
+    testTimeout: 15000,
+    pool: "threads",
     setupFiles: ["./tests/setup.ts"],
-    include: ["tests/**/*.{test,spec}.{ts,tsx}"],
     exclude: ["node_modules", ".next"],
     passWithNoTests: false,
+    // .ts tests (actions, loaders, helpers) skip jsdom; a file that needs the DOM opts in
+    // with a `// @vitest-environment jsdom` comment.
+    projects: [
+      {
+        extends: true,
+        test: { name: "node", environment: "node", include: ["tests/**/*.test.ts"] },
+      },
+      {
+        extends: true,
+        test: {
+          name: "dom",
+          environment: "jsdom",
+          include: ["tests/**/*.test.tsx"],
+          setupFiles: ["./tests/setup-dom.ts"],
+        },
+      },
+    ],
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov", "html"],

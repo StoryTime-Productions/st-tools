@@ -103,7 +103,7 @@ describe("hub pages", () => {
     render(await HubLayout({ children: <p>child</p> }));
     expect(screen.getByText("child")).toBeInTheDocument();
     expect(workspaceShell.mock.calls[0][0]).toMatchObject({ activeNav: "hub", title: "Hub" });
-  }, 15000);
+  });
 
   it("shows members an empty state without admin controls", async () => {
     const { HubPage, getCurrentUser, lib } = await loadHub();
