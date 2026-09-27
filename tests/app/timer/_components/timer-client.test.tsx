@@ -549,8 +549,10 @@ describe("TimerClient", () => {
     await waitFor(() => expect(sync).toHaveBeenCalledTimes(5));
 
     fireEvent.click(screen.getByRole("button", { name: /Timer settings/ }));
-    fireEvent.change(screen.getByLabelText("Work"), { target: { value: "30" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    fireEvent.change(await screen.findByLabelText("Work"), { target: { value: "30" } });
+    const save = screen.getByRole("button", { name: "Save changes" });
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
 
     await waitFor(() => expect(sync).toHaveBeenCalledTimes(6));
     expect(sync).toHaveBeenLastCalledWith(expect.objectContaining({ sessionId: "session-1" }));
