@@ -13,6 +13,7 @@ const toastMocks = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 const routerMocks = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
 
 vi.mock("@/app/actions/hub", () => actionMocks);
+vi.mock("@/app/actions/hangouts", () => ({}));
 vi.mock("sonner", () => ({ toast: toastMocks }));
 vi.mock("next/navigation", () => ({ useRouter: () => routerMocks }));
 vi.mock("@/components/ui/select", async () => import("../../../../../helpers/native-select"));

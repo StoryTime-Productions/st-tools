@@ -5,11 +5,14 @@ import { ProjectCoverEditor } from "@/app/hub/projects/[projectId]/_components/p
 const actionMocks = vi.hoisted(() => ({
   setProjectCoverUrlAction: vi.fn(),
   uploadProjectCoverAction: vi.fn(),
+  setHangoutCoverUrlAction: vi.fn(),
+  uploadHangoutCoverAction: vi.fn(),
 }));
 const toastMocks = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 const routerMocks = vi.hoisted(() => ({ refresh: vi.fn() }));
 
 vi.mock("@/app/actions/hub", () => actionMocks);
+vi.mock("@/app/actions/hangouts", () => actionMocks);
 vi.mock("sonner", () => ({ toast: toastMocks }));
 vi.mock("next/navigation", () => ({ useRouter: () => routerMocks }));
 
@@ -17,7 +20,7 @@ const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 
 function renderEditor(coverImageUrl: string | null = null) {
   const { container } = render(
-    <ProjectCoverEditor projectId={PROJECT_ID} title="St-tools" coverImageUrl={coverImageUrl} />
+    <ProjectCoverEditor id={PROJECT_ID} title="St-tools" coverImageUrl={coverImageUrl} />
   );
   return container;
 }
@@ -90,5 +93,31 @@ describe("ProjectCoverEditor", () => {
     expect(actionMocks.setProjectCoverUrlAction).toHaveBeenCalledWith(PROJECT_ID, null);
     expect(container.querySelector("img")).toBeNull();
     expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
+  });
+
+  it("uses the hangout actions for a hangout cover", async () => {
+    actionMocks.uploadHangoutCoverAction.mockResolvedValue({ success: true });
+    actionMocks.setHangoutCoverUrlAction.mockResolvedValue({ success: true });
+    render(
+      <ProjectCoverEditor
+        id={PROJECT_ID}
+        title="Beach day"
+        coverImageUrl="https://example.com/c.png"
+        kind="hangout"
+      />
+    );
+    expect(screen.getByText(/the hangout shows its initials/)).toBeInTheDocument();
+
+    const file = new File(["x"], "cover.png", { type: "image/png" });
+    fireEvent.change(screen.getByLabelText("Upload cover image"), { target: { files: [file] } });
+    await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Cover updated"));
+    const formData = actionMocks.uploadHangoutCoverAction.mock.calls[0][0] as FormData;
+    expect(formData.get("hangoutId")).toBe(PROJECT_ID);
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    await waitFor(() =>
+      expect(actionMocks.setHangoutCoverUrlAction).toHaveBeenCalledWith(PROJECT_ID, null)
+    );
+    expect(actionMocks.setProjectCoverUrlAction).not.toHaveBeenCalled();
   });
 });

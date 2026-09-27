@@ -4,18 +4,30 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ImageUp, Link2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { setHangoutCoverUrlAction, uploadHangoutCoverAction } from "@/app/actions/hangouts";
 import { setProjectCoverUrlAction, uploadProjectCoverAction } from "@/app/actions/hub";
 import { ProjectCover } from "@/app/hub/_components/project-cover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 interface ProjectCoverEditorProps {
-  projectId: string;
+  id: string;
   title: string;
   coverImageUrl: string | null;
+  kind?: "project" | "hangout";
 }
 
-export function ProjectCoverEditor({ projectId, title, coverImageUrl }: ProjectCoverEditorProps) {
+export function ProjectCoverEditor({
+  id,
+  title,
+  coverImageUrl,
+  kind = "project",
+}: ProjectCoverEditorProps) {
+  const isHangout = kind === "hangout";
+  const upload = (formData: FormData) =>
+    isHangout ? uploadHangoutCoverAction(formData) : uploadProjectCoverAction(formData);
+  const saveUrl = (next: string | null) =>
+    isHangout ? setHangoutCoverUrlAction(id, next) : setProjectCoverUrlAction(id, next);
   const router = useRouter();
   const fileInput = useRef<HTMLInputElement>(null);
   const [cover, setCover] = useState(coverImageUrl);
@@ -35,11 +47,11 @@ export function ProjectCoverEditor({ projectId, title, coverImageUrl }: ProjectC
   function handleFile(file: File | undefined) {
     if (!file) return;
     const formData = new FormData();
-    formData.set("projectId", projectId);
+    formData.set(`${kind}Id`, id);
     formData.set("cover", file);
 
     startTransition(async () => {
-      const result = await uploadProjectCoverAction(formData);
+      const result = await upload(formData);
       applyResult(result, URL.createObjectURL(file));
       if (fileInput.current) fileInput.current.value = "";
     });
@@ -50,7 +62,7 @@ export function ProjectCoverEditor({ projectId, title, coverImageUrl }: ProjectC
     if (!next) return;
 
     startTransition(async () => {
-      const result = await setProjectCoverUrlAction(projectId, next);
+      const result = await saveUrl(next);
       applyResult(result, next);
       if (!("error" in result)) setUrl("");
     });
@@ -58,7 +70,7 @@ export function ProjectCoverEditor({ projectId, title, coverImageUrl }: ProjectC
 
   function handleRemove() {
     startTransition(async () => {
-      applyResult(await setProjectCoverUrlAction(projectId, null), null);
+      applyResult(await saveUrl(null), null);
     });
   }
 
@@ -127,7 +139,7 @@ export function ProjectCoverEditor({ projectId, title, coverImageUrl }: ProjectC
         </Button>
       </div>
       <p className="text-muted-foreground text-xs">
-        JPEG, PNG, WebP or GIF up to 5 MB. Without a cover, the project shows its initials.
+        JPEG, PNG, WebP or GIF up to 5 MB. Without a cover, the {kind} shows its initials.
       </p>
     </fieldset>
   );
