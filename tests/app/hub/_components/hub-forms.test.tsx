@@ -114,7 +114,7 @@ describe("QuarterRangeFields", () => {
     expect(onChange).toHaveBeenLastCalledWith({ start: "2026-Q3", end: null });
 
     fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "none" } });
-    expect(onChange).toHaveBeenLastCalledWith({ start: null, end: "2026-Q2" });
+    expect(onChange).toHaveBeenLastCalledWith({ start: null, end: null });
   });
 });
 
