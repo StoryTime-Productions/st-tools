@@ -163,7 +163,6 @@ describe("pomodoro actions", () => {
       data: {
         userId: "11111111-1111-4111-8111-111111111111",
         durationMin: 25,
-        points: 1,
       },
     });
     expect(revalidatePath).toHaveBeenCalledWith("/timer");
