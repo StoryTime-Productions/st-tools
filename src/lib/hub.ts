@@ -113,6 +113,13 @@ export interface ProjectBoard {
   title: string;
   cardCount: number;
   accessible: boolean;
+  requested: boolean;
+}
+
+export interface BoardAccessRequestItem {
+  id: string;
+  boardTitle: string;
+  userName: string;
 }
 
 export interface ProjectParticipant {
@@ -133,6 +140,7 @@ export interface ProjectWork {
   boards: ProjectBoard[];
   participants: ProjectParticipant[];
   availableTasks: AvailableTask[];
+  accessRequests: BoardAccessRequestItem[];
 }
 
 export async function getProjectWork(
@@ -148,6 +156,10 @@ export async function getProjectWork(
       members: {
         select: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
       },
+      accessRequests: {
+        select: { id: true, userId: true, user: { select: { name: true, email: true } } },
+        orderBy: { createdAt: "asc" },
+      },
       columns: {
         select: {
           cards: {
@@ -160,11 +172,12 @@ export async function getProjectWork(
     },
   });
 
+  const isAdmin = viewer.role === "ADMIN";
   const participants = new Map<string, ProjectParticipant>();
+  const accessRequests: BoardAccessRequestItem[] = [];
   const availableTasks: AvailableTask[] = [];
   const projectBoards = boards.map((board) => {
-    const accessible =
-      viewer.role === "ADMIN" || board.members.some(({ user }) => user.id === viewer.id);
+    const accessible = isAdmin || board.members.some(({ user }) => user.id === viewer.id);
     const cards = board.columns.flatMap((column) => column.cards);
 
     for (const { user } of board.members) {
@@ -187,7 +200,23 @@ export async function getProjectWork(
       }
     }
 
-    return { id: board.id, title: board.title, cardCount: cards.length, accessible };
+    if (isAdmin) {
+      for (const request of board.accessRequests) {
+        accessRequests.push({
+          id: request.id,
+          boardTitle: board.title,
+          userName: request.user.name?.trim() || request.user.email,
+        });
+      }
+    }
+
+    return {
+      id: board.id,
+      title: board.title,
+      cardCount: cards.length,
+      accessible,
+      requested: board.accessRequests.some((request) => request.userId === viewer.id),
+    };
   });
 
   availableTasks.sort(
@@ -198,6 +227,7 @@ export async function getProjectWork(
     boards: projectBoards,
     participants: [...participants.values()].sort((a, b) => a.name.localeCompare(b.name)),
     availableTasks,
+    accessRequests,
   };
 }
 
