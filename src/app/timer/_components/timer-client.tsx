@@ -534,15 +534,13 @@ export function TimerClient({
         return;
       }
 
-      setDurations({
-        workMinutes: workMin,
-        shortBreakMinutes: shortBreakMin,
-        longBreakMinutes: longBreakMin,
-      });
-
-      if (currentSession && isSessionOwner) {
-        syncSharedTimerStateFromStore();
-      }
+      runAndSync(() =>
+        setDurations({
+          workMinutes: workMin,
+          shortBreakMinutes: shortBreakMin,
+          longBreakMinutes: longBreakMin,
+        })
+      );
 
       toast.success("Timer settings updated");
     });
@@ -552,42 +550,34 @@ export function TimerClient({
     writeTimerPrefs({ ...timerPrefs, ...patch });
   }
 
-  function onStartTimer() {
-    void playUiCue("play");
-    start();
+  function runAndSync(action: () => void) {
+    action();
     if (currentSession && isSessionOwner) {
       syncSharedTimerStateFromStore();
     }
+  }
+
+  function onStartTimer() {
+    void playUiCue("play");
+    runAndSync(start);
   }
 
   function onPauseTimer() {
     void playUiCue("pause");
-    pause();
-    if (currentSession && isSessionOwner) {
-      syncSharedTimerStateFromStore();
-    }
+    runAndSync(pause);
   }
 
   function onResumeTimer() {
     void playUiCue("play");
-    resume();
-    if (currentSession && isSessionOwner) {
-      syncSharedTimerStateFromStore();
-    }
+    runAndSync(resume);
   }
 
   function onSkipTimer() {
-    skip();
-    if (currentSession && isSessionOwner) {
-      syncSharedTimerStateFromStore();
-    }
+    runAndSync(skip);
   }
 
   function onResetTimer() {
-    reset();
-    if (currentSession && isSessionOwner) {
-      syncSharedTimerStateFromStore();
-    }
+    runAndSync(reset);
   }
 
   function onStartOwnSession() {

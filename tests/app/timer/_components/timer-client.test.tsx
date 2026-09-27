@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TimerClient } from "@/app/timer/_components/timer-client";
 import { useTimerStore } from "@/stores/timer-store";
@@ -524,6 +524,36 @@ describe("TimerClient", () => {
     await waitFor(() => {
       expect(toastMocks.error).toHaveBeenCalledWith("Unable to sync timer state");
     });
+  });
+
+  it("syncs the shared timer after each owner control and settings save", async () => {
+    const props = makeProps();
+    props.initialCollaboration = makeOwnedSessionCollaboration(props.currentUserId);
+    const sync = actionMocks.syncFocusSessionTimerStateAction;
+    sync.mockResolvedValue({ snapshot: props.initialCollaboration });
+
+    render(<TimerClient {...props} />);
+
+    for (const [name, calls] of [
+      ["Start", 1],
+      ["Pause", 2],
+      ["Skip", 3],
+      ["Reset", 4],
+    ] as const) {
+      fireEvent.click(screen.getByRole("button", { name }));
+      await waitFor(() => expect(sync).toHaveBeenCalledTimes(calls));
+    }
+
+    act(() => useTimerStore.setState({ secondsLeft: 300, isRunning: false }));
+    fireEvent.click(screen.getByRole("button", { name: "Resume" }));
+    await waitFor(() => expect(sync).toHaveBeenCalledTimes(5));
+
+    fireEvent.click(screen.getByRole("button", { name: /Timer settings/ }));
+    fireEvent.change(screen.getByLabelText("Work"), { target: { value: "30" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(sync).toHaveBeenCalledTimes(6));
+    expect(sync).toHaveBeenLastCalledWith(expect.objectContaining({ sessionId: "session-1" }));
   });
 
   it("hides owner-only controls for locked non-owner sessions", async () => {
