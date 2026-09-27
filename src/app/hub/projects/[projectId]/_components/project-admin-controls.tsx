@@ -11,6 +11,7 @@ import {
 } from "@/app/actions/hub";
 import { InitiativeSelect } from "@/app/hub/_components/initiative-select";
 import { QuarterRangeFields } from "@/app/hub/_components/quarter-range-fields";
+import { ProjectCoverEditor } from "@/app/hub/projects/[projectId]/_components/project-cover-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -124,6 +125,12 @@ function ProjectEditorForm({
   return (
     <>
       <div className="flex-1 space-y-6 overflow-y-auto px-4 pb-4">
+        <ProjectCoverEditor
+          projectId={project.id}
+          title={project.title}
+          coverImageUrl={project.coverImageUrl}
+        />
+
         <div className="space-y-2">
           <Label htmlFor="edit-project-title">Title</Label>
           <Input

@@ -43,10 +43,17 @@ async function loadHubModule() {
 
   vi.doMock("next/cache", () => ({ revalidatePath }));
   vi.doMock("@/lib/get-current-user", () => ({ getCurrentUser }));
+  const storage = {
+    upload: vi.fn().mockResolvedValue({ error: null }),
+    getPublicUrl: vi.fn((path: string) => ({ data: { publicUrl: `https://cdn/${path}` } })),
+  };
+  const createClient = vi.fn(async () => ({ storage: { from: vi.fn(() => storage) } }));
+
   vi.doMock("@/lib/prisma", () => ({ prisma }));
+  vi.doMock("@/lib/supabase/server", () => ({ createClient }));
 
   const hub = await import("@/app/actions/hub");
-  return { ...hub, revalidatePath, getCurrentUser, prisma, tx };
+  return { ...hub, revalidatePath, getCurrentUser, prisma, tx, storage };
 }
 
 function projectUpdate(overrides: Record<string, unknown> = {}) {
@@ -331,5 +338,98 @@ describe("hub actions", () => {
     hub.prisma.project.deleteMany.mockResolvedValueOnce({ count: 1 });
     await expect(hub.deleteProjectAction(IDS.project)).resolves.toEqual({ success: true });
     expect(hub.revalidatePath).toHaveBeenCalledWith("/boards");
+  });
+
+  it("sets and clears a cover image URL", async () => {
+    const hub = await loadHubModule();
+
+    await expect(hub.setProjectCoverUrlAction(IDS.project, "ftp://x.org/a.png")).resolves.toEqual({
+      error: "Image URLs must start with http(s)://",
+    });
+    await expect(hub.setProjectCoverUrlAction(IDS.project, "nope")).resolves.toEqual({
+      error: "Enter a full image URL",
+    });
+
+    hub.prisma.project.updateMany.mockResolvedValueOnce({ count: 0 });
+    await expect(
+      hub.setProjectCoverUrlAction(IDS.project, "https://example.com/a.png")
+    ).resolves.toEqual({ error: "Project not found" });
+
+    hub.prisma.project.updateMany.mockResolvedValue({ count: 1 });
+    await expect(
+      hub.setProjectCoverUrlAction(IDS.project, " https://example.com/a.png ")
+    ).resolves.toEqual({ success: true });
+    expect(hub.prisma.project.updateMany).toHaveBeenLastCalledWith({
+      where: { id: IDS.project },
+      data: { coverImageUrl: "https://example.com/a.png" },
+    });
+
+    await expect(hub.setProjectCoverUrlAction(IDS.project, null)).resolves.toEqual({
+      success: true,
+    });
+    expect(hub.prisma.project.updateMany).toHaveBeenLastCalledWith({
+      where: { id: IDS.project },
+      data: { coverImageUrl: null },
+    });
+
+    hub.getCurrentUser.mockResolvedValue(member);
+    await expect(hub.setProjectCoverUrlAction(IDS.project, null)).resolves.toEqual({
+      error: "Forbidden: Admin access required",
+    });
+  });
+
+  it("uploads cover images to storage", async () => {
+    const hub = await loadHubModule();
+    const form = (fields: Record<string, string | File>) => {
+      const data = new FormData();
+      Object.entries(fields).forEach(([key, value]) => data.set(key, value));
+      return data;
+    };
+    const png = new File([new Uint8Array([1, 2, 3])], "Cover.PNG", { type: "image/png" });
+
+    await expect(hub.uploadProjectCoverAction(form({ projectId: "bad" }))).resolves.toEqual({
+      error: "Invalid project",
+    });
+    await expect(hub.uploadProjectCoverAction(form({ projectId: IDS.project }))).resolves.toEqual({
+      error: "No file provided",
+    });
+    await expect(
+      hub.uploadProjectCoverAction(
+        form({ projectId: IDS.project, cover: new File(["x"], "a.txt", { type: "text/plain" }) })
+      )
+    ).resolves.toEqual({ error: "Only JPEG, PNG, WebP and GIF images are allowed" });
+    await expect(
+      hub.uploadProjectCoverAction(
+        form({
+          projectId: IDS.project,
+          cover: new File([new Uint8Array(5 * 1024 * 1024 + 1)], "big.png", { type: "image/png" }),
+        })
+      )
+    ).resolves.toEqual({ error: "File must be smaller than 5 MB" });
+
+    hub.storage.upload.mockResolvedValueOnce({ error: { message: "Bucket full" } });
+    await expect(
+      hub.uploadProjectCoverAction(form({ projectId: IDS.project, cover: png }))
+    ).resolves.toEqual({ error: "Bucket full" });
+
+    hub.prisma.project.updateMany.mockResolvedValue({ count: 1 });
+    await expect(
+      hub.uploadProjectCoverAction(form({ projectId: IDS.project, cover: png }))
+    ).resolves.toEqual({ success: true });
+
+    const path = `${admin.id}/project-covers/${IDS.project}.png`;
+    expect(hub.storage.upload).toHaveBeenLastCalledWith(path, expect.any(ArrayBuffer), {
+      contentType: "image/png",
+      upsert: true,
+    });
+    expect(hub.prisma.project.updateMany).toHaveBeenLastCalledWith({
+      where: { id: IDS.project },
+      data: { coverImageUrl: expect.stringContaining(`https://cdn/${path}?v=`) },
+    });
+
+    hub.getCurrentUser.mockResolvedValue(member);
+    await expect(hub.uploadProjectCoverAction(form({ projectId: IDS.project }))).resolves.toEqual({
+      error: "Forbidden: Admin access required",
+    });
   });
 });
