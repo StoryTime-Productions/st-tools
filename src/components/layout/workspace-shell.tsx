@@ -3,7 +3,16 @@ import Image from "next/image";
 import type { CSSProperties, ReactNode } from "react";
 import type { Role } from "@prisma/client";
 import type { LucideIcon } from "lucide-react";
-import { BookOpen, Clock3, FolderKanban, Home, LogOut, Settings, Users } from "lucide-react";
+import {
+  BookOpen,
+  Clock3,
+  Compass,
+  FolderKanban,
+  Home,
+  LogOut,
+  Settings,
+  Users,
+} from "lucide-react";
 import { signOutAction } from "@/app/actions/auth";
 import { OnlinePresenceTracker } from "@/components/layout/online-presence-tracker";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -13,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-export type WorkspaceNavKey = "overview" | "boards" | "focus" | "profile" | "members";
+export type WorkspaceNavKey = "overview" | "boards" | "hub" | "focus" | "profile" | "members";
 
 export interface WorkspaceShellUser {
   id: string;
@@ -227,6 +236,13 @@ export function WorkspaceShell({
       key: "boards",
     },
     {
+      href: "/hub",
+      label: "Hub",
+      caption: "Projects, hangouts and calendar",
+      icon: Compass,
+      key: "hub",
+    },
+    {
       href: "/timer",
       label: "Focus",
       caption: "Pomodoro sessions",
@@ -369,7 +385,13 @@ export function WorkspaceShell({
                     </div>
                   </div>
                   <form action={signOutAction}>
-                    <Button type="submit" variant="ghost" size="sm" className="gap-2">
+                    <Button
+                      type="submit"
+                      variant="ghost"
+                      size="sm"
+                      className="gap-2"
+                      aria-label="Sign out"
+                    >
                       <LogOut className="size-4" />
                       <span className="hidden sm:inline">Sign out</span>
                     </Button>
