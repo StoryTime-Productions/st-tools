@@ -352,3 +352,39 @@ export async function uploadProjectCoverAction(formData: FormData): Promise<HubA
 
   return saveProjectCover(projectId.data, `${publicUrl}?v=${Date.now()}`);
 }
+
+export async function setBoardProjectAction(
+  boardId: string,
+  projectId: string | null
+): Promise<HubActionResult> {
+  if (!(await requireAdmin())) return { error: FORBIDDEN };
+
+  const parsed = z
+    .object({ boardId: z.string().uuid(), projectId: z.string().uuid().nullable() })
+    .safeParse({ boardId, projectId });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const board = await prisma.board.findUnique({
+    where: { id: parsed.data.boardId },
+    select: { projectId: true },
+  });
+  if (!board) return { error: "Board not found" };
+
+  if (parsed.data.projectId) {
+    const project = await prisma.project.findUnique({
+      where: { id: parsed.data.projectId },
+      select: { id: true },
+    });
+    if (!project) return { error: "Project not found" };
+  }
+
+  await prisma.board.update({
+    where: { id: parsed.data.boardId },
+    data: { projectId: parsed.data.projectId },
+  });
+
+  if (parsed.data.projectId) revalidateHub(parsed.data.projectId);
+  if (board.projectId) revalidateHub(board.projectId);
+  revalidatePath("/boards");
+  return { success: true };
+}

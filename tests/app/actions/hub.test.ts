@@ -4,6 +4,8 @@ import { Prisma } from "@prisma/client";
 const IDS = {
   initiative: "11111111-1111-4111-8111-111111111111",
   project: "22222222-2222-4222-8222-222222222222",
+  board: "55555555-5555-4555-8555-555555555555",
+  otherProject: "66666666-6666-4666-8666-666666666666",
 };
 
 const admin = { id: "33333333-3333-4333-8333-333333333333", role: "ADMIN" };
@@ -38,6 +40,7 @@ async function loadHubModule() {
       updateMany: vi.fn(),
       deleteMany: vi.fn(),
     },
+    board: { findUnique: vi.fn(), update: vi.fn() },
     $transaction: vi.fn(async (fn: (client: typeof tx) => Promise<unknown>) => fn(tx)),
   };
 
@@ -98,6 +101,7 @@ describe("hub actions", () => {
     await expect(hub.updateProjectAction(projectUpdate())).resolves.toEqual(forbidden);
     await expect(hub.setProjectFinishedAction(IDS.project, true)).resolves.toEqual(forbidden);
     await expect(hub.deleteProjectAction(IDS.project)).resolves.toEqual(forbidden);
+    await expect(hub.setBoardProjectAction(IDS.board, IDS.project)).resolves.toEqual(forbidden);
     expect(hub.prisma.initiative.create).not.toHaveBeenCalled();
   });
 
@@ -430,6 +434,45 @@ describe("hub actions", () => {
     hub.getCurrentUser.mockResolvedValue(member);
     await expect(hub.uploadProjectCoverAction(form({ projectId: IDS.project }))).resolves.toEqual({
       error: "Forbidden: Admin access required",
+    });
+  });
+
+  it("attaches, moves and detaches boards", async () => {
+    const hub = await loadHubModule();
+
+    await expect(hub.setBoardProjectAction("bad", null)).resolves.toEqual({
+      error: "Invalid UUID",
+    });
+
+    hub.prisma.board.findUnique.mockResolvedValueOnce(null);
+    await expect(hub.setBoardProjectAction(IDS.board, IDS.project)).resolves.toEqual({
+      error: "Board not found",
+    });
+
+    hub.prisma.board.findUnique.mockResolvedValue({ projectId: IDS.otherProject });
+    hub.prisma.project.findUnique.mockResolvedValueOnce(null);
+    await expect(hub.setBoardProjectAction(IDS.board, IDS.project)).resolves.toEqual({
+      error: "Project not found",
+    });
+    expect(hub.prisma.board.update).not.toHaveBeenCalled();
+
+    hub.prisma.project.findUnique.mockResolvedValueOnce({ id: IDS.project });
+    await expect(hub.setBoardProjectAction(IDS.board, IDS.project)).resolves.toEqual({
+      success: true,
+    });
+    expect(hub.prisma.board.update).toHaveBeenCalledWith({
+      where: { id: IDS.board },
+      data: { projectId: IDS.project },
+    });
+    expect(hub.revalidatePath).toHaveBeenCalledWith(`/hub/projects/${IDS.project}`);
+    expect(hub.revalidatePath).toHaveBeenCalledWith(`/hub/projects/${IDS.otherProject}`);
+    expect(hub.revalidatePath).toHaveBeenCalledWith("/boards");
+
+    hub.prisma.board.findUnique.mockResolvedValue({ projectId: null });
+    await expect(hub.setBoardProjectAction(IDS.board, null)).resolves.toEqual({ success: true });
+    expect(hub.prisma.board.update).toHaveBeenLastCalledWith({
+      where: { id: IDS.board },
+      data: { projectId: null },
     });
   });
 });

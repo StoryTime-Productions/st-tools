@@ -33,6 +33,12 @@ async function loadHub() {
     getInitiativeOptions: vi.fn().mockResolvedValue([{ id: "i1", name: "Internal Tools" }]),
     getProjectSummaries: vi.fn().mockResolvedValue([]),
     getProjectDetail: vi.fn().mockResolvedValue(PROJECT),
+    getProjectWork: vi.fn().mockResolvedValue({
+      boards: [],
+      participants: [],
+      availableTasks: [],
+    }),
+    getStandaloneBoardOptions: vi.fn().mockResolvedValue([{ id: "b9", title: "Loose" }]),
   };
   const tagFindMany = vi.fn().mockResolvedValue([{ name: "web" }]);
   const workspaceShell = vi.fn(({ children }: { children: React.ReactNode }) => (
@@ -49,6 +55,11 @@ async function loadHub() {
   }));
   vi.doMock("@/app/hub/_components/manage-initiatives-dialog", () => ({
     ManageInitiativesDialog: () => <button type="button">Manage initiatives</button>,
+  }));
+  vi.doMock("@/app/hub/projects/[projectId]/_components/project-boards", () => ({
+    ProjectBoards: ({ standaloneBoards }: { standaloneBoards: unknown[] | null }) => (
+      <div data-testid="project-boards">{standaloneBoards ? "admin" : "member"}</div>
+    ),
   }));
   vi.doMock("@/app/hub/projects/[projectId]/_components/project-admin-controls", () => ({
     ProjectAdminControls: ({ tagOptions }: { tagOptions: string[] }) => (
@@ -148,6 +159,10 @@ describe("hub pages", () => {
       "https://github.com/x"
     );
     expect(screen.queryByTestId("admin-controls")).not.toBeInTheDocument();
+    expect(screen.getByTestId("project-boards")).toHaveTextContent("member");
+    expect(lib.getProjectWork).toHaveBeenCalledWith("p1", member);
+    expect(screen.getByText(/Members of this project/)).toBeInTheDocument();
+    expect(screen.getByText("No unassigned cards.")).toBeInTheDocument();
 
     lib.getProjectDetail.mockResolvedValueOnce(null);
     await expect(ProjectPage({ params: Promise.resolve({ projectId: "nope" }) })).rejects.toThrow(
@@ -178,5 +193,36 @@ describe("hub pages", () => {
     expect(screen.getByText("No initiative")).toBeInTheDocument();
     expect(screen.getByText("No phases yet.")).toBeInTheDocument();
     expect(screen.getByText("No links yet.")).toBeInTheDocument();
+    expect(screen.getByTestId("project-boards")).toHaveTextContent("admin");
+  });
+
+  it("lists participants and available tasks", async () => {
+    const { ProjectPage, getCurrentUser, lib } = await loadHub();
+    getCurrentUser.mockResolvedValue(member);
+    lib.getProjectWork.mockResolvedValueOnce({
+      boards: [],
+      participants: [{ id: "u1", name: "Alice Smith", avatarUrl: null }],
+      availableTasks: [
+        {
+          id: "c1",
+          title: "Sketch map",
+          boardId: "b1",
+          boardTitle: "Art",
+          dueDate: new Date("2026-10-01T16:00:00Z"),
+        },
+        { id: "c2", title: "Undated", boardId: "b1", boardTitle: "Art", dueDate: null },
+      ],
+    });
+
+    render(await ProjectPage({ params: Promise.resolve({ projectId: "p1" }) }));
+
+    expect(screen.getByText("Alice Smith")).toBeInTheDocument();
+    expect(screen.getByText("AS")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Sketch map/ })).toHaveAttribute(
+      "href",
+      "/boards/b1?card=c1"
+    );
+    expect(screen.getByText("Due Oct 1")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Undated/ })).not.toHaveTextContent("Due");
   });
 });

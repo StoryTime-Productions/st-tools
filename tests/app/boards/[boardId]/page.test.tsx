@@ -99,5 +99,16 @@ describe("BoardDetailPage", () => {
     });
     expect(boardView).toHaveBeenCalled();
     expect(screen.getByTestId("board-view")).toHaveTextContent("Architecture board");
+    expect(boardView.mock.calls[0][0]).toMatchObject({ initialCardId: undefined });
+
+    getCurrentUser.mockResolvedValueOnce({ id: "u1", role: "MEMBER" });
+    getBoardDetailsData.mockResolvedValueOnce({ id: "board-42", title: "Architecture board" });
+    render(
+      await BoardDetailPage({
+        params: Promise.resolve({ boardId: "board-42" }),
+        searchParams: Promise.resolve({ card: "card-7" }),
+      })
+    );
+    expect(boardView.mock.calls[1][0]).toMatchObject({ initialCardId: "card-7" });
   });
 });

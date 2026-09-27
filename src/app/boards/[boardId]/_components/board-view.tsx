@@ -62,6 +62,7 @@ import { cn } from "@/lib/utils";
 
 interface BoardViewProps {
   board: BoardDetailsData;
+  initialCardId?: string;
 }
 
 function getBoardQueryKey(boardId: string) {
@@ -567,12 +568,12 @@ function ColumnContainer({
   );
 }
 
-export function BoardView({ board }: BoardViewProps) {
+export function BoardView({ board, initialCardId }: BoardViewProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const boardQueryKey = getBoardQueryKey(board.id);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
-  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(initialCardId ?? null);
   const [inviteMemberId, setInviteMemberId] = useState<string | undefined>(undefined);
   const [isPending, startTransition] = useTransition();
 
