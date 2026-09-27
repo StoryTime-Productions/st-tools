@@ -93,7 +93,7 @@ describe("getBoardDetailsData", () => {
     expect(sortUsersByDisplayName).not.toHaveBeenCalled();
   });
 
-  it("normalises open workspace board data and applies sorting/mapping rules", async () => {
+  it("normalises board data and applies sorting/mapping rules", async () => {
     const {
       getBoardDetailsData,
       findFirst,
@@ -125,10 +125,8 @@ describe("getBoardDetailsData", () => {
       id: "board-2",
       title: "Product roadmap",
       ownerId: owner.id,
-      isPersonal: false,
-      isOpenToWorkspace: true,
       owner,
-      members: [{ user: memberB }],
+      members: [{ user: memberA }, { user: memberB }],
       columns: [
         {
           id: "col-2",
@@ -272,58 +270,7 @@ describe("getBoardDetailsData", () => {
     });
   });
 
-  it("limits personal boards to owner in active members", async () => {
-    const {
-      getBoardDetailsData,
-      findFirst,
-      findMany,
-      getAccessibleBoardWhere,
-      sortUsersByDisplayName,
-    } = await loadBoardDetailsModule();
-
-    const owner = buildUser({
-      id: "owner-p",
-      name: "Personal Owner",
-      email: "owner-p@example.com",
-      role: "MEMBER",
-    });
-    const outsider = buildUser({
-      id: "outsider-p",
-      name: "Outside User",
-      email: "outside@example.com",
-      role: "MEMBER",
-    });
-
-    getAccessibleBoardWhere.mockReturnValueOnce({
-      OR: [{ ownerId: owner.id }],
-    });
-    findFirst.mockResolvedValueOnce({
-      id: "board-personal",
-      title: "Private board",
-      ownerId: owner.id,
-      isPersonal: true,
-      isOpenToWorkspace: false,
-      owner,
-      members: [{ user: outsider }],
-      columns: [],
-    });
-    findMany.mockResolvedValueOnce([owner, outsider]);
-    sortUsersByDisplayName.mockImplementationOnce((users: unknown[]) => users);
-
-    const result = await getBoardDetailsData("board-personal", {
-      id: owner.id,
-      role: "MEMBER",
-    });
-
-    expect(result?.canManage).toBe(true);
-    expect(result?.activeMembers).toHaveLength(1);
-    expect(result?.activeMembers[0]).toMatchObject({
-      id: owner.id,
-      isOwner: true,
-    });
-  });
-
-  it("includes only explicit members for non-workspace collaborative boards", async () => {
+  it("includes only explicit members as active members", async () => {
     const {
       getBoardDetailsData,
       findFirst,
@@ -358,8 +305,6 @@ describe("getBoardDetailsData", () => {
       id: "board-restricted",
       title: "Restricted board",
       ownerId: owner.id,
-      isPersonal: false,
-      isOpenToWorkspace: false,
       owner,
       members: [{ user: invited }],
       columns: [],

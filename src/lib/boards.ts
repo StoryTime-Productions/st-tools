@@ -14,10 +14,6 @@ export function getAccessibleBoardWhere(actor: BoardActor): Prisma.BoardWhereInp
     OR: [
       { ownerId: actor.id },
       {
-        isPersonal: false,
-        isOpenToWorkspace: true,
-      },
-      {
         members: {
           some: {
             userId: actor.id,

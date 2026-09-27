@@ -222,7 +222,7 @@ export function WorkspaceShell({
     {
       href: "/boards",
       label: "Boards",
-      caption: "Personal Kanban planning",
+      caption: "Team Kanban planning",
       icon: FolderKanban,
       key: "boards",
     },

@@ -67,8 +67,6 @@ const commentContentSchema = z
 
 const createBoardSchema = z.object({
   title: boardTitleSchema,
-  collaborative: z.boolean().default(false),
-  openToWorkspace: z.boolean().default(false),
 });
 
 const updateBoardSchema = z.object({
@@ -78,11 +76,6 @@ const updateBoardSchema = z.object({
 
 const deleteBoardSchema = z.object({
   boardId: z.string().uuid(),
-});
-
-const updateBoardAccessSchema = z.object({
-  boardId: z.string().uuid(),
-  isOpenToWorkspace: z.boolean(),
 });
 
 const updateBoardMemberSchema = z.object({
@@ -158,10 +151,7 @@ type CardRecord = PrismaCard & {
 };
 type ColumnRecord = PrismaColumn & { cards: CardRecord[] };
 
-type BoardAccessRecord = Pick<
-  PrismaBoard,
-  "id" | "ownerId" | "isPersonal" | "isOpenToWorkspace"
-> & {
+type BoardAccessRecord = Pick<PrismaBoard, "id" | "ownerId"> & {
   members?: Array<{ userId: string }>;
 };
 
@@ -406,8 +396,6 @@ async function getAccessibleBoard(
     select: {
       id: true,
       ownerId: true,
-      isPersonal: true,
-      isOpenToWorkspace: true,
       members: {
         select: {
           userId: true,
@@ -429,8 +417,6 @@ async function getManageableBoard(
     select: {
       id: true,
       ownerId: true,
-      isPersonal: true,
-      isOpenToWorkspace: true,
       members: {
         select: {
           userId: true,
@@ -525,19 +511,7 @@ async function getCardRecord(cardId: string) {
   });
 }
 
-async function isValidAssignee(board: BoardAccessRecord, assigneeId: string): Promise<boolean> {
-  if (board.isPersonal) {
-    return board.ownerId === assigneeId;
-  }
-
-  if (board.isOpenToWorkspace) {
-    const user = await prisma.user.findUnique({
-      where: { id: assigneeId },
-      select: { id: true },
-    });
-    return Boolean(user);
-  }
-
+function isValidAssignee(board: BoardAccessRecord, assigneeId: string): boolean {
   return (
     board.ownerId === assigneeId ||
     board.members?.some((member) => member.userId === assigneeId) === true
@@ -553,14 +527,13 @@ export async function createBoardAction(
   const parsed = createBoardSchema.safeParse(values);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
-  const collaborative = parsed.data.collaborative;
-
   const board = await prisma.board.create({
     data: {
       title: parsed.data.title,
-      isPersonal: !collaborative,
-      isOpenToWorkspace: collaborative ? parsed.data.openToWorkspace : false,
       ownerId: currentUser.id,
+      members: {
+        create: { userId: currentUser.id },
+      },
       columns: {
         create: defaultColumns.map((title, index) => ({
           title,
@@ -573,16 +546,6 @@ export async function createBoardAction(
 
   revalidateBoardViews(board.id);
   return { success: true, boardId: board.id };
-}
-
-export async function createPersonalBoardAction(
-  values: Pick<z.infer<typeof createBoardSchema>, "title">
-): Promise<BoardActionResult> {
-  return createBoardAction({
-    title: values.title,
-    collaborative: false,
-    openToWorkspace: false,
-  });
 }
 
 export async function renameBoardAction(
@@ -638,35 +601,6 @@ export async function deleteBoardAction(boardId: string): Promise<BoardActionRes
   return { success: true };
 }
 
-export async function updateBoardAccessAction(
-  boardId: string,
-  isOpenToWorkspace: boolean
-): Promise<GenericActionResult> {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) return { error: "Not authenticated" };
-
-  const parsed = updateBoardAccessSchema.safeParse({ boardId, isOpenToWorkspace });
-  if (!parsed.success) return { error: parsed.error.issues[0].message };
-
-  const board = await getManageableBoard(
-    { id: currentUser.id, role: currentUser.role },
-    parsed.data.boardId
-  );
-  if (!board || board.isPersonal) {
-    return { error: "Collaborative board not found" };
-  }
-
-  await prisma.board.update({
-    where: { id: board.id },
-    data: {
-      isOpenToWorkspace: parsed.data.isOpenToWorkspace,
-    },
-  });
-
-  revalidateBoardViews(board.id);
-  return { success: true };
-}
-
 export async function addBoardMemberAction(
   boardId: string,
   userId: string
@@ -681,12 +615,8 @@ export async function addBoardMemberAction(
     { id: currentUser.id, role: currentUser.role },
     parsed.data.boardId
   );
-  if (!board || board.isPersonal) {
-    return { error: "Collaborative board not found" };
-  }
-
-  if (board.isOpenToWorkspace) {
-    return { error: "This board is already open to the whole workspace" };
+  if (!board) {
+    return { error: "Board not found" };
   }
 
   if (board.ownerId === parsed.data.userId) {
@@ -733,8 +663,8 @@ export async function removeBoardMemberAction(
     { id: currentUser.id, role: currentUser.role },
     parsed.data.boardId
   );
-  if (!board || board.isPersonal) {
-    return { error: "Collaborative board not found" };
+  if (!board) {
+    return { error: "Board not found" };
   }
 
   if (board.ownerId === parsed.data.userId) {
@@ -1038,7 +968,7 @@ export async function updateCardAction(
   }
 
   if (parsed.data.assigneeId) {
-    const validAssignee = await isValidAssignee(board, parsed.data.assigneeId);
+    const validAssignee = isValidAssignee(board, parsed.data.assigneeId);
     if (!validAssignee) {
       return { error: "Assignee must have access to this board" };
     }

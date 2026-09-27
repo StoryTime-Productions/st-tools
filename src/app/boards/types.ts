@@ -54,8 +54,6 @@ export interface BoardColumnData {
 export interface BoardDetailsData {
   id: string;
   title: string;
-  isPersonal: boolean;
-  isOpenToWorkspace: boolean;
   ownerId: string;
   canManage: boolean;
   columns: BoardColumnData[];

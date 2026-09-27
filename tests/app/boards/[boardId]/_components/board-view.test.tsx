@@ -16,7 +16,6 @@ const actionMocks = vi.hoisted(() => ({
   removeBoardMemberAction: vi.fn(),
   renameColumnAction: vi.fn(),
   reorderColumnsAction: vi.fn(),
-  updateBoardAccessAction: vi.fn(),
   updateCardAction: vi.fn(),
 }));
 
@@ -105,8 +104,6 @@ function makeBoard(): BoardDetailsData {
   return {
     id: IDS.board,
     title: "Roadmap",
-    isPersonal: false,
-    isOpenToWorkspace: false,
     ownerId: IDS.owner,
     canManage: true,
     activeMembers: [owner, member],
@@ -202,7 +199,6 @@ describe("BoardView", () => {
     actionMocks.removeBoardMemberAction.mockResolvedValue({ success: true });
     actionMocks.renameColumnAction.mockResolvedValue({ success: true });
     actionMocks.reorderColumnsAction.mockResolvedValue({ success: true });
-    actionMocks.updateBoardAccessAction.mockResolvedValue({ success: true });
     actionMocks.updateCardAction.mockResolvedValue({
       success: true,
       card: makeBoard().columns[0].cards[0],
@@ -279,17 +275,6 @@ describe("BoardView", () => {
     });
   });
 
-  it("toggles workspace access", async () => {
-    renderBoard();
-
-    const accessToggle = screen.getAllByRole("checkbox")[0];
-    fireEvent.click(accessToggle);
-
-    await waitFor(() => {
-      expect(actionMocks.updateBoardAccessAction).toHaveBeenCalledWith(IDS.board, true);
-    });
-  });
-
   it("deletes a board and redirects", async () => {
     renderBoard();
 
@@ -324,31 +309,15 @@ describe("BoardView", () => {
     });
   });
 
-  it("hides collaborative controls for personal boards", async () => {
-    const personalBoard = {
-      ...makeBoard(),
-      isPersonal: true,
-      isOpenToWorkspace: false,
-    };
-
-    renderBoard(personalBoard);
-
-    expect(screen.getByText("Private")).toBeInTheDocument();
-    expect(screen.queryByText("Open to workspace")).not.toBeInTheDocument();
-    expect(screen.queryByText("Invite teammate")).not.toBeInTheDocument();
-    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
-    expect(supabaseMocks.createClient).not.toHaveBeenCalled();
-  });
-
-  it("hides invite controls when board is open to workspace", async () => {
+  it("hides invite and remove controls when the viewer cannot manage the board", async () => {
     renderBoard({
       ...makeBoard(),
-      isOpenToWorkspace: true,
+      canManage: false,
     });
 
-    expect(screen.getByText("Open to workspace")).toBeInTheDocument();
     expect(screen.queryByText("Invite teammate")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^remove$/i })).not.toBeInTheDocument();
+    expect(supabaseMocks.createClient).toHaveBeenCalled();
   });
 
   it("keeps add card form closed when title is blank", async () => {

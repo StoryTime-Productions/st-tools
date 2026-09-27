@@ -35,8 +35,7 @@ function makeBoards(): BoardListItem[] {
       createdAtLabel: "Today",
       cardCount: 5,
       ownerLabel: "Owned by you",
-      scopeLabel: "Collaborative",
-      accessDescription: "Open to the workspace",
+      memberLabel: "4 members",
       canManage: true,
     },
     {
@@ -46,8 +45,7 @@ function makeBoards(): BoardListItem[] {
       createdAtLabel: "Yesterday",
       cardCount: 2,
       ownerLabel: "Owned by teammate",
-      scopeLabel: "Personal",
-      accessDescription: "Invite-only",
+      memberLabel: "1 member",
       canManage: false,
     },
   ];

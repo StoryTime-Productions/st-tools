@@ -12,14 +12,10 @@ describe("boards helpers", () => {
     expect(getManageableBoardWhere({ id: "u-1", role: "ADMIN" })).toEqual({});
   });
 
-  it("returns workspace/member/owner filters for member access", () => {
+  it("returns member/owner filters for member access", () => {
     expect(getAccessibleBoardWhere({ id: "member-1", role: "MEMBER" })).toEqual({
       OR: [
         { ownerId: "member-1" },
-        {
-          isPersonal: false,
-          isOpenToWorkspace: true,
-        },
         {
           members: {
             some: {

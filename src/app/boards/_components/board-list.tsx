@@ -6,7 +6,6 @@ import { useState, useTransition } from "react";
 import { ArrowUpRight, Pencil, Save, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { deleteBoardAction, renameBoardAction } from "@/app/actions/boards";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,8 +24,7 @@ export interface BoardListItem {
   createdAtLabel: string;
   cardCount: number;
   ownerLabel: string;
-  scopeLabel: string;
-  accessDescription: string;
+  memberLabel: string;
   canManage: boolean;
 }
 
@@ -103,7 +101,7 @@ function BoardRow({ board }: { board: BoardListItem }) {
               disabled={isPending}
               aria-label="Board title"
             />
-            <p className="text-muted-foreground text-xs">{board.accessDescription}</p>
+            <p className="text-muted-foreground text-xs">{board.memberLabel}</p>
           </div>
         ) : (
           <div className="space-y-1">
@@ -111,10 +109,9 @@ function BoardRow({ board }: { board: BoardListItem }) {
               <Link href={board.href} className="font-medium hover:underline">
                 {board.title}
               </Link>
-              <Badge variant="outline">{board.scopeLabel}</Badge>
             </div>
             <p className="text-muted-foreground text-xs">{board.ownerLabel}</p>
-            <p className="text-muted-foreground text-xs">{board.accessDescription}</p>
+            <p className="text-muted-foreground text-xs">{board.memberLabel}</p>
           </div>
         )}
       </TableCell>
