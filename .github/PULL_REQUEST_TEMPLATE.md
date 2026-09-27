@@ -1,13 +1,13 @@
 <!--
-  Branch name must follow:  <type>/<issue-number>-<short-description>
+  Branch name must follow:  <type>/[<issue-number>-]<short-description>
   Commit messages must follow Conventional Commits v1.0.0-beta.4
-  Every commit must include a "Refs: #N" or "Closes: #N" footer.
+  A "Refs: #N" or "Closes: #N" footer is optional; referenced issues must exist.
   These are enforced by the CI validate job — fix them before requesting review.
 -->
 
 ## Linked Issue
 
-<!-- Every PR must be linked to an existing ticket. -->
+<!-- Optional. Delete this section if there is no ticket. -->
 
 Closes #<!-- issue number -->
 
@@ -65,8 +65,8 @@ Closes #<!-- issue number -->
 
 <!-- All boxes must be checked before requesting review. -->
 
-- [ ] Branch name follows `<type>/<issue-number>-<description>` convention
-- [ ] All commits follow Conventional Commits format with `Refs: #N` or `Closes: #N` footer
+- [ ] Branch name follows `<type>/[<issue-number>-]<description>` convention
+- [ ] All commits follow Conventional Commits format
 - [ ] `pnpm lint` passes with zero warnings
 - [ ] `pnpm typecheck` passes
 - [ ] `pnpm build` succeeds
