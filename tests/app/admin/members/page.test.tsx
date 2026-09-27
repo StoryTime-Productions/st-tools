@@ -36,6 +36,7 @@ function makeUser(overrides: Partial<User>): User {
     name: "Default User",
     email: "default@example.com",
     avatarUrl: null,
+    discordId: null,
     role: "MEMBER",
     primaryColor: null,
     secondaryColor: null,

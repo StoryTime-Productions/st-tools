@@ -35,14 +35,19 @@ export async function GET(request: NextRequest) {
         return authErrorRedirect(origin, "Could not determine an email for this account.");
       }
 
+      const discordId =
+        data.user.identities?.find((identity) => identity.provider === "discord")?.identity_data
+          ?.sub ?? null;
+
       try {
         // Ensure the user row exists in our database
         await prisma.user.upsert({
           where: { id: data.user.id },
-          update: {},
+          update: discordId ? { discordId } : {},
           create: {
             id: data.user.id,
             email,
+            discordId,
           },
         });
       } catch (upsertError) {
