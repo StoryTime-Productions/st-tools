@@ -40,6 +40,7 @@ async function loadHub() {
       accessRequests: [],
     }),
     getStandaloneBoardOptions: vi.fn().mockResolvedValue([{ id: "b9", title: "Loose" }]),
+    getCalendarCards: vi.fn().mockResolvedValue([{ id: "c1" }]),
   };
   const tagFindMany = vi.fn().mockResolvedValue([{ name: "web" }]);
   const workspaceShell = vi.fn(({ children }: { children: React.ReactNode }) => (
@@ -77,10 +78,28 @@ async function loadHub() {
     ),
   }));
 
+  vi.doMock("@/app/hub/calendar/_components/hub-calendar", () => ({
+    HubCalendar: ({ cards, today }: { cards: unknown[]; today: string }) => (
+      <p data-testid="calendar">
+        {cards.length} {today}
+      </p>
+    ),
+  }));
+
   const { default: HubLayout } = await import("@/app/hub/layout");
+  const { default: CalendarPage } = await import("@/app/hub/calendar/page");
   const { default: HubPage } = await import("@/app/hub/page");
   const { default: ProjectPage } = await import("@/app/hub/projects/[projectId]/page");
-  return { HubLayout, HubPage, ProjectPage, getCurrentUser, lib, workspaceShell, redirect };
+  return {
+    HubLayout,
+    HubPage,
+    CalendarPage,
+    ProjectPage,
+    getCurrentUser,
+    lib,
+    workspaceShell,
+    redirect,
+  };
 }
 
 describe("hub pages", () => {
@@ -103,6 +122,20 @@ describe("hub pages", () => {
     render(await HubLayout({ children: <p>child</p> }));
     expect(screen.getByText("child")).toBeInTheDocument();
     expect(workspaceShell.mock.calls[0][0]).toMatchObject({ activeNav: "hub", title: "Hub" });
+  });
+
+  it("loads the viewer's calendar cards under the Calendar tab", async () => {
+    const { CalendarPage, getCurrentUser, lib } = await loadHub();
+
+    getCurrentUser.mockResolvedValue(null);
+    await expect(CalendarPage()).rejects.toThrow("REDIRECT");
+
+    getCurrentUser.mockResolvedValue(member);
+    render(await CalendarPage());
+    expect(lib.getCalendarCards).toHaveBeenCalledWith(member);
+    expect(screen.getByTestId("calendar")).toHaveTextContent(/^1 \d{4}-\d{2}-\d{2}$/);
+    expect(screen.getByRole("link", { name: "Calendar" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Overview" })).toHaveAttribute("href", "/hub");
   });
 
   it("shows members an empty state without admin controls", async () => {
