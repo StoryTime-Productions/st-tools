@@ -52,10 +52,10 @@ jobs:
 
       - name: Enforce patch coverage >= 70%
         run: |
-          CHANGED="$(git diff --name-only --diff-filter=d "origin/${{ github.base_ref }}...HEAD")"
+          CHANGED="$(git diff --numstat --no-renames --diff-filter=d "origin/${{ github.base_ref }}...HEAD" | awk '$1 > 0 {print $3}')"
           COVERED_SOURCE="$(echo "$CHANGED" | grep -E '^src/.*\.tsx?$' | grep -Ev '\.d\.ts$|^src/app/layout\.tsx$' || true)"
           if [ -z "$COVERED_SOURCE" ]; then
-            echo "No covered source files (src/**/*.ts, *.tsx) changed; skipping patch coverage."
+            echo "No added lines in covered source files (src/**/*.ts, *.tsx); skipping patch coverage."
             exit 0
           fi
 

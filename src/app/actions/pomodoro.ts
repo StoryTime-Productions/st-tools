@@ -51,12 +51,6 @@ const recordSessionSchema = z.object({
     .int("Session duration must be a whole number")
     .min(1, "Session duration must be at least 1 minute")
     .max(180, "Session duration must be 180 minutes or fewer"),
-  points: z
-    .number()
-    .int("Points must be a whole number")
-    .min(1, "Points must be at least 1")
-    .max(10, "Points must be 10 or fewer")
-    .default(1),
 });
 
 const startSessionSchema = z.object({
@@ -329,7 +323,6 @@ export async function recordPomodoroSessionAction(
     data: {
       userId: user.id,
       durationMin: parsed.data.durationMin,
-      points: parsed.data.points,
     },
   });
 

@@ -185,7 +185,6 @@ model PomodoroSession {
   id          String   @id @default(uuid())
   durationMin Int
   completedAt DateTime @default(now())
-  points      Int      @default(1)
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
