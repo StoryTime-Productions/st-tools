@@ -39,6 +39,16 @@ describe("hub data loaders", () => {
         finishedAt: null,
         initiative: { name: "Internal Tools" },
         phases: [{ name: "Concept" }, { name: "Build" }],
+        links: [{ url: "https://github.com/x" }],
+        boards: [
+          { members: [{ user: { id: "u2", name: "Bea", email: "b@x", avatarUrl: null } }] },
+          {
+            members: [
+              { user: { id: "u1", name: null, email: "al@x", avatarUrl: "https://a" } },
+              { user: { id: "u2", name: "Bea", email: "b@x", avatarUrl: null } },
+            ],
+          },
+        ],
       },
       {
         id: "p2",
@@ -50,6 +60,8 @@ describe("hub data loaders", () => {
         finishedAt: new Date(),
         initiative: null,
         phases: [],
+        links: [],
+        boards: [],
       },
       {
         id: "p3",
@@ -61,6 +73,8 @@ describe("hub data loaders", () => {
         finishedAt: null,
         initiative: null,
         phases: [],
+        links: [],
+        boards: [],
       },
     ]);
 
@@ -70,27 +84,42 @@ describe("hub data loaders", () => {
         title: "St-tools",
         coverImageUrl: null,
         initiativeName: "Internal Tools",
+        startQuarter: "2026-Q3",
+        endQuarter: "2026-Q4",
         quarterLabel: "Q3 2026 – Q4 2026",
         currentPhase: "Build",
         finished: false,
+        linkUrls: ["https://github.com/x"],
+        participants: [
+          { id: "u1", name: "al@x", avatarUrl: "https://a" },
+          { id: "u2", name: "Bea", avatarUrl: null },
+        ],
       },
       {
         id: "p2",
         title: "Old",
         coverImageUrl: "https://example.com/c.png",
         initiativeName: null,
+        startQuarter: null,
+        endQuarter: null,
         quarterLabel: null,
         currentPhase: null,
         finished: true,
+        linkUrls: [],
+        participants: [],
       },
       {
         id: "p3",
         title: "New",
         coverImageUrl: null,
         initiativeName: null,
+        startQuarter: null,
+        endQuarter: null,
         quarterLabel: null,
         currentPhase: null,
         finished: false,
+        linkUrls: [],
+        participants: [],
       },
     ]);
   });

@@ -27,3 +27,67 @@ export function projectInitials(title: string): string {
     .map((word) => word[0]?.toUpperCase() ?? "")
     .join("");
 }
+
+export function quartersBetween(start: string, end: string): string[] {
+  const toIndex = (quarter: string) => {
+    const [year, q] = quarter.split("-Q").map(Number);
+    return year * 4 + q - 1;
+  };
+  const quarters: string[] = [];
+  for (let index = toIndex(start); index <= toIndex(end); index += 1) {
+    quarters.push(`${Math.floor(index / 4)}-Q${(index % 4) + 1}`);
+  }
+  return quarters;
+}
+
+interface Groupable {
+  title: string;
+  startQuarter: string | null;
+  endQuarter: string | null;
+  initiativeName: string | null;
+}
+
+export interface ProjectGroup<T> {
+  label: string;
+  projects: T[];
+}
+
+export function sortBySoonestEnd<T extends Groupable>(projects: T[]): T[] {
+  return [...projects].sort((left, right) => {
+    const a = left.endQuarter ?? "~";
+    const b = right.endQuarter ?? "~";
+    return a === b ? left.title.localeCompare(right.title) : a < b ? -1 : 1;
+  });
+}
+
+export function groupByQuarter<T extends Groupable>(projects: T[]): ProjectGroup<T>[] {
+  const groups = new Map<string, T[]>();
+  const undated: T[] = [];
+  for (const project of sortBySoonestEnd(projects)) {
+    if (!project.startQuarter) {
+      undated.push(project);
+      continue;
+    }
+    for (const quarter of quartersBetween(
+      project.startQuarter,
+      project.endQuarter ?? project.startQuarter
+    )) {
+      groups.set(quarter, [...(groups.get(quarter) ?? []), project]);
+    }
+  }
+  const dated = [...groups.keys()]
+    .sort()
+    .map((quarter) => ({ label: formatQuarter(quarter), projects: groups.get(quarter)! }));
+  return undated.length > 0 ? [...dated, { label: "No quarter", projects: undated }] : dated;
+}
+
+export function groupByInitiative<T extends Groupable>(projects: T[]): ProjectGroup<T>[] {
+  const groups = new Map<string, T[]>();
+  for (const project of sortBySoonestEnd(projects)) {
+    const key = project.initiativeName ?? "";
+    groups.set(key, [...(groups.get(key) ?? []), project]);
+  }
+  return [...groups.keys()]
+    .sort((a, b) => (a === "" ? 1 : b === "" ? -1 : a.localeCompare(b)))
+    .map((key) => ({ label: key || "No initiative", projects: groups.get(key)! }));
+}

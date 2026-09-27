@@ -13,7 +13,7 @@ export function ProjectCover({
   return (
     <div
       className={cn(
-        "bg-muted text-muted-foreground flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl text-sm font-semibold",
+        "bg-muted text-foreground/80 flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl text-sm font-semibold",
         className
       )}
       aria-hidden="true"
