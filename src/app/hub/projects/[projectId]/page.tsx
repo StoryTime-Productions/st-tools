@@ -1,13 +1,20 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProjectCover } from "@/app/hub/_components/project-cover";
+import { ProjectBoards } from "@/app/hub/projects/[projectId]/_components/project-boards";
 import { ProjectAdminControls } from "@/app/hub/projects/[projectId]/_components/project-admin-controls";
 import { getCurrentUser } from "@/lib/get-current-user";
-import { getInitiativeOptions, getProjectDetail } from "@/lib/hub";
-import { formatQuarterRange } from "@/lib/hub-format";
+import {
+  getInitiativeOptions,
+  getProjectDetail,
+  getProjectWork,
+  getStandaloneBoardOptions,
+} from "@/lib/hub";
+import { formatQuarterRange, projectInitials } from "@/lib/hub-format";
 import { linkIcon } from "@/lib/hub-links";
 import { prisma } from "@/lib/prisma";
 
@@ -20,14 +27,16 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
   if (!project) notFound();
 
   const isAdmin = user.role === "ADMIN";
-  const [initiatives, tagOptions] = isAdmin
+  const [initiatives, tagOptions, standaloneBoards] = isAdmin
     ? await Promise.all([
         getInitiativeOptions(),
         prisma.tag
           .findMany({ select: { name: true }, orderBy: { name: "asc" } })
           .then((tags) => tags.map((tag) => tag.name)),
+        getStandaloneBoardOptions(),
       ])
-    : [[], []];
+    : [[], [], null];
+  const work = await getProjectWork(project.id, user);
   const quarterLabel = formatQuarterRange(project.startQuarter, project.endQuarter);
 
   return (
@@ -133,6 +142,81 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
                     </li>
                   );
                 })}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
+          <CardHeader>
+            <CardTitle className="text-base">Boards</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ProjectBoards
+              projectId={project.id}
+              boards={work.boards}
+              standaloneBoards={standaloneBoards}
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
+          <CardHeader>
+            <CardTitle className="text-base">Participants</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {work.participants.length === 0 ? (
+              <p className="text-muted-foreground text-sm">
+                Members of this project&apos;s boards show up here.
+              </p>
+            ) : (
+              <ul className="flex flex-wrap gap-3">
+                {work.participants.map((participant) => (
+                  <li key={participant.id} className="flex items-center gap-2 text-sm">
+                    <Avatar className="size-8">
+                      <AvatarImage src={participant.avatarUrl ?? undefined} alt="" />
+                      <AvatarFallback>{projectInitials(participant.name)}</AvatarFallback>
+                    </Avatar>
+                    {participant.name}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-base">Available tasks</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {work.availableTasks.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No unassigned cards.</p>
+            ) : (
+              <ul className="space-y-2">
+                {work.availableTasks.map((task) => (
+                  <li key={task.id}>
+                    <Link
+                      href={`/boards/${task.boardId}?card=${task.id}`}
+                      className="hover:bg-muted/40 flex items-center justify-between gap-3 rounded-2xl border px-4 py-2 text-sm"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium">{task.title}</span>
+                        <span className="text-muted-foreground text-xs">{task.boardTitle}</span>
+                      </span>
+                      {task.dueDate ? (
+                        <span className="text-muted-foreground shrink-0 text-xs">
+                          Due{" "}
+                          {task.dueDate.toLocaleDateString("en-CA", {
+                            month: "short",
+                            day: "numeric",
+                            timeZone: "UTC",
+                          })}
+                        </span>
+                      ) : null}
+                    </Link>
+                  </li>
+                ))}
               </ul>
             )}
           </CardContent>

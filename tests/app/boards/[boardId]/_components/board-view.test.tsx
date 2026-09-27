@@ -156,7 +156,7 @@ function makeBoard(): BoardDetailsData {
   };
 }
 
-function renderBoard(board = makeBoard()) {
+function renderBoard(board = makeBoard(), initialCardId?: string) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -167,7 +167,7 @@ function renderBoard(board = makeBoard()) {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <BoardView board={board} />
+      <BoardView board={board} initialCardId={initialCardId} />
     </QueryClientProvider>
   );
 }
@@ -267,6 +267,12 @@ describe("BoardView", () => {
       expect(actionMocks.addCardCommentAction).toHaveBeenCalledWith(IDS.card, "Comment from test");
     });
   }, 15000);
+
+  it("opens the card from a deep link", () => {
+    renderBoard(makeBoard(), IDS.card);
+
+    expect(screen.getByRole("dialog")).toHaveTextContent("Seed card");
+  });
 
   it("removes a board member", async () => {
     renderBoard();

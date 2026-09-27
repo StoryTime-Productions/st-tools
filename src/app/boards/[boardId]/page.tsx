@@ -7,8 +7,10 @@ export const dynamic = "force-dynamic";
 
 export default async function BoardDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ boardId: string }>;
+  searchParams?: Promise<{ card?: string }>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/auth/sign-in");
@@ -21,5 +23,7 @@ export default async function BoardDetailPage({
     notFound();
   }
 
-  return <BoardView board={boardData} />;
+  const { card } = (await searchParams) ?? {};
+
+  return <BoardView board={boardData} initialCardId={card} />;
 }

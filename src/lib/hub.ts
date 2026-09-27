@@ -107,3 +107,104 @@ export async function getProjectDetail(projectId: string): Promise<ProjectDetail
     finished: project.finishedAt !== null,
   };
 }
+
+export interface ProjectBoard {
+  id: string;
+  title: string;
+  cardCount: number;
+  accessible: boolean;
+}
+
+export interface ProjectParticipant {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+}
+
+export interface AvailableTask {
+  id: string;
+  title: string;
+  boardId: string;
+  boardTitle: string;
+  dueDate: Date | null;
+}
+
+export interface ProjectWork {
+  boards: ProjectBoard[];
+  participants: ProjectParticipant[];
+  availableTasks: AvailableTask[];
+}
+
+export async function getProjectWork(
+  projectId: string,
+  viewer: { id: string; role: string }
+): Promise<ProjectWork> {
+  const boards = await prisma.board.findMany({
+    where: { projectId },
+    orderBy: { title: "asc" },
+    select: {
+      id: true,
+      title: true,
+      members: {
+        select: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+      },
+      columns: {
+        select: {
+          cards: {
+            select: { id: true, title: true, dueDate: true, assigneeId: true },
+            orderBy: { position: "asc" },
+          },
+        },
+        orderBy: { position: "asc" },
+      },
+    },
+  });
+
+  const participants = new Map<string, ProjectParticipant>();
+  const availableTasks: AvailableTask[] = [];
+  const projectBoards = boards.map((board) => {
+    const accessible =
+      viewer.role === "ADMIN" || board.members.some(({ user }) => user.id === viewer.id);
+    const cards = board.columns.flatMap((column) => column.cards);
+
+    for (const { user } of board.members) {
+      participants.set(user.id, {
+        id: user.id,
+        name: user.name?.trim() || user.email,
+        avatarUrl: user.avatarUrl,
+      });
+    }
+    if (accessible) {
+      for (const card of cards) {
+        if (card.assigneeId) continue;
+        availableTasks.push({
+          id: card.id,
+          title: card.title,
+          boardId: board.id,
+          boardTitle: board.title,
+          dueDate: card.dueDate,
+        });
+      }
+    }
+
+    return { id: board.id, title: board.title, cardCount: cards.length, accessible };
+  });
+
+  availableTasks.sort(
+    (a, b) => (a.dueDate?.getTime() ?? Infinity) - (b.dueDate?.getTime() ?? Infinity)
+  );
+
+  return {
+    boards: projectBoards,
+    participants: [...participants.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    availableTasks,
+  };
+}
+
+export async function getStandaloneBoardOptions(): Promise<Array<{ id: string; title: string }>> {
+  return prisma.board.findMany({
+    where: { projectId: null },
+    select: { id: true, title: true },
+    orderBy: { title: "asc" },
+  });
+}
