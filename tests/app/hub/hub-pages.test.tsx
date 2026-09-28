@@ -28,6 +28,7 @@ const HANGOUT = {
   status: "COLLECTING",
   description: "Bring sunscreen",
   discordThreadUrl: "https://discord.com/channels/1/2",
+  proposerName: null,
 };
 
 async function loadHub() {
@@ -54,6 +55,7 @@ async function loadHub() {
   const hangouts = {
     getHangoutSummaries: vi.fn().mockResolvedValue([]),
     getHangoutDetail: vi.fn().mockResolvedValue(HANGOUT),
+    getOpenIdeas: vi.fn().mockResolvedValue([]),
   };
   const tagFindMany = vi.fn().mockResolvedValue([{ name: "web" }]);
   const workspaceShell = vi.fn(({ children }: { children: React.ReactNode }) => (
@@ -109,6 +111,9 @@ async function loadHub() {
     ),
   }));
 
+  vi.doMock("@/app/hub/ideas/_components/idea-actions", () => ({
+    IdeaActions: ({ title }: { title: string }) => <button type="button">Promote {title}</button>,
+  }));
   vi.doMock("@/app/hub/calendar/_components/hub-calendar", () => ({
     HubCalendar: ({ cards, today }: { cards: unknown[]; today: string }) => (
       <p data-testid="calendar">
@@ -122,7 +127,9 @@ async function loadHub() {
   const { default: HubPage } = await import("@/app/hub/page");
   const { default: ProjectPage } = await import("@/app/hub/projects/[projectId]/page");
   const { default: HangoutPage } = await import("@/app/hub/hangouts/[hangoutId]/page");
+  const { default: IdeasPage } = await import("@/app/hub/ideas/page");
   return {
+    IdeasPage,
     HangoutPage,
     hangouts,
     HubLayout,
@@ -351,5 +358,54 @@ describe("hub pages", () => {
 
     hangouts.getHangoutDetail.mockResolvedValueOnce(null);
     await expect(HangoutPage(params())).rejects.toThrow("NOT_FOUND");
+  });
+
+  it("lists open ideas with admin actions and marks promoted hangouts", async () => {
+    const { IdeasPage, HangoutPage, getCurrentUser, hangouts } = await loadHub();
+
+    getCurrentUser.mockResolvedValue(null);
+    await expect(IdeasPage()).rejects.toThrow("REDIRECT");
+
+    getCurrentUser.mockResolvedValue(member);
+    const empty = render(await IdeasPage());
+    expect(screen.getByText("No ideas yet.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ideas" })).toHaveAttribute("aria-current", "page");
+    expect(screen.queryByText(/Promote one/)).not.toBeInTheDocument();
+    empty.unmount();
+
+    hangouts.getOpenIdeas.mockResolvedValue([
+      {
+        id: "i1",
+        title: "Karaoke",
+        details: "Friday night?",
+        createdAt: new Date("2026-09-28T16:00:00Z"),
+        proposerName: "Sam Lee",
+        proposerAvatarUrl: null,
+      },
+      {
+        id: "i2",
+        title: "Hike",
+        details: null,
+        createdAt: new Date("2026-09-27T16:00:00Z"),
+        proposerName: "kai",
+        proposerAvatarUrl: "https://a/kai.png",
+      },
+    ]);
+    const members = render(await IdeasPage());
+    expect(screen.getByRole("heading", { name: "Karaoke" })).toBeInTheDocument();
+    expect(screen.getByText("Friday night?")).toBeInTheDocument();
+    expect(screen.getByText(/Sam Lee · Sep 28/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Promote/ })).not.toBeInTheDocument();
+    members.unmount();
+
+    getCurrentUser.mockResolvedValue(admin);
+    const admins = render(await IdeasPage());
+    expect(screen.getByText(/Promote one to start collecting availability/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Promote Hike" })).toBeInTheDocument();
+    admins.unmount();
+
+    hangouts.getHangoutDetail.mockResolvedValueOnce({ ...HANGOUT, proposerName: "Sam Lee" });
+    render(await HangoutPage({ params: Promise.resolve({ hangoutId: "h1" }) }));
+    expect(screen.getByText("Idea by Sam Lee in Discord")).toBeInTheDocument();
   });
 });

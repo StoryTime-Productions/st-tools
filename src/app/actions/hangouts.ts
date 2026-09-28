@@ -145,3 +145,57 @@ export async function uploadHangoutCoverAction(formData: FormData): Promise<Hang
 
   return saveHangoutCover(hangoutId.data, cover.url);
 }
+
+const IDEA_GONE = "Idea not found or already promoted";
+
+class IdeaTaken extends Error {}
+
+export async function promoteIdeaAction(ideaId: string): Promise<CreateHangoutResult> {
+  if (!(await requireAdmin())) return { error: FORBIDDEN };
+
+  const parsed = z.string().uuid().safeParse(ideaId);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  try {
+    const hangoutId = await prisma.$transaction(async (tx) => {
+      const idea = await tx.hangoutIdea.findFirst({
+        where: { id: parsed.data, hangoutId: null },
+        select: { title: true, details: true },
+      });
+      if (!idea) throw new IdeaTaken();
+
+      const hangout = await tx.hangout.create({
+        data: { title: idea.title, description: idea.details },
+        select: { id: true },
+      });
+      const linked = await tx.hangoutIdea.updateMany({
+        where: { id: parsed.data, hangoutId: null },
+        data: { hangoutId: hangout.id },
+      });
+      if (linked.count === 0) throw new IdeaTaken();
+      return hangout.id;
+    });
+
+    revalidateHangout(hangoutId);
+    revalidatePath("/hub/ideas");
+    return { success: true, hangoutId };
+  } catch (error) {
+    if (error instanceof IdeaTaken) return { error: IDEA_GONE };
+    throw error;
+  }
+}
+
+export async function dismissIdeaAction(ideaId: string): Promise<HangoutActionResult> {
+  if (!(await requireAdmin())) return { error: FORBIDDEN };
+
+  const parsed = z.string().uuid().safeParse(ideaId);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const result = await prisma.hangoutIdea.deleteMany({
+    where: { id: parsed.data, hangoutId: null },
+  });
+  if (result.count === 0) return { error: IDEA_GONE };
+
+  revalidatePath("/hub/ideas");
+  return { success: true };
+}
