@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
+import type { HangoutSummary } from "@/lib/hangouts";
 import type { ProjectSummary } from "@/lib/hub";
 
 function summary(overrides: Partial<ProjectSummary>): ProjectSummary {
@@ -49,9 +50,14 @@ const PROJECTS = [
   summary({ id: "p4", title: "Shipped", finished: true }),
 ];
 
-async function renderOverview(projects = PROJECTS) {
+const HANGOUTS: HangoutSummary[] = [
+  { id: "h1", title: "Beach day", coverImageUrl: null, status: "COLLECTING" },
+  { id: "h2", title: "Bowling", coverImageUrl: null, status: "CANCELLED" },
+];
+
+async function renderOverview(projects = PROJECTS, hangouts: HangoutSummary[] = []) {
   const { ProjectOverview } = await import("@/app/hub/_components/project-overview");
-  render(<ProjectOverview projects={projects} />);
+  render(<ProjectOverview projects={projects} hangouts={hangouts} />);
 }
 
 function titles() {
@@ -95,7 +101,7 @@ describe("ProjectOverview", () => {
     expect(
       within(screen.getByRole("region", { name: "Q3 2026" })).getAllByRole("link")
     ).toHaveLength(2);
-    expect(screen.getByRole("region", { name: "No quarter" })).toHaveTextContent("Someday");
+    expect(screen.getByRole("region", { name: "No date" })).toHaveTextContent("Someday");
 
     fireEvent.click(screen.getByRole("button", { name: "By initiative" }));
     expect(screen.getByRole("region", { name: "Internal Tools" })).toHaveTextContent("St-tools");
@@ -146,10 +152,75 @@ describe("ProjectOverview", () => {
 
   it("says when every project is finished", async () => {
     await renderOverview([summary({ id: "p9", title: "Done", finished: true })]);
-    expect(screen.getByText(/No active projects/)).toBeInTheDocument();
+    expect(screen.getByText(/Nothing active/)).toBeInTheDocument();
   });
 
   it("says when there are no finished projects", async () => {
+    await renderOverview([summary({ id: "p8", title: "Live" })]);
+    fireEvent.click(screen.getByRole("button", { name: "Past" }));
+    expect(screen.getByText("Nothing finished or cancelled yet.")).toBeInTheDocument();
+  });
+
+  it("mixes hangouts into every view by default", async () => {
+    await renderOverview(PROJECTS, HANGOUTS);
+
+    expect(screen.getByRole("button", { name: "Mixed" })).toHaveAttribute("aria-pressed", "true");
+    expect(titles()).toEqual(["Channel", "St-tools", "Beach day", "Someday"]);
+    expect(screen.getByRole("link", { name: /Beach day/ })).toHaveAttribute(
+      "href",
+      "/hub/hangouts/h1"
+    );
+    expect(screen.getByText("Collecting availability")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "By quarter" }));
+    expect(screen.getByRole("region", { name: "No date" })).toHaveTextContent("Beach day");
+
+    fireEvent.click(screen.getByRole("button", { name: "By initiative" }));
+    expect(screen.getByRole("region", { name: "Hangouts" })).toHaveTextContent("Beach day");
+
+    fireEvent.click(screen.getByRole("button", { name: "Past" }));
+    expect(titles()).toEqual(["Bowling", "Shipped"]);
+    expect(screen.getByText("Cancelled")).toBeInTheDocument();
+  });
+
+  it("separates hangouts from projects and remembers the layout", async () => {
+    await renderOverview(PROJECTS, HANGOUTS);
+
+    fireEvent.click(screen.getByRole("button", { name: "Separate" }));
+    expect(localStorage.getItem("hub-overview-mode")).toBe("separate");
+    const hangouts = screen.getByRole("region", { name: "Hangouts" });
+    expect(within(hangouts).getAllByRole("link")).toHaveLength(1);
+    expect(
+      within(screen.getByRole("region", { name: "Projects" })).getAllByRole("link")
+    ).toHaveLength(3);
+
+    fireEvent.click(screen.getByRole("button", { name: "By quarter" }));
+    expect(screen.getByRole("region", { name: "No quarter" })).toHaveTextContent("Someday");
+
+    fireEvent.click(screen.getByRole("button", { name: "Past" }));
+    expect(
+      within(screen.getByRole("region", { name: "Hangouts" })).getByText("Bowling")
+    ).toBeInTheDocument();
+  });
+
+  it("explains empty sections in the separate layout", async () => {
+    localStorage.setItem("hub-overview-mode", "separate");
+    await renderOverview([summary({ id: "p9", title: "Done", finished: true })]);
+
+    expect(screen.getByRole("button", { name: "Separate" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    expect(screen.getByText("No hangouts planned.")).toBeInTheDocument();
+    expect(screen.getByText(/No active projects/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Past" }));
+    expect(screen.getByText("No cancelled hangouts.")).toBeInTheDocument();
+    expect(screen.queryByText("No finished projects yet.")).not.toBeInTheDocument();
+  });
+
+  it("says when no project is finished in the separate layout", async () => {
+    localStorage.setItem("hub-overview-mode", "separate");
     await renderOverview([summary({ id: "p8", title: "Live" })]);
     fireEvent.click(screen.getByRole("button", { name: "Past" }));
     expect(screen.getByText("No finished projects yet.")).toBeInTheDocument();
