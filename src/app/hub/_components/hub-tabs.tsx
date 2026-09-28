@@ -4,9 +4,10 @@ import { cn } from "@/lib/utils";
 const TABS = [
   { href: "/hub", label: "Overview" },
   { href: "/hub/calendar", label: "Calendar" },
-];
+  { href: "/hub/ideas", label: "Ideas" },
+] as const;
 
-export function HubTabs({ active }: { active: "/hub" | "/hub/calendar" }) {
+export function HubTabs({ active }: { active: (typeof TABS)[number]["href"] }) {
   return (
     <nav aria-label="Hub" className="border-border/70 flex gap-1 border-b">
       {TABS.map((tab) => (

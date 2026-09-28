@@ -41,6 +41,11 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
             <Badge variant={hangout.status === "CANCELLED" ? "outline" : "secondary"}>
               {HANGOUT_STATUS_LABEL[hangout.status]}
             </Badge>
+            {hangout.proposerName ? (
+              <p className="text-muted-foreground text-xs">
+                Idea by {hangout.proposerName} in Discord
+              </p>
+            ) : null}
           </div>
         </div>
 

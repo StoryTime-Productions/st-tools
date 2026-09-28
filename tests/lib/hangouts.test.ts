@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 async function loadHangoutsLib() {
-  const prisma = { hangout: { findMany: vi.fn(), findUnique: vi.fn() } };
+  const prisma = {
+    hangout: { findMany: vi.fn(), findUnique: vi.fn() },
+    hangoutIdea: { findMany: vi.fn() },
+    user: { findMany: vi.fn() },
+  };
   vi.doMock("@/lib/prisma", () => ({ prisma }));
   const lib = await import("@/lib/hangouts");
   return { ...lib, prisma };
@@ -29,6 +33,68 @@ describe("hangout data loaders", () => {
     await expect(getHangoutDetail("h1")).resolves.toBeNull();
     expect(prisma.hangout.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: "h1" } })
+    );
+  });
+
+  it("flattens the proposer of the idea a hangout came from", async () => {
+    const { getHangoutDetail, prisma } = await loadHangoutsLib();
+    const base = { id: "h1", title: "Karaoke", description: null };
+    prisma.hangout.findUnique
+      .mockResolvedValueOnce({ ...base, idea: { proposerName: "sam#1" } })
+      .mockResolvedValueOnce({ ...base, idea: null });
+
+    await expect(getHangoutDetail("h1")).resolves.toEqual({ ...base, proposerName: "sam#1" });
+    await expect(getHangoutDetail("h1")).resolves.toEqual({ ...base, proposerName: null });
+  });
+
+  it("lists open ideas with linked accounts preferred over Discord names", async () => {
+    const { getOpenIdeas, prisma } = await loadHangoutsLib();
+    const createdAt = new Date("2026-09-28T12:00:00Z");
+    prisma.hangoutIdea.findMany.mockResolvedValue([
+      {
+        id: "i1",
+        title: "Karaoke",
+        details: null,
+        createdAt,
+        proposerName: "sam",
+        proposerDiscordId: "d1",
+      },
+      {
+        id: "i2",
+        title: "Hike",
+        details: "Rattlesnake",
+        createdAt,
+        proposerName: "kai",
+        proposerDiscordId: "d2",
+      },
+    ]);
+    prisma.user.findMany.mockResolvedValue([
+      { discordId: "d1", name: "Sam Lee", avatarUrl: "https://a/sam.png" },
+    ]);
+
+    await expect(getOpenIdeas()).resolves.toEqual([
+      {
+        id: "i1",
+        title: "Karaoke",
+        details: null,
+        createdAt,
+        proposerName: "Sam Lee",
+        proposerAvatarUrl: "https://a/sam.png",
+      },
+      {
+        id: "i2",
+        title: "Hike",
+        details: "Rattlesnake",
+        createdAt,
+        proposerName: "kai",
+        proposerAvatarUrl: null,
+      },
+    ]);
+    expect(prisma.hangoutIdea.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { hangoutId: null }, orderBy: { createdAt: "desc" } })
+    );
+    expect(prisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { discordId: { in: ["d1", "d2"] } } })
     );
   });
 });

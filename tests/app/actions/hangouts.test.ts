@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const HANGOUT_ID = "22222222-2222-4222-8222-222222222222";
+const IDEA_ID = "55555555-5555-4555-8555-555555555555";
 const THREAD = "https://discord.com/channels/123/456";
 const admin = { id: "33333333-3333-4333-8333-333333333333", role: "ADMIN" };
 const member = { id: "44444444-4444-4444-8444-444444444444", role: "MEMBER" };
@@ -13,7 +14,16 @@ async function loadModule() {
       create: vi.fn().mockResolvedValue({ id: HANGOUT_ID }),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
+    hangoutIdea: {
+      findFirst: vi.fn().mockResolvedValue({ title: "Karaoke", details: "Friday?" }),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
+    $transaction: vi.fn(),
   };
+  prisma.$transaction.mockImplementation(async (fn: (tx: typeof prisma) => Promise<unknown>) =>
+    fn(prisma)
+  );
   const uploadCover = vi.fn();
   vi.doMock("next/cache", () => ({ revalidatePath }));
   vi.doMock("@/lib/get-current-user", () => ({ getCurrentUser }));
@@ -164,6 +174,59 @@ describe("hangout actions", () => {
     mod.prisma.hangout.updateMany.mockResolvedValue({ count: 0 });
     await expect(mod.setHangoutCoverUrlAction(HANGOUT_ID, null)).resolves.toEqual({
       error: "Hangout not found",
+    });
+  });
+
+  it("promotes an idea into a hangout once", async () => {
+    const mod = await loadModule();
+
+    await expect(mod.promoteIdeaAction(IDEA_ID)).resolves.toEqual({
+      success: true,
+      hangoutId: HANGOUT_ID,
+    });
+    expect(mod.prisma.hangout.create).toHaveBeenCalledWith({
+      data: { title: "Karaoke", description: "Friday?" },
+      select: { id: true },
+    });
+    expect(mod.prisma.hangoutIdea.updateMany).toHaveBeenCalledWith({
+      where: { id: IDEA_ID, hangoutId: null },
+      data: { hangoutId: HANGOUT_ID },
+    });
+    expect(mod.revalidatePath).toHaveBeenCalledWith("/hub/ideas");
+
+    const gone = { error: "Idea not found or already promoted" };
+    mod.prisma.hangoutIdea.updateMany.mockResolvedValueOnce({ count: 0 });
+    await expect(mod.promoteIdeaAction(IDEA_ID)).resolves.toEqual(gone);
+    mod.prisma.hangoutIdea.findFirst.mockResolvedValueOnce(null);
+    await expect(mod.promoteIdeaAction(IDEA_ID)).resolves.toEqual(gone);
+    await expect(mod.promoteIdeaAction("bad")).resolves.toHaveProperty("error");
+
+    mod.prisma.$transaction.mockRejectedValueOnce(new Error("db down"));
+    await expect(mod.promoteIdeaAction(IDEA_ID)).rejects.toThrow("db down");
+
+    mod.getCurrentUser.mockResolvedValue(member);
+    await expect(mod.promoteIdeaAction(IDEA_ID)).resolves.toEqual({
+      error: "Forbidden: Admin access required",
+    });
+  });
+
+  it("dismisses only unpromoted ideas and only for admins", async () => {
+    const mod = await loadModule();
+
+    await expect(mod.dismissIdeaAction(IDEA_ID)).resolves.toEqual({ success: true });
+    expect(mod.prisma.hangoutIdea.deleteMany).toHaveBeenCalledWith({
+      where: { id: IDEA_ID, hangoutId: null },
+    });
+
+    mod.prisma.hangoutIdea.deleteMany.mockResolvedValueOnce({ count: 0 });
+    await expect(mod.dismissIdeaAction(IDEA_ID)).resolves.toEqual({
+      error: "Idea not found or already promoted",
+    });
+    await expect(mod.dismissIdeaAction("bad")).resolves.toHaveProperty("error");
+
+    mod.getCurrentUser.mockResolvedValue(member);
+    await expect(mod.dismissIdeaAction(IDEA_ID)).resolves.toEqual({
+      error: "Forbidden: Admin access required",
     });
   });
 });
