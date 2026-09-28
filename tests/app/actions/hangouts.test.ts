@@ -229,4 +229,54 @@ describe("hangout actions", () => {
       error: "Forbidden: Admin access required",
     });
   });
+
+  it("saves the availability setup with a deduplicated, sorted date list", async () => {
+    const mod = await loadModule();
+    const setup = {
+      hangoutId: HANGOUT_ID,
+      dates: ["2026-10-04", "2026-10-03", "2026-10-04"],
+      startHour: 10,
+      endHour: 18,
+      deadline: "2026-10-02T18:00",
+    };
+
+    await expect(mod.setAvailabilitySetupAction(setup)).resolves.toEqual({ success: true });
+    expect(mod.prisma.hangout.updateMany).toHaveBeenCalledWith({
+      where: { id: HANGOUT_ID, status: "COLLECTING" },
+      data: {
+        availabilityDates: ["2026-10-03", "2026-10-04"],
+        windowStartHour: 10,
+        windowEndHour: 18,
+        availabilityDeadline: new Date("2026-10-02T22:00:00Z"),
+      },
+    });
+
+    await mod.setAvailabilitySetupAction({ ...setup, deadline: null });
+    expect(mod.prisma.hangout.updateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ availabilityDeadline: null }),
+      })
+    );
+
+    const invalid: Array<[typeof setup, string]> = [
+      [{ ...setup, dates: [] }, "Pick at least one date"],
+      [{ ...setup, dates: ["2026-13-45"] }, "Invalid date"],
+      [{ ...setup, dates: ["Oct 3"] }, "Dates must look like 2026-10-03"],
+      [{ ...setup, startHour: 18, endHour: 18 }, "End time must be after the start time"],
+      [{ ...setup, deadline: "2026-10-02" }, "Deadline needs a date and time"],
+    ];
+    for (const [values, error] of invalid) {
+      await expect(mod.setAvailabilitySetupAction(values)).resolves.toEqual({ error });
+    }
+
+    mod.prisma.hangout.updateMany.mockResolvedValueOnce({ count: 0 });
+    await expect(mod.setAvailabilitySetupAction(setup)).resolves.toEqual({
+      error: "Hangout not found or no longer collecting availability",
+    });
+
+    mod.getCurrentUser.mockResolvedValue(member);
+    await expect(mod.setAvailabilitySetupAction(setup)).resolves.toEqual({
+      error: "Forbidden: Admin access required",
+    });
+  });
 });

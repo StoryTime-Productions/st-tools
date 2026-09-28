@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { HangoutStatus, Role } from "@prisma/client";
+import { torontoToUtc } from "@/lib/calendar";
 import { uploadCover } from "@/lib/cover-upload";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { prisma } from "@/lib/prisma";
@@ -197,5 +198,51 @@ export async function dismissIdeaAction(ideaId: string): Promise<HangoutActionRe
   if (result.count === 0) return { error: IDEA_GONE };
 
   revalidatePath("/hub/ideas");
+  return { success: true };
+}
+
+const dayKey = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Dates must look like 2026-10-03")
+  .refine((key) => !Number.isNaN(Date.parse(`${key}T00:00:00Z`)), "Invalid date");
+
+const availabilitySetupSchema = z
+  .object({
+    hangoutId: z.string().uuid(),
+    dates: z.array(dayKey).min(1, "Pick at least one date").max(60, "Pick 60 dates or fewer"),
+    startHour: z.number().int().min(0).max(23),
+    endHour: z.number().int().min(1).max(24),
+    deadline: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Deadline needs a date and time")
+      .nullable(),
+  })
+  .refine((setup) => setup.endHour > setup.startHour, "End time must be after the start time");
+
+export async function setAvailabilitySetupAction(
+  values: z.infer<typeof availabilitySetupSchema>
+): Promise<HangoutActionResult> {
+  if (!(await requireAdmin())) return { error: FORBIDDEN };
+
+  const parsed = availabilitySetupSchema.safeParse(values);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const { hangoutId, dates, startHour, endHour, deadline } = parsed.data;
+
+  const [deadlineDay, deadlineTime] = deadline?.split("T") ?? [];
+  const [hours, minutes] = deadlineTime?.split(":").map(Number) ?? [];
+
+  const result = await prisma.hangout.updateMany({
+    where: { id: hangoutId, status: HangoutStatus.COLLECTING },
+    data: {
+      availabilityDates: [...new Set(dates)].sort(),
+      windowStartHour: startHour,
+      windowEndHour: endHour,
+      availabilityDeadline: deadline ? torontoToUtc(deadlineDay, hours * 60 + minutes) : null,
+    },
+  });
+  if (result.count === 0)
+    return { error: "Hangout not found or no longer collecting availability" };
+
+  revalidateHangout(hangoutId);
   return { success: true };
 }
