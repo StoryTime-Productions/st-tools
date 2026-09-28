@@ -12,16 +12,13 @@ describe("hangout data loaders", () => {
     vi.resetModules();
   });
 
-  it("lists hangouts that are not cancelled, newest first", async () => {
+  it("lists every hangout, newest first", async () => {
     const { getHangoutSummaries, prisma } = await loadHangoutsLib();
     prisma.hangout.findMany.mockResolvedValue([{ id: "h1" }]);
 
     await expect(getHangoutSummaries()).resolves.toEqual([{ id: "h1" }]);
     expect(prisma.hangout.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { status: { not: "CANCELLED" } },
-        orderBy: { createdAt: "desc" },
-      })
+      expect.objectContaining({ orderBy: { createdAt: "desc" } })
     );
   });
 

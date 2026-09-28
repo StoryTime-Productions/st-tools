@@ -52,11 +52,6 @@ async function loadHub() {
     getCalendarCards: vi.fn().mockResolvedValue([{ id: "c1" }]),
   };
   const hangouts = {
-    HANGOUT_STATUS_LABEL: {
-      COLLECTING: "Collecting availability",
-      SCHEDULED: "Scheduled",
-      CANCELLED: "Cancelled",
-    },
     getHangoutSummaries: vi.fn().mockResolvedValue([]),
     getHangoutDetail: vi.fn().mockResolvedValue(HANGOUT),
   };
@@ -86,10 +81,16 @@ async function loadHub() {
     NewProjectDialog: () => <button type="button">New project</button>,
   }));
   vi.doMock("@/app/hub/_components/project-overview", () => ({
-    ProjectOverview: ({ projects }: { projects: Array<{ title: string }> }) => (
+    ProjectOverview: ({
+      projects,
+      hangouts,
+    }: {
+      projects: Array<{ title: string }>;
+      hangouts: Array<{ title: string }>;
+    }) => (
       <ul data-testid="overview">
-        {projects.map((project) => (
-          <li key={project.title}>{project.title}</li>
+        {[...hangouts, ...projects].map((item) => (
+          <li key={item.title}>{item.title}</li>
         ))}
       </ul>
     ),
@@ -177,8 +178,9 @@ describe("hub pages", () => {
 
     render(await HubPage());
 
-    expect(screen.getByText("No projects yet")).toBeInTheDocument();
+    expect(screen.getByText("Nothing planned yet")).toBeInTheDocument();
     expect(screen.getByText(/will show up here/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "New hangout" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "New project" })).not.toBeInTheDocument();
     expect(lib.getInitiativeOptions).not.toHaveBeenCalled();
   });
@@ -296,24 +298,19 @@ describe("hub pages", () => {
     expect(screen.getByRole("link", { name: /Undated/ })).not.toHaveTextContent("Due");
   });
 
-  it("lists hangouts on the hub with a create button for admins", async () => {
+  it("passes hangouts to the overview and offers admins every create button", async () => {
     const { HubPage, getCurrentUser, hangouts } = await loadHub();
-    getCurrentUser.mockResolvedValue(member);
+    getCurrentUser.mockResolvedValue(admin);
 
     const { unmount } = render(await HubPage());
-    expect(screen.getByText("No hangouts planned yet.")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "New hangout" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Create the first hangout or project/)).toBeInTheDocument();
     unmount();
 
-    getCurrentUser.mockResolvedValue(admin);
     hangouts.getHangoutSummaries.mockResolvedValue([HANGOUT]);
     render(await HubPage());
     expect(screen.getByRole("button", { name: "New hangout" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Beach day/ })).toHaveAttribute(
-      "href",
-      "/hub/hangouts/h1"
-    );
-    expect(screen.getByText("Collecting availability")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New project" })).toBeInTheDocument();
+    expect(screen.getByTestId("overview")).toHaveTextContent("Beach day");
   });
 
   it("renders a hangout for members, admins and after cancelling", async () => {

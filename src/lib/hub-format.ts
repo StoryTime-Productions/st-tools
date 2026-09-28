@@ -1,3 +1,5 @@
+import type { HangoutStatus } from "@prisma/client";
+
 export function formatQuarter(quarter: string): string {
   const [year, q] = quarter.split("-");
   return `${q} ${year}`;
@@ -60,7 +62,16 @@ export function sortBySoonestEnd<T extends Groupable>(projects: T[]): T[] {
   });
 }
 
-export function groupByQuarter<T extends Groupable>(projects: T[]): ProjectGroup<T>[] {
+export const HANGOUT_STATUS_LABEL: Record<HangoutStatus, string> = {
+  COLLECTING: "Collecting availability",
+  SCHEDULED: "Scheduled",
+  CANCELLED: "Cancelled",
+};
+
+export function groupByQuarter<T extends Groupable>(
+  projects: T[],
+  undatedLabel = "No quarter"
+): ProjectGroup<T>[] {
   const groups = new Map<string, T[]>();
   const undated: T[] = [];
   for (const project of sortBySoonestEnd(projects)) {
@@ -78,7 +89,7 @@ export function groupByQuarter<T extends Groupable>(projects: T[]): ProjectGroup
   const dated = [...groups.keys()]
     .sort()
     .map((quarter) => ({ label: formatQuarter(quarter), projects: groups.get(quarter)! }));
-  return undated.length > 0 ? [...dated, { label: "No quarter", projects: undated }] : dated;
+  return undated.length > 0 ? [...dated, { label: undatedLabel, projects: undated }] : dated;
 }
 
 export function groupByInitiative<T extends Groupable>(projects: T[]): ProjectGroup<T>[] {

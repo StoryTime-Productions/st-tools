@@ -13,15 +13,8 @@ export interface HangoutDetail extends HangoutSummary {
   discordThreadUrl: string | null;
 }
 
-export const HANGOUT_STATUS_LABEL: Record<HangoutStatus, string> = {
-  COLLECTING: "Collecting availability",
-  SCHEDULED: "Scheduled",
-  CANCELLED: "Cancelled",
-};
-
 export async function getHangoutSummaries(): Promise<HangoutSummary[]> {
   return prisma.hangout.findMany({
-    where: { status: { not: "CANCELLED" } },
     select: { id: true, title: true, coverImageUrl: true, status: true },
     orderBy: { createdAt: "desc" },
   });

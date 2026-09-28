@@ -6,7 +6,8 @@ import { CancelHangoutButton, HangoutDialog } from "@/app/hub/_components/hangou
 import { ProjectCover } from "@/app/hub/_components/project-cover";
 import { ProjectCoverEditor } from "@/app/hub/projects/[projectId]/_components/project-cover-editor";
 import { getCurrentUser } from "@/lib/get-current-user";
-import { getHangoutDetail, HANGOUT_STATUS_LABEL } from "@/lib/hangouts";
+import { getHangoutDetail } from "@/lib/hangouts";
+import { HANGOUT_STATUS_LABEL } from "@/lib/hub-format";
 
 export default async function HangoutPage({ params }: { params: Promise<{ hangoutId: string }> }) {
   const user = await getCurrentUser();
