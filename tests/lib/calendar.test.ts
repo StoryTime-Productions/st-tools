@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { addDays, rangeLabel, stepAnchor, todayKey, visibleDays } from "@/lib/calendar";
+import {
+  addDays,
+  hourLabel,
+  rangeLabel,
+  stepAnchor,
+  todayKey,
+  torontoInputValue,
+  torontoToUtc,
+  visibleDays,
+} from "@/lib/calendar";
 
 describe("calendar helpers", () => {
   it("uses the EST date for today", () => {
@@ -42,5 +51,24 @@ describe("calendar helpers", () => {
     expect(rangeLabel("month", "2026-09-27")).toBe("September 2026");
     expect(rangeLabel("week", "2026-09-29")).toBe("Sep 27 – Oct 3, 2026");
     expect(rangeLabel("day", "2026-09-27")).toBe("Sunday, September 27, 2026");
+  });
+
+  it("converts Toronto wall-clock times to instants across daylight saving", () => {
+    expect(torontoToUtc("2026-10-03", 18 * 60).toISOString()).toBe("2026-10-03T22:00:00.000Z");
+    expect(torontoToUtc("2026-12-03", 18 * 60 + 30).toISOString()).toBe("2026-12-03T23:30:00.000Z");
+    expect(torontoToUtc("2026-11-01", 12 * 60).toISOString()).toBe("2026-11-01T17:00:00.000Z");
+    expect(torontoInputValue(new Date("2026-10-03T22:00:00Z"))).toBe("2026-10-03T18:00");
+    expect(torontoInputValue(new Date("2026-12-04T04:30:00Z"))).toBe("2026-12-03T23:30");
+  });
+
+  it("labels whole hours on a 12-hour clock", () => {
+    expect([0, 9, 12, 13, 23, 24].map(hourLabel)).toEqual([
+      "12 AM",
+      "9 AM",
+      "12 PM",
+      "1 PM",
+      "11 PM",
+      "Midnight",
+    ]);
   });
 });

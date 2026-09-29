@@ -246,14 +246,18 @@ enum HangoutStatus {
 }
 
 model Hangout {
-  id               String        @id @default(uuid())
-  title            String
-  description      String?
-  coverImageUrl    String?
-  discordThreadUrl String?
-  status           HangoutStatus @default(COLLECTING)
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  id                   String        @id @default(uuid())
+  title                String
+  description          String?
+  coverImageUrl        String?
+  discordThreadUrl     String?
+  status               HangoutStatus @default(COLLECTING)
+  availabilityDates    String[]      @default([])
+  windowStartHour      Int           @default(9)
+  windowEndHour        Int           @default(17)
+  availabilityDeadline DateTime?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 
   idea HangoutIdea?
 

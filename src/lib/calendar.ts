@@ -71,3 +71,36 @@ export function rangeLabel(view: CalendarView, anchor: string) {
 export function dayLabel(key: string, options: Intl.DateTimeFormatOptions) {
   return format(key, options);
 }
+
+function torontoOffsetMs(at: number) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Toronto",
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+      .formatToParts(at)
+      .map((part) => [part.type, Number(part.value)])
+  );
+  return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute) - at;
+}
+
+/** The instant a Toronto wall-clock time (day key + minutes after midnight) happens. */
+export function torontoToUtc(key: string, minutes: number) {
+  const naive = toDate(key).getTime() + minutes * 60_000;
+  return new Date(naive - torontoOffsetMs(naive - torontoOffsetMs(naive)));
+}
+
+export function hourLabel(hour: number) {
+  if (hour % 24 === 0) return hour === 0 ? "12 AM" : "Midnight";
+  return `${hour % 12 || 12} ${hour < 12 ? "AM" : "PM"}`;
+}
+
+/** A `datetime-local` value (YYYY-MM-DDTHH:mm) for an instant, in Toronto time. */
+export function torontoInputValue(at: Date) {
+  return at.toLocaleString("sv-SE", { timeZone: "America/Toronto" }).slice(0, 16).replace(" ", "T");
+}

@@ -29,6 +29,10 @@ const HANGOUT = {
   description: "Bring sunscreen",
   discordThreadUrl: "https://discord.com/channels/1/2",
   proposerName: null,
+  availabilityDates: [] as string[],
+  windowStartHour: 9,
+  windowEndHour: 17,
+  availabilityDeadline: null as Date | null,
 };
 
 async function loadHub() {
@@ -111,6 +115,13 @@ async function loadHub() {
     ),
   }));
 
+  vi.doMock("@/app/hub/hangouts/[hangoutId]/_components/availability-setup", () => ({
+    AvailabilitySetup: ({ initial }: { initial: { dates: string[]; deadline: string | null } }) => (
+      <p data-testid="availability-setup">
+        {initial.dates.join(",")} {initial.deadline ?? "no deadline"}
+      </p>
+    ),
+  }));
   vi.doMock("@/app/hub/ideas/_components/idea-actions", () => ({
     IdeaActions: ({ title }: { title: string }) => <button type="button">Promote {title}</button>,
   }));
@@ -407,5 +418,48 @@ describe("hub pages", () => {
     hangouts.getHangoutDetail.mockResolvedValueOnce({ ...HANGOUT, proposerName: "Sam Lee" });
     render(await HangoutPage({ params: Promise.resolve({ hangoutId: "h1" }) }));
     expect(screen.getByText("Idea by Sam Lee in Discord")).toBeInTheDocument();
+  });
+
+  it("shows the availability setup to admins and a summary to members", async () => {
+    const { HangoutPage, getCurrentUser, hangouts } = await loadHub();
+    const params = () => ({ params: Promise.resolve({ hangoutId: "h1" }) });
+    const setUp = {
+      ...HANGOUT,
+      availabilityDates: ["2026-10-02", "2026-10-03"],
+      windowStartHour: 18,
+      windowEndHour: 22,
+      availabilityDeadline: new Date("2026-10-01T22:00:00Z"),
+    };
+
+    getCurrentUser.mockResolvedValue(member);
+    const empty = render(await HangoutPage(params()));
+    expect(screen.getByText("The admins haven't picked dates yet.")).toBeInTheDocument();
+    empty.unmount();
+
+    hangouts.getHangoutDetail.mockResolvedValueOnce(setUp);
+    const summary = render(await HangoutPage(params()));
+    expect(screen.getByText("Fri, Oct 2, Sat, Oct 3")).toBeInTheDocument();
+    expect(screen.getByText("6 PM – 10 PM EST · Fill in by Oct 1, 6:00 PM")).toBeInTheDocument();
+    summary.unmount();
+
+    hangouts.getHangoutDetail.mockResolvedValueOnce({ ...setUp, availabilityDeadline: null });
+    const noDeadline = render(await HangoutPage(params()));
+    expect(screen.getByText("6 PM – 10 PM EST")).toBeInTheDocument();
+    noDeadline.unmount();
+
+    getCurrentUser.mockResolvedValue(admin);
+    hangouts.getHangoutDetail.mockResolvedValueOnce(setUp);
+    const admins = render(await HangoutPage(params()));
+    expect(screen.getByTestId("availability-setup")).toHaveTextContent(
+      "2026-10-02,2026-10-03 2026-10-01T18:00"
+    );
+    admins.unmount();
+
+    render(await HangoutPage(params()));
+    expect(screen.getByTestId("availability-setup")).toHaveTextContent("no deadline");
+
+    hangouts.getHangoutDetail.mockResolvedValueOnce({ ...setUp, status: "SCHEDULED" });
+    render(await HangoutPage(params()));
+    expect(screen.getAllByTestId("availability-setup")).toHaveLength(1);
   });
 });

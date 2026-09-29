@@ -2,9 +2,12 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, MessageCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AvailabilitySetup } from "@/app/hub/hangouts/[hangoutId]/_components/availability-setup";
 import { CancelHangoutButton, HangoutDialog } from "@/app/hub/_components/hangout-dialog";
 import { ProjectCover } from "@/app/hub/_components/project-cover";
 import { ProjectCoverEditor } from "@/app/hub/projects/[projectId]/_components/project-cover-editor";
+import { dayLabel, hourLabel, todayKey, torontoInputValue } from "@/lib/calendar";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { getHangoutDetail } from "@/lib/hangouts";
 import { HANGOUT_STATUS_LABEL } from "@/lib/hub-format";
@@ -71,6 +74,56 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
           <MessageCircle className="size-4" aria-hidden="true" />
           Discord thread
         </a>
+      ) : null}
+
+      {hangout.status === "COLLECTING" ? (
+        <Card className="border-border/70 bg-background/85 max-w-3xl rounded-3xl shadow-none">
+          <CardHeader>
+            <CardTitle className="text-base">Availability</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {user.role === "ADMIN" ? (
+              <AvailabilitySetup
+                hangoutId={hangout.id}
+                today={todayKey()}
+                initial={{
+                  dates: hangout.availabilityDates,
+                  startHour: hangout.windowStartHour,
+                  endHour: hangout.windowEndHour,
+                  deadline: hangout.availabilityDeadline
+                    ? torontoInputValue(hangout.availabilityDeadline)
+                    : null,
+                }}
+              />
+            ) : hangout.availabilityDates.length === 0 ? (
+              <p className="text-muted-foreground text-sm">
+                The admins haven&apos;t picked dates yet.
+              </p>
+            ) : (
+              <div className="space-y-1 text-sm">
+                <p>
+                  {hangout.availabilityDates
+                    .map((day) =>
+                      dayLabel(day, { weekday: "short", month: "short", day: "numeric" })
+                    )
+                    .join(", ")}
+                </p>
+                <p className="text-muted-foreground">
+                  {hourLabel(hangout.windowStartHour)} – {hourLabel(hangout.windowEndHour)} EST
+                  {hangout.availabilityDeadline
+                    ? ` · Fill in by ${hangout.availabilityDeadline.toLocaleString("en-US", {
+                        timeZone: "America/Toronto",
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}`
+                    : ""}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       ) : null}
 
       {canEdit ? (

@@ -12,6 +12,10 @@ export interface HangoutDetail extends HangoutSummary {
   description: string | null;
   discordThreadUrl: string | null;
   proposerName: string | null;
+  availabilityDates: string[];
+  windowStartHour: number;
+  windowEndHour: number;
+  availabilityDeadline: Date | null;
 }
 
 export interface HangoutIdeaItem {
@@ -40,6 +44,10 @@ export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail
       status: true,
       description: true,
       discordThreadUrl: true,
+      availabilityDates: true,
+      windowStartHour: true,
+      windowEndHour: true,
+      availabilityDeadline: true,
       idea: { select: { proposerName: true } },
     },
   });
