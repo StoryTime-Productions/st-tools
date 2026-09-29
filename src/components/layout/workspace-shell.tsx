@@ -318,13 +318,17 @@ export function WorkspaceShell({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Link href="/dashboard" className="w-fit px-2 py-2">
+                  <Link
+                    href="/dashboard"
+                    className="w-fit rounded-2xl bg-zinc-900 px-3 py-2 dark:bg-transparent dark:px-2"
+                  >
                     <Image
-                      src="/icon.jpg"
-                      alt="StoryTime Tools"
-                      width={44}
-                      height={44}
-                      className="size-11 rounded-2xl object-cover"
+                      src="/storytime-logo.png"
+                      alt="StoryTime Productions"
+                      width={431}
+                      height={177}
+                      priority
+                      className="h-14 w-auto"
                     />
                   </Link>
                 </TooltipTrigger>

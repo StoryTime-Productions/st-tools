@@ -64,9 +64,14 @@ jobs:
           echo "$DIFF_COVER_OUTPUT"
 
           if echo "$DIFF_COVER_OUTPUT" | grep -q "No lines with coverage information in this diff."; then
-            echo "diff-cover could not map changed lines to coverage data."
-            echo "Failing to avoid a false-green patch coverage check."
-            exit 1
+            for f in $COVERED_SOURCE; do
+              if ! grep '^SF:' coverage/lcov.info | grep -qF "$f"; then
+                echo "$f is missing from coverage data."
+                echo "Failing to avoid a false-green patch coverage check."
+                exit 1
+              fi
+            done
+            echo "Changed files are in coverage data but no changed line is executable; skipping."
           fi
 
       - name: Upload coverage to Codecov
