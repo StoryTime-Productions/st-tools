@@ -99,4 +99,38 @@ describe("AvailabilitySetup", () => {
       )
     );
   });
+
+  it("asks before dropping answers and resubmits when confirmed", async () => {
+    const confirm = vi
+      .spyOn(window, "confirm")
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    actionMocks.setAvailabilitySetupAction
+      .mockResolvedValueOnce({ confirmDrop: 1 })
+      .mockResolvedValueOnce({ confirmDrop: 3 })
+      .mockResolvedValueOnce({ success: true });
+    renderSetup({ dates: ["2026-10-03"], startHour: 10, endHour: 16, deadline: null });
+    const save = screen.getByRole("button", { name: "Save availability setup" });
+
+    fireEvent.click(save);
+    await waitFor(() =>
+      expect(confirm).toHaveBeenCalledWith(
+        "This drops availability outside the new dates or hours for 1 member."
+      )
+    );
+    await waitFor(() => expect(save).toBeEnabled());
+    expect(actionMocks.setAvailabilitySetupAction).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(save);
+    await waitFor(() =>
+      expect(toastMocks.success).toHaveBeenCalledWith("Availability setup saved")
+    );
+    expect(confirm).toHaveBeenLastCalledWith(
+      "This drops availability outside the new dates or hours for 3 members."
+    );
+    expect(actionMocks.setAvailabilitySetupAction).toHaveBeenLastCalledWith(
+      expect.objectContaining({ dates: ["2026-10-03"] }),
+      true
+    );
+  });
 });
