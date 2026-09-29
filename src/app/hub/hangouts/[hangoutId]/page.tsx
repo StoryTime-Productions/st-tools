@@ -3,13 +3,14 @@ import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, MessageCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AvailabilityGrid } from "@/app/hub/hangouts/[hangoutId]/_components/availability-grid";
 import { AvailabilitySetup } from "@/app/hub/hangouts/[hangoutId]/_components/availability-setup";
 import { CancelHangoutButton, HangoutDialog } from "@/app/hub/_components/hangout-dialog";
 import { ProjectCover } from "@/app/hub/_components/project-cover";
 import { ProjectCoverEditor } from "@/app/hub/projects/[projectId]/_components/project-cover-editor";
 import { dayLabel, hourLabel, todayKey, torontoInputValue } from "@/lib/calendar";
 import { getCurrentUser } from "@/lib/get-current-user";
-import { getHangoutDetail } from "@/lib/hangouts";
+import { getAvailabilityResponses, getHangoutDetail } from "@/lib/hangouts";
 import { HANGOUT_STATUS_LABEL } from "@/lib/hub-format";
 
 export default async function HangoutPage({ params }: { params: Promise<{ hangoutId: string }> }) {
@@ -21,6 +22,9 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
   if (!hangout) notFound();
 
   const canEdit = user.role === "ADMIN" && hangout.status !== "CANCELLED";
+  const collecting = hangout.status === "COLLECTING";
+  const hasDates = hangout.availabilityDates.length > 0;
+  const responses = hasDates ? await getAvailabilityResponses(hangout.id) : [];
 
   return (
     <div className="space-y-6">
@@ -76,13 +80,13 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
         </a>
       ) : null}
 
-      {hangout.status === "COLLECTING" ? (
-        <Card className="border-border/70 bg-background/85 max-w-3xl rounded-3xl shadow-none">
+      {collecting || hasDates ? (
+        <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
           <CardHeader>
             <CardTitle className="text-base">Availability</CardTitle>
           </CardHeader>
-          <CardContent>
-            {user.role === "ADMIN" ? (
+          <CardContent className="space-y-8">
+            {collecting && user.role === "ADMIN" ? (
               <AvailabilitySetup
                 hangoutId={hangout.id}
                 today={todayKey()}
@@ -95,7 +99,7 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
                     : null,
                 }}
               />
-            ) : hangout.availabilityDates.length === 0 ? (
+            ) : !hasDates ? (
               <p className="text-muted-foreground text-sm">
                 The admins haven&apos;t picked dates yet.
               </p>
@@ -122,6 +126,19 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
                 </p>
               </div>
             )}
+            {hasDates ? (
+              <AvailabilityGrid
+                hangoutId={hangout.id}
+                setup={{
+                  dates: hangout.availabilityDates,
+                  startHour: hangout.windowStartHour,
+                  endHour: hangout.windowEndHour,
+                }}
+                user={{ id: user.id, name: user.name ?? user.email }}
+                responses={responses}
+                editable={collecting}
+              />
+            ) : null}
           </CardContent>
         </Card>
       ) : null}

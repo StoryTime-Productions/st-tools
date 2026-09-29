@@ -46,6 +46,7 @@ model User {
   sentFocusSessionRequests     PomodoroFocusSessionRequest[] @relation("PomodoroFocusSessionRequestRequester")
   receivedFocusSessionRequests PomodoroFocusSessionRequest[] @relation("PomodoroFocusSessionRequestTarget")
   pages                        Page[]
+  hangoutAvailability          HangoutAvailability[]
 
   @@map("users")
 }
@@ -259,9 +260,24 @@ model Hangout {
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
 
-  idea HangoutIdea?
+  idea         HangoutIdea?
+  availability HangoutAvailability[]
 
   @@map("hangouts")
+}
+
+model HangoutAvailability {
+  slots     String[] @default([])
+  updatedAt DateTime @updatedAt
+
+  hangoutId String
+  hangout   Hangout @relation(fields: [hangoutId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([hangoutId, userId])
+  @@map("hangout_availability")
 }
 
 model HangoutIdea {

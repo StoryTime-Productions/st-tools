@@ -55,13 +55,14 @@ export function AvailabilitySetup({
 
   function handleSave() {
     startTransition(async () => {
-      const result = await setAvailabilitySetupAction({
-        hangoutId,
-        dates,
-        startHour,
-        endHour,
-        deadline: deadline || null,
-      });
+      const values = { hangoutId, dates, startHour, endHour, deadline: deadline || null };
+      let result = await setAvailabilitySetupAction(values);
+      if ("confirmDrop" in result) {
+        const members = result.confirmDrop === 1 ? "1 member" : `${result.confirmDrop} members`;
+        if (!confirm(`This drops availability outside the new dates or hours for ${members}.`))
+          return;
+        result = await setAvailabilitySetupAction(values, true);
+      }
       if ("error" in result) {
         toast.error(result.error);
         return;

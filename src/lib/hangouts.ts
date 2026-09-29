@@ -1,4 +1,5 @@
 import type { HangoutStatus } from "@prisma/client";
+import type { AvailabilityResponse } from "@/lib/availability";
 import { prisma } from "@/lib/prisma";
 
 export interface HangoutSummary {
@@ -54,6 +55,15 @@ export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail
   if (!hangout) return null;
   const { idea, ...detail } = hangout;
   return { ...detail, proposerName: idea?.proposerName ?? null };
+}
+
+export async function getAvailabilityResponses(hangoutId: string): Promise<AvailabilityResponse[]> {
+  const rows = await prisma.hangoutAvailability.findMany({
+    where: { hangoutId },
+    select: { userId: true, slots: true, user: { select: { name: true, email: true } } },
+    orderBy: { user: { name: "asc" } },
+  });
+  return rows.map(({ userId, slots, user }) => ({ userId, slots, name: user.name ?? user.email }));
 }
 
 export async function getOpenIdeas(): Promise<HangoutIdeaItem[]> {

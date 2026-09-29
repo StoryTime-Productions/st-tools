@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import type { ProjectDetail } from "@/lib/hub";
 
 const admin = { id: "admin-id", role: "ADMIN" };
-const member = { id: "member-id", role: "MEMBER" };
+const member = { id: "member-id", role: "MEMBER", name: null, email: "m@storytime.gg" };
 
 const PROJECT: ProjectDetail = {
   id: "p1",
@@ -60,6 +60,7 @@ async function loadHub() {
     getHangoutSummaries: vi.fn().mockResolvedValue([]),
     getHangoutDetail: vi.fn().mockResolvedValue(HANGOUT),
     getOpenIdeas: vi.fn().mockResolvedValue([]),
+    getAvailabilityResponses: vi.fn().mockResolvedValue([{ userId: "u1", name: "Ann", slots: [] }]),
   };
   const tagFindMany = vi.fn().mockResolvedValue([{ name: "web" }]);
   const workspaceShell = vi.fn(({ children }: { children: React.ReactNode }) => (
@@ -119,6 +120,21 @@ async function loadHub() {
     AvailabilitySetup: ({ initial }: { initial: { dates: string[]; deadline: string | null } }) => (
       <p data-testid="availability-setup">
         {initial.dates.join(",")} {initial.deadline ?? "no deadline"}
+      </p>
+    ),
+  }));
+  vi.doMock("@/app/hub/hangouts/[hangoutId]/_components/availability-grid", () => ({
+    AvailabilityGrid: ({
+      user,
+      responses,
+      editable,
+    }: {
+      user: { name: string };
+      responses: unknown[];
+      editable: boolean;
+    }) => (
+      <p data-testid="availability-grid">
+        {user.name} {responses.length} {editable ? "editable" : "read-only"}
       </p>
     ),
   }));
@@ -434,12 +450,15 @@ describe("hub pages", () => {
     getCurrentUser.mockResolvedValue(member);
     const empty = render(await HangoutPage(params()));
     expect(screen.getByText("The admins haven't picked dates yet.")).toBeInTheDocument();
+    expect(screen.queryByTestId("availability-grid")).not.toBeInTheDocument();
     empty.unmount();
 
     hangouts.getHangoutDetail.mockResolvedValueOnce(setUp);
     const summary = render(await HangoutPage(params()));
     expect(screen.getByText("Fri, Oct 2, Sat, Oct 3")).toBeInTheDocument();
     expect(screen.getByText("6 PM – 10 PM EST · Fill in by Oct 1, 6:00 PM")).toBeInTheDocument();
+    expect(screen.getByTestId("availability-grid")).toHaveTextContent("m@storytime.gg 1 editable");
+    expect(hangouts.getAvailabilityResponses).toHaveBeenCalledWith("h1");
     summary.unmount();
 
     hangouts.getHangoutDetail.mockResolvedValueOnce({ ...setUp, availabilityDeadline: null });
@@ -461,5 +480,6 @@ describe("hub pages", () => {
     hangouts.getHangoutDetail.mockResolvedValueOnce({ ...setUp, status: "SCHEDULED" });
     render(await HangoutPage(params()));
     expect(screen.getAllByTestId("availability-setup")).toHaveLength(1);
+    expect(screen.getAllByTestId("availability-grid").at(-1)).toHaveTextContent("read-only");
   });
 });
