@@ -13,8 +13,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { dayLabel, rangeLabel, stepAnchor, visibleDays, type CalendarView } from "@/lib/calendar";
+import {
+  dayLabel,
+  rangeLabel,
+  stepAnchor,
+  timeLabel,
+  visibleDays,
+  type CalendarView,
+} from "@/lib/calendar";
+import type { CalendarHangout } from "@/lib/hangouts";
 import type { CalendarCard } from "@/lib/hub";
+import { HANGOUT_STATUS_LABEL } from "@/lib/hub-format";
 import { cn } from "@/lib/utils";
 
 const VIEWS: Array<{ value: CalendarView; label: string }> = [
@@ -34,9 +43,22 @@ const PALETTE = [
   "bg-teal-100 text-teal-950 dark:bg-teal-950 dark:text-teal-100",
 ];
 
-const ALL = "all";
+const HANGOUT_COLOUR = "bg-fuchsia-100 text-fuchsia-950 dark:bg-fuchsia-950 dark:text-fuchsia-100";
 
-export function HubCalendar({ cards, today }: { cards: CalendarCard[]; today: string }) {
+const ALL = "all";
+const HANGOUTS = "hangouts";
+
+type Entry = { kind: "card"; card: CalendarCard } | { kind: "hangout"; hangout: CalendarHangout };
+
+export function HubCalendar({
+  cards,
+  hangouts,
+  today,
+}: {
+  cards: CalendarCard[];
+  hangouts: CalendarHangout[];
+  today: string;
+}) {
   const [view, setView] = useState<CalendarView>("month");
   const [anchor, setAnchor] = useState(today);
   const [projectId, setProjectId] = useState(ALL);
@@ -48,17 +70,29 @@ export function HubCalendar({ cards, today }: { cards: CalendarCard[]; today: st
     projects.map((project, index) => [project.id, PALETTE[index % PALETTE.length]])
   );
 
-  const byDay = new Map<string, CalendarCard[]>();
+  const byDay = new Map<string, Entry[]>();
+  const add = (day: string, entry: Entry) => byDay.set(day, [...(byDay.get(day) ?? []), entry]);
+  if (projectId === ALL || projectId === HANGOUTS) {
+    for (const hangout of hangouts)
+      for (const day of hangout.days) add(day, { kind: "hangout", hangout });
+  }
   for (const card of cards) {
-    if (projectId !== ALL && card.projectId !== projectId) continue;
-    byDay.set(card.dueDate, [...(byDay.get(card.dueDate) ?? []), card]);
+    if (projectId === ALL || card.projectId === projectId)
+      add(card.dueDate, { kind: "card", card });
   }
 
   const days = visibleDays(view, anchor);
   const month = anchor.slice(0, 7);
-  const item = (card: CalendarCard) => (
-    <CalendarItem key={card.id} card={card} colour={colourOf.get(card.projectId)!} />
-  );
+  const item = (entry: Entry) =>
+    entry.kind === "card" ? (
+      <CalendarItem
+        key={entry.card.id}
+        card={entry.card}
+        colour={colourOf.get(entry.card.projectId)!}
+      />
+    ) : (
+      <HangoutItem key={entry.hangout.id} hangout={entry.hangout} />
+    );
 
   return (
     <div className="space-y-4">
@@ -94,6 +128,7 @@ export function HubCalendar({ cards, today }: { cards: CalendarCard[]; today: st
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={ALL}>All projects</SelectItem>
+              <SelectItem value={HANGOUTS}>Hangouts</SelectItem>
               {projects.map((project) => (
                 <SelectItem key={project.id} value={project.id}>
                   {project.title}
@@ -118,8 +153,11 @@ export function HubCalendar({ cards, today }: { cards: CalendarCard[]; today: st
         </div>
       </div>
 
-      {projects.length > 0 ? (
+      {projects.length > 0 || hangouts.length > 0 ? (
         <ul aria-label="Projects" className="flex flex-wrap gap-2 text-xs">
+          {hangouts.length > 0 ? (
+            <li className={cn("rounded-md px-2 py-0.5", HANGOUT_COLOUR)}>Hangouts</li>
+          ) : null}
           {projects.map((project) => (
             <li key={project.id} className={cn("rounded-md px-2 py-0.5", colourOf.get(project.id))}>
               {project.title}
@@ -196,8 +234,8 @@ function AgendaList({
   item,
 }: {
   days: string[];
-  byDay: Map<string, CalendarCard[]>;
-  item: (card: CalendarCard) => React.ReactNode;
+  byDay: Map<string, Entry[]>;
+  item: (entry: Entry) => React.ReactNode;
 }) {
   if (days.length === 0) {
     return <p className="text-muted-foreground text-sm">Nothing due this month.</p>;
@@ -244,6 +282,45 @@ function CalendarItem({ card, colour }: { card: CalendarCard; colour: string }) 
         {card.finished ? <Badge variant="outline">Finished</Badge> : null}
         <Button asChild size="sm" className="w-full">
           <Link href={`/boards/${card.boardId}?card=${card.id}`}>Open card</Link>
+        </Button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function HangoutItem({ hangout }: { hangout: CalendarHangout }) {
+  const time = hangout.startSlot?.slice(11);
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "focus-visible:ring-ring block w-full truncate rounded-md px-1.5 py-0.5 text-left text-xs focus-visible:ring-2 focus-visible:outline-none",
+            time
+              ? HANGOUT_COLOUR
+              : "text-muted-foreground border border-dashed border-fuchsia-400 dark:border-fuchsia-700"
+          )}
+        >
+          {time ? `${timeLabel(time)} ` : ""}
+          {hangout.title}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent aria-label={hangout.title} className="w-72 space-y-2 text-sm">
+        <p className="font-medium">{hangout.title}</p>
+        <Badge variant="secondary">{HANGOUT_STATUS_LABEL[hangout.status]}</Badge>
+        {time ? (
+          <p className="text-xs">
+            {dayLabel(hangout.days[0], { weekday: "short", month: "long", day: "numeric" })},{" "}
+            {timeLabel(time)} EST · {hangout.goingCount} going
+          </p>
+        ) : (
+          <p className="text-muted-foreground text-xs">
+            One of {hangout.days.length} candidate dates
+          </p>
+        )}
+        <Button asChild size="sm" className="w-full">
+          <Link href={`/hub/hangouts/${hangout.id}`}>Open hangout</Link>
         </Button>
       </PopoverContent>
     </Popover>

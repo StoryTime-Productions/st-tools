@@ -115,4 +115,48 @@ describe("hangout data loaders", () => {
       expect.objectContaining({ where: { discordId: { in: ["d1", "d2"] } } })
     );
   });
+
+  it("places calendar hangouts on their locked day or every candidate date", async () => {
+    const { getCalendarHangouts, prisma } = await loadHangoutsLib();
+    prisma.hangout.findMany.mockResolvedValue([
+      {
+        id: "h1",
+        title: "Board games",
+        status: "SCHEDULED",
+        startSlot: "2026-10-03T19:30",
+        availabilityDates: ["2026-10-02", "2026-10-03"],
+        _count: { attendees: 3 },
+      },
+      {
+        id: "h2",
+        title: "Karaoke",
+        status: "COLLECTING",
+        startSlot: null,
+        availabilityDates: ["2026-10-09", "2026-10-10"],
+        _count: { attendees: 0 },
+      },
+    ]);
+
+    await expect(getCalendarHangouts()).resolves.toEqual([
+      {
+        id: "h1",
+        title: "Board games",
+        status: "SCHEDULED",
+        startSlot: "2026-10-03T19:30",
+        days: ["2026-10-03"],
+        goingCount: 3,
+      },
+      {
+        id: "h2",
+        title: "Karaoke",
+        status: "COLLECTING",
+        startSlot: null,
+        days: ["2026-10-09", "2026-10-10"],
+        goingCount: 0,
+      },
+    ]);
+    expect(prisma.hangout.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { status: { in: ["COLLECTING", "SCHEDULED"] } } })
+    );
+  });
 });

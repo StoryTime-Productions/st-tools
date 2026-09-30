@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { HubCalendar } from "@/app/hub/calendar/_components/hub-calendar";
+import type { CalendarHangout } from "@/lib/hangouts";
 import type { CalendarCard } from "@/lib/hub";
 
 vi.mock("@/components/ui/select", async () => import("../../../helpers/native-select"));
@@ -45,7 +46,7 @@ function heading() {
 
 describe("HubCalendar", () => {
   it("shows the month with a project legend and card details in a popover", () => {
-    render(<HubCalendar cards={CARDS} today="2026-09-27" />);
+    render(<HubCalendar cards={CARDS} hangouts={[]} today="2026-09-27" />);
 
     expect(heading()).toBe("September 2026");
     expect(screen.getByRole("button", { name: "Month" })).toHaveAttribute("aria-pressed", "true");
@@ -69,7 +70,7 @@ describe("HubCalendar", () => {
   });
 
   it("marks finished cards and unassigned ones in the popover", () => {
-    render(<HubCalendar cards={CARDS} today="2026-09-27" />);
+    render(<HubCalendar cards={CARDS} hangouts={[]} today="2026-09-27" />);
     fireEvent.click(screen.getByRole("button", { name: "Channel art" }));
     const popover = screen.getByRole("dialog", { name: "Channel art" });
     expect(popover).toHaveTextContent("Unassigned");
@@ -77,7 +78,7 @@ describe("HubCalendar", () => {
   });
 
   it("switches views, steps through dates and filters by project", () => {
-    render(<HubCalendar cards={CARDS} today="2026-09-27" />);
+    render(<HubCalendar cards={CARDS} hangouts={[]} today="2026-09-27" />);
 
     fireEvent.click(screen.getByRole("button", { name: "Week" }));
     expect(heading()).toBe("Sep 27 – Oct 3, 2026");
@@ -107,5 +108,61 @@ describe("HubCalendar", () => {
     expect(screen.getByText("Release notes")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Previous" }));
     expect(heading()).toBe("September 2026");
+  });
+
+  it("shows locked hangouts on their day and collecting ones faded on each candidate date", () => {
+    const hangouts: CalendarHangout[] = [
+      {
+        id: "h1",
+        title: "Board games",
+        status: "SCHEDULED",
+        startSlot: "2026-09-26T19:30",
+        days: ["2026-09-26"],
+        goingCount: 3,
+      },
+      {
+        id: "h2",
+        title: "Karaoke",
+        status: "COLLECTING",
+        startSlot: null,
+        days: ["2026-09-24", "2026-09-25"],
+        goingCount: 0,
+      },
+    ];
+    render(<HubCalendar cards={CARDS} hangouts={hangouts} today="2026-09-27" />);
+
+    expect(
+      within(screen.getByRole("list", { name: "Projects" })).getByText("Hangouts")
+    ).toBeInTheDocument();
+    const locked = within(screen.getByLabelText("September 26")).getByRole("button", {
+      name: "7:30 PM Board games",
+    });
+    expect(locked).toHaveClass("bg-fuchsia-100");
+    expect(screen.getAllByRole("button", { name: "Karaoke" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Karaoke" })[0]).toHaveClass("border-dashed");
+
+    fireEvent.click(locked);
+    const popover = screen.getByRole("dialog", { name: "Board games" });
+    expect(popover).toHaveTextContent("Scheduled");
+    expect(popover).toHaveTextContent("Sat, September 26, 7:30 PM EST · 3 going");
+    expect(within(popover).getByRole("link", { name: "Open hangout" })).toHaveAttribute(
+      "href",
+      "/hub/hangouts/h1"
+    );
+    fireEvent.keyDown(popover, { key: "Escape" });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Karaoke" })[0]);
+    expect(screen.getByRole("dialog", { name: "Karaoke" })).toHaveTextContent(
+      "One of 2 candidate dates"
+    );
+    fireEvent.keyDown(screen.getByRole("dialog", { name: "Karaoke" }), { key: "Escape" });
+
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "hangouts" } });
+    expect(screen.queryByText("Record trailer")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "7:30 PM Board games" })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "p2" } });
+    expect(screen.queryByText("Board games", { exact: false })).not.toBeInTheDocument();
+    expect(screen.getByText("Record trailer")).toBeInTheDocument();
   });
 });

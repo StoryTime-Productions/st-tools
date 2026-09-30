@@ -109,3 +109,33 @@ export async function getOpenIdeas(): Promise<HangoutIdeaItem[]> {
     };
   });
 }
+
+export interface CalendarHangout {
+  id: string;
+  title: string;
+  status: HangoutStatus;
+  startSlot: string | null;
+  days: string[];
+  goingCount: number;
+}
+
+/** Scheduled hangouts on their day; collecting ones on every candidate date. */
+export async function getCalendarHangouts(): Promise<CalendarHangout[]> {
+  const hangouts = await prisma.hangout.findMany({
+    where: { status: { in: ["COLLECTING", "SCHEDULED"] } },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      startSlot: true,
+      availabilityDates: true,
+      _count: { select: { attendees: { where: { status: "GOING" } } } },
+    },
+    orderBy: { title: "asc" },
+  });
+  return hangouts.map(({ availabilityDates, _count, ...hangout }) => ({
+    ...hangout,
+    days: hangout.startSlot ? [hangout.startSlot.slice(0, 10)] : availabilityDates,
+    goingCount: _count.attendees,
+  }));
+}

@@ -63,6 +63,7 @@ async function loadHub() {
     getHangoutDetail: vi.fn().mockResolvedValue(HANGOUT),
     getOpenIdeas: vi.fn().mockResolvedValue([]),
     getAvailabilityResponses: vi.fn().mockResolvedValue([{ userId: "u1", name: "Ann", slots: [] }]),
+    getCalendarHangouts: vi.fn().mockResolvedValue([{ id: "h1" }, { id: "h2" }]),
   };
   const tagFindMany = vi.fn().mockResolvedValue([{ name: "web" }]);
   const workspaceShell = vi.fn(({ children }: { children: React.ReactNode }) => (
@@ -156,9 +157,17 @@ async function loadHub() {
     IdeaActions: ({ title }: { title: string }) => <button type="button">Promote {title}</button>,
   }));
   vi.doMock("@/app/hub/calendar/_components/hub-calendar", () => ({
-    HubCalendar: ({ cards, today }: { cards: unknown[]; today: string }) => (
+    HubCalendar: ({
+      cards,
+      hangouts,
+      today,
+    }: {
+      cards: unknown[];
+      hangouts: unknown[];
+      today: string;
+    }) => (
       <p data-testid="calendar">
-        {cards.length} {today}
+        {cards.length} {hangouts.length} {today}
       </p>
     ),
   }));
@@ -215,7 +224,7 @@ describe("hub pages", () => {
     getCurrentUser.mockResolvedValue(member);
     render(await CalendarPage());
     expect(lib.getCalendarCards).toHaveBeenCalledWith(member);
-    expect(screen.getByTestId("calendar")).toHaveTextContent(/^1 \d{4}-\d{2}-\d{2}$/);
+    expect(screen.getByTestId("calendar")).toHaveTextContent(/^1 2 \d{4}-\d{2}-\d{2}$/);
     expect(screen.getByRole("link", { name: "Calendar" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Overview" })).toHaveAttribute("href", "/hub");
   });
