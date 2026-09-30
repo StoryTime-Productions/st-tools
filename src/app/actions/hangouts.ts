@@ -385,3 +385,34 @@ export async function reopenAvailabilityAction(hangoutId: string): Promise<Hango
   revalidateHangout(parsed.data);
   return { success: true };
 }
+
+const attendanceSchema = z.object({
+  hangoutId: z.string().uuid(),
+  status: z.nativeEnum(AttendanceStatus),
+});
+
+export async function setAttendanceAction(
+  values: z.infer<typeof attendanceSchema>
+): Promise<HangoutActionResult> {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) return { error: "Unauthorized" };
+
+  const parsed = attendanceSchema.safeParse(values);
+  if (!parsed.success) return { error: "Invalid attendance" };
+  const { hangoutId, status } = parsed.data;
+
+  const hangout = await prisma.hangout.findUnique({
+    where: { id: hangoutId },
+    select: { status: true },
+  });
+  if (hangout?.status !== HangoutStatus.SCHEDULED) return { error: "Hangout is not scheduled" };
+
+  await prisma.hangoutAttendee.upsert({
+    where: { hangoutId_userId: { hangoutId, userId: currentUser.id } },
+    create: { hangoutId, userId: currentUser.id, status },
+    update: { status },
+  });
+
+  revalidateHangout(hangoutId);
+  return { success: true };
+}

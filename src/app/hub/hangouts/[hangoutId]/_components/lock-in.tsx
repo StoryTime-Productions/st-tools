@@ -3,12 +3,21 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { lockInHangoutAction, reopenAvailabilityAction } from "@/app/actions/hangouts";
+import {
+  lockInHangoutAction,
+  reopenAvailabilityAction,
+  setAttendanceAction,
+} from "@/app/actions/hangouts";
 import { Button } from "@/components/ui/button";
 import type { RankedRun } from "@/lib/availability";
 import { dayLabel, timeLabel } from "@/lib/calendar";
 
 const DAY = { weekday: "short", month: "short", day: "numeric" } as const;
+const STATUSES = [
+  ["GOING", "Going"],
+  ["MAYBE", "Maybe"],
+  ["NOT_GOING", "Not going"],
+] as const;
 
 function useAction() {
   const router = useRouter();
@@ -81,11 +90,13 @@ export function LockedIn({
   hangoutId,
   startSlot,
   attendees,
+  userId,
   canReopen,
 }: {
   hangoutId: string;
   startSlot: string;
   attendees: { userId: string; name: string; status: string }[];
+  userId: string;
   canReopen: boolean;
 }) {
   const [isPending, run] = useAction();
@@ -95,6 +106,7 @@ export function LockedIn({
       .filter((attendee) => attendee.status === status)
       .map((attendee) => attendee.name)
       .join(", ") || "Nobody yet";
+  const mine = attendees.find((attendee) => attendee.userId === userId)?.status;
 
   function reopen() {
     if (!window.confirm("Reopen availability? The locked time and everyone's Going / Maybe reset."))
@@ -107,12 +119,27 @@ export function LockedIn({
       <p className="font-medium">
         {dayLabel(day, DAY)}, {timeLabel(time)} EST
       </p>
-      <p>
-        <span className="text-muted-foreground">Going:</span> {names("GOING")}
-      </p>
-      <p>
-        <span className="text-muted-foreground">Maybe:</span> {names("MAYBE")}
-      </p>
+      {STATUSES.map(([status, label]) => (
+        <p key={status}>
+          <span className="text-muted-foreground">{label}:</span> {names(status)}
+        </p>
+      ))}
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Your attendance">
+        {STATUSES.map(([status, label]) => (
+          <Button
+            key={status}
+            size="sm"
+            variant={mine === status ? "default" : "outline"}
+            aria-pressed={mine === status}
+            disabled={isPending}
+            onClick={() =>
+              run(() => setAttendanceAction({ hangoutId, status }), "Attendance saved")
+            }
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
       {canReopen ? (
         <Button size="sm" variant="outline" disabled={isPending} onClick={reopen}>
           Reopen availability

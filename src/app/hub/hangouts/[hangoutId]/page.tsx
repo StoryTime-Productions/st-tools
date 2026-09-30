@@ -98,6 +98,7 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
                 hangoutId={hangout.id}
                 startSlot={hangout.startSlot}
                 attendees={hangout.attendees}
+                userId={user.id}
                 canReopen={user.role === "ADMIN"}
               />
             ) : null}
