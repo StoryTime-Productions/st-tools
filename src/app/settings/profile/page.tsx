@@ -7,6 +7,7 @@ import { AvatarForm } from "./_components/avatar-form";
 import { AppearanceForm } from "./_components/appearance-form";
 import { PomodoroPreferencesForm } from "./_components/pomodoro-preferences-form";
 import { DiscordLink } from "./_components/discord-link";
+import { HomeAddressForm } from "./_components/home-address-form";
 
 export const metadata = { title: "Profile – Settings" };
 
@@ -34,6 +35,18 @@ export default async function ProfileSettingsPage() {
           </CardHeader>
           <CardContent>
             <ProfileForm initialName={user.name} />
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
+          <CardHeader>
+            <CardTitle className="text-base">Home address</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <HomeAddressForm
+              initialAddress={user.homeAddress}
+              initialLocated={user.homeLat !== null}
+            />
           </CardContent>
         </Card>
 

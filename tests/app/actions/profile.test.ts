@@ -26,8 +26,10 @@ async function loadProfileModule() {
   const createClient = vi.fn();
   const update = vi.fn();
   const findUnique = vi.fn();
+  const geocodeAddress = vi.fn();
 
   vi.doMock("next/cache", () => ({ revalidatePath }));
+  vi.doMock("@/lib/tomtom", () => ({ geocodeAddress }));
   vi.doMock("@/lib/supabase/server", () => ({ createClient }));
   vi.doMock("@/lib/prisma", () => ({
     prisma: {
@@ -46,6 +48,7 @@ async function loadProfileModule() {
     createClient,
     update,
     findUnique,
+    geocodeAddress,
   };
 }
 
@@ -268,5 +271,74 @@ describe("profile actions", () => {
         }),
       })
     );
+  });
+
+  it("saves the geocoded home address, the raw text when TomTom is unavailable, or clears it", async () => {
+    const { updateHomeAddressAction, createClient, update, geocodeAddress, revalidatePath } =
+      await loadProfileModule();
+    const supabase = buildSupabaseClient();
+    supabase.auth.getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    createClient.mockResolvedValue(supabase);
+
+    geocodeAddress.mockResolvedValueOnce({
+      address: "290 Bremner Blvd, Toronto",
+      lat: 43.6,
+      lon: -79.4,
+    });
+    await expect(updateHomeAddressAction("  290 bremner  ")).resolves.toEqual({
+      success: true,
+      address: "290 Bremner Blvd, Toronto",
+      located: true,
+    });
+    expect(geocodeAddress).toHaveBeenCalledWith("290 bremner");
+    expect(update).toHaveBeenLastCalledWith({
+      where: { id: "u1" },
+      data: { homeAddress: "290 Bremner Blvd, Toronto", homeLat: 43.6, homeLon: -79.4 },
+    });
+    expect(revalidatePath).toHaveBeenCalledWith("/settings/profile");
+
+    geocodeAddress.mockResolvedValueOnce(null);
+    await expect(updateHomeAddressAction("12 Elm St")).resolves.toEqual({
+      success: true,
+      address: "12 Elm St",
+      located: false,
+    });
+    expect(update).toHaveBeenLastCalledWith({
+      where: { id: "u1" },
+      data: { homeAddress: "12 Elm St", homeLat: null, homeLon: null },
+    });
+
+    await expect(updateHomeAddressAction("   ")).resolves.toEqual({
+      success: true,
+      address: null,
+      located: false,
+    });
+    expect(geocodeAddress).toHaveBeenCalledTimes(2);
+    expect(update).toHaveBeenLastCalledWith({
+      where: { id: "u1" },
+      data: { homeAddress: null, homeLat: null, homeLon: null },
+    });
+  });
+
+  it("rejects unknown and overlong addresses and signed-out users", async () => {
+    const { updateHomeAddressAction, createClient, update, geocodeAddress } =
+      await loadProfileModule();
+    const supabase = buildSupabaseClient();
+    supabase.auth.getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    createClient.mockResolvedValue(supabase);
+
+    geocodeAddress.mockResolvedValueOnce("no-match");
+    await expect(updateHomeAddressAction("zzqq")).resolves.toEqual({
+      error: "Couldn't find that address. Check it and try again.",
+    });
+    await expect(updateHomeAddressAction("x".repeat(301))).resolves.toEqual({
+      error: "Address is too long",
+    });
+
+    supabase.auth.getUser.mockResolvedValue({ data: { user: null } });
+    await expect(updateHomeAddressAction("12 Elm St")).resolves.toEqual({
+      error: "Not authenticated",
+    });
+    expect(update).not.toHaveBeenCalled();
   });
 });

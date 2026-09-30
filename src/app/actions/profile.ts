@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
+import { geocodeAddress } from "@/lib/tomtom";
 
 export type ProfileActionResult = { error: string } | { success: true };
 
@@ -41,6 +42,34 @@ export async function updateProfileAction(
 
   revalidatePath("/settings/profile");
   return { success: true };
+}
+
+// ─── Update home address ──────────────────────────────────────────────────────
+export type HomeAddressResult =
+  | { error: string }
+  | { success: true; address: string | null; located: boolean };
+
+export async function updateHomeAddressAction(input: string): Promise<HomeAddressResult> {
+  const parsed = z.string().trim().max(300, "Address is too long").safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const match = parsed.data ? await geocodeAddress(parsed.data) : null;
+  if (match === "no-match") return { error: "Couldn't find that address. Check it and try again." };
+
+  const address = match?.address ?? (parsed.data || null);
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { homeAddress: address, homeLat: match?.lat ?? null, homeLon: match?.lon ?? null },
+  });
+
+  revalidatePath("/settings/profile");
+  return { success: true, address, located: Boolean(match) };
 }
 
 // ─── Update appearance ────────────────────────────────────────────────────────
