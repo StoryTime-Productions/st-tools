@@ -10,6 +10,7 @@ async function loadProfileSettingsPageModule() {
   const profileForm = vi.fn(() => <div data-testid="profile-form" />);
   const appearanceForm = vi.fn(() => <div data-testid="appearance-form" />);
   const pomodoroPreferencesForm = vi.fn(() => <div data-testid="pomodoro-preferences-form" />);
+  const homeAddressForm = vi.fn(() => <div data-testid="home-address-form" />);
   const discordLink = vi.fn(({ connected }: { connected: boolean }) => (
     <div data-testid="discord-link">{connected ? "connected" : "not connected"}</div>
   ));
@@ -17,6 +18,9 @@ async function loadProfileSettingsPageModule() {
     DiscordLink: discordLink,
   }));
 
+  vi.doMock("@/app/settings/profile/_components/home-address-form", () => ({
+    HomeAddressForm: homeAddressForm,
+  }));
   vi.doMock("next/navigation", () => ({ redirect }));
   vi.doMock("@/lib/get-current-user", () => ({ getCurrentUser }));
   vi.doMock("@/app/settings/profile/_components/avatar-form", () => ({ AvatarForm: avatarForm }));
@@ -40,6 +44,7 @@ async function loadProfileSettingsPageModule() {
     profileForm,
     appearanceForm,
     pomodoroPreferencesForm,
+    homeAddressForm,
   };
 }
 
@@ -73,6 +78,7 @@ describe("ProfileSettingsPage", () => {
       profileForm,
       appearanceForm,
       pomodoroPreferencesForm,
+      homeAddressForm,
     } = await loadProfileSettingsPageModule();
 
     const user = makeUser({
@@ -86,6 +92,7 @@ describe("ProfileSettingsPage", () => {
       backgroundMode: "COLOR",
       backgroundColor: "#112233",
       discordId: "123",
+      homeAddress: "12 Elm St",
     });
 
     getCurrentUser.mockResolvedValueOnce(user);
@@ -110,6 +117,10 @@ describe("ProfileSettingsPage", () => {
       {
         initialName: user.name,
       },
+      undefined
+    );
+    expect(homeAddressForm).toHaveBeenCalledWith(
+      { initialAddress: "12 Elm St", initialLocated: false },
       undefined
     );
     expect(appearanceForm).toHaveBeenCalledWith(
