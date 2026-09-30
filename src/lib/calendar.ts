@@ -100,6 +100,13 @@ export function hourLabel(hour: number) {
   return `${hour % 12 || 12} ${hour < 12 ? "AM" : "PM"}`;
 }
 
+/** `14:30` -> `2:30 PM`; `24:00` reads as midnight. */
+export function timeLabel(time: string) {
+  const [hours, minutes] = time.split(":").map(Number);
+  const [hour, half] = hourLabel(hours % 24).split(" ");
+  return `${hour}:${String(minutes).padStart(2, "0")} ${half}`;
+}
+
 /** A `datetime-local` value (YYYY-MM-DDTHH:mm) for an instant, in Toronto time. */
 export function torontoInputValue(at: Date) {
   return at.toLocaleString("sv-SE", { timeZone: "America/Toronto" }).slice(0, 16).replace(" ", "T");

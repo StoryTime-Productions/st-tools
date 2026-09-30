@@ -36,15 +36,33 @@ describe("hangout data loaders", () => {
     );
   });
 
-  it("flattens the proposer of the idea a hangout came from", async () => {
+  it("flattens the proposer and attendee names", async () => {
     const { getHangoutDetail, prisma } = await loadHangoutsLib();
     const base = { id: "h1", title: "Karaoke", description: null };
     prisma.hangout.findUnique
-      .mockResolvedValueOnce({ ...base, idea: { proposerName: "sam#1" } })
-      .mockResolvedValueOnce({ ...base, idea: null });
+      .mockResolvedValueOnce({
+        ...base,
+        idea: { proposerName: "sam#1" },
+        attendees: [
+          { userId: "a", status: "GOING", user: { name: "Alice", email: "a@x.gg" } },
+          { userId: "b", status: "MAYBE", user: { name: null, email: "b@x.gg" } },
+        ],
+      })
+      .mockResolvedValueOnce({ ...base, idea: null, attendees: [] });
 
-    await expect(getHangoutDetail("h1")).resolves.toEqual({ ...base, proposerName: "sam#1" });
-    await expect(getHangoutDetail("h1")).resolves.toEqual({ ...base, proposerName: null });
+    await expect(getHangoutDetail("h1")).resolves.toEqual({
+      ...base,
+      proposerName: "sam#1",
+      attendees: [
+        { userId: "a", status: "GOING", name: "Alice" },
+        { userId: "b", status: "MAYBE", name: "b@x.gg" },
+      ],
+    });
+    await expect(getHangoutDetail("h1")).resolves.toEqual({
+      ...base,
+      proposerName: null,
+      attendees: [],
+    });
   });
 
   it("lists open ideas with linked accounts preferred over Discord names", async () => {

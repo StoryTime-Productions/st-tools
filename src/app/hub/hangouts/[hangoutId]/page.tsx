@@ -5,10 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AvailabilityGrid } from "@/app/hub/hangouts/[hangoutId]/_components/availability-grid";
 import { AvailabilitySetup } from "@/app/hub/hangouts/[hangoutId]/_components/availability-setup";
+import { LockedIn, RankedSlots } from "@/app/hub/hangouts/[hangoutId]/_components/lock-in";
 import { CancelHangoutButton, HangoutDialog } from "@/app/hub/_components/hangout-dialog";
 import { ProjectCover } from "@/app/hub/_components/project-cover";
 import { ProjectCoverEditor } from "@/app/hub/projects/[projectId]/_components/project-cover-editor";
 import { dayLabel, hourLabel, todayKey, torontoInputValue } from "@/lib/calendar";
+import { rankRuns } from "@/lib/availability";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { getAvailabilityResponses, getHangoutDetail } from "@/lib/hangouts";
 import { HANGOUT_STATUS_LABEL } from "@/lib/hub-format";
@@ -25,6 +27,11 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
   const collecting = hangout.status === "COLLECTING";
   const hasDates = hangout.availabilityDates.length > 0;
   const responses = hasDates ? await getAvailabilityResponses(hangout.id) : [];
+  const setup = {
+    dates: hangout.availabilityDates,
+    startHour: hangout.windowStartHour,
+    endHour: hangout.windowEndHour,
+  };
 
   return (
     <div className="space-y-6">
@@ -86,6 +93,14 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
             <CardTitle className="text-base">Availability</CardTitle>
           </CardHeader>
           <CardContent className="space-y-8">
+            {hangout.status === "SCHEDULED" && hangout.startSlot ? (
+              <LockedIn
+                hangoutId={hangout.id}
+                startSlot={hangout.startSlot}
+                attendees={hangout.attendees}
+                canReopen={user.role === "ADMIN"}
+              />
+            ) : null}
             {collecting && user.role === "ADMIN" ? (
               <AvailabilitySetup
                 hangoutId={hangout.id}
@@ -129,14 +144,18 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
             {hasDates ? (
               <AvailabilityGrid
                 hangoutId={hangout.id}
-                setup={{
-                  dates: hangout.availabilityDates,
-                  startHour: hangout.windowStartHour,
-                  endHour: hangout.windowEndHour,
-                }}
+                setup={setup}
                 user={{ id: user.id, name: user.name ?? user.email }}
                 responses={responses}
                 editable={collecting}
+              />
+            ) : null}
+            {collecting ? (
+              <RankedSlots
+                hangoutId={hangout.id}
+                runs={rankRuns(setup, responses)}
+                total={responses.length}
+                canLock={user.role === "ADMIN"}
               />
             ) : null}
           </CardContent>

@@ -47,6 +47,7 @@ model User {
   receivedFocusSessionRequests PomodoroFocusSessionRequest[] @relation("PomodoroFocusSessionRequestTarget")
   pages                        Page[]
   hangoutAvailability          HangoutAvailability[]
+  hangoutAttendance            HangoutAttendee[]
 
   @@map("users")
 }
@@ -240,6 +241,12 @@ model ProjectLink {
   @@map("project_links")
 }
 
+enum AttendanceStatus {
+  GOING
+  MAYBE
+  NOT_GOING
+}
+
 enum HangoutStatus {
   COLLECTING
   SCHEDULED
@@ -257,11 +264,13 @@ model Hangout {
   windowStartHour      Int           @default(9)
   windowEndHour        Int           @default(17)
   availabilityDeadline DateTime?
+  startSlot            String?
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
 
   idea         HangoutIdea?
   availability HangoutAvailability[]
+  attendees    HangoutAttendee[]
 
   @@map("hangouts")
 }
@@ -278,6 +287,20 @@ model HangoutAvailability {
 
   @@id([hangoutId, userId])
   @@map("hangout_availability")
+}
+
+model HangoutAttendee {
+  status    AttendanceStatus
+  updatedAt DateTime         @updatedAt
+
+  hangoutId String
+  hangout   Hangout @relation(fields: [hangoutId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([hangoutId, userId])
+  @@map("hangout_attendees")
 }
 
 model HangoutIdea {

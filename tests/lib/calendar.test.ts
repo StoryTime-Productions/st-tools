@@ -4,6 +4,7 @@ import {
   hourLabel,
   rangeLabel,
   stepAnchor,
+  timeLabel,
   todayKey,
   torontoInputValue,
   torontoToUtc,
@@ -69,6 +70,15 @@ describe("calendar helpers", () => {
       "1 PM",
       "11 PM",
       "Midnight",
+    ]);
+  });
+
+  it("labels slot times on a 12-hour clock", () => {
+    expect(["00:15", "09:45", "14:30", "24:00"].map(timeLabel)).toEqual([
+      "12:15 AM",
+      "9:45 AM",
+      "2:30 PM",
+      "12:00 AM",
     ]);
   });
 });
