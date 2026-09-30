@@ -30,6 +30,7 @@ async function loadModule() {
     hangoutAttendee: {
       deleteMany: vi.fn(),
       createMany: vi.fn(),
+      upsert: vi.fn(),
     },
     hangoutIdea: {
       findFirst: vi.fn().mockResolvedValue({ title: "Karaoke", details: "Friday?" }),
@@ -440,5 +441,35 @@ describe("hangout actions", () => {
     await expect(mod.reopenAvailabilityAction(HANGOUT_ID)).resolves.toEqual({
       error: "Forbidden: Admin access required",
     });
+  });
+
+  it("sets the caller's own attendance on a scheduled hangout", async () => {
+    const mod = await loadModule();
+    mod.getCurrentUser.mockResolvedValue(member);
+    mod.prisma.hangout.findUnique.mockResolvedValue({ status: "SCHEDULED" });
+    const key = { hangoutId: HANGOUT_ID, userId: member.id };
+
+    await expect(
+      mod.setAttendanceAction({ hangoutId: HANGOUT_ID, status: "NOT_GOING" })
+    ).resolves.toEqual({ success: true });
+    expect(mod.prisma.hangoutAttendee.upsert).toHaveBeenCalledWith({
+      where: { hangoutId_userId: key },
+      create: { ...key, status: "NOT_GOING" },
+      update: { status: "NOT_GOING" },
+    });
+    expect(mod.revalidatePath).toHaveBeenCalledWith(`/hub/hangouts/${HANGOUT_ID}`);
+
+    mod.prisma.hangout.findUnique.mockResolvedValue({ status: "COLLECTING" });
+    await expect(
+      mod.setAttendanceAction({ hangoutId: HANGOUT_ID, status: "GOING" })
+    ).resolves.toEqual({ error: "Hangout is not scheduled" });
+    await expect(
+      mod.setAttendanceAction({ hangoutId: HANGOUT_ID, status: "SURE" as "GOING" })
+    ).resolves.toEqual({ error: "Invalid attendance" });
+
+    mod.getCurrentUser.mockResolvedValue(null);
+    await expect(
+      mod.setAttendanceAction({ hangoutId: HANGOUT_ID, status: "GOING" })
+    ).resolves.toEqual({ error: "Unauthorized" });
   });
 });

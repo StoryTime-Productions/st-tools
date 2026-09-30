@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { LockedIn, RankedSlots } from "@/app/hub/hangouts/[hangoutId]/_components/lock-in";
 
 const actionMocks = vi.hoisted(() => ({
   lockInHangoutAction: vi.fn(),
   reopenAvailabilityAction: vi.fn(),
+  setAttendanceAction: vi.fn(),
 }));
 const toastMocks = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 const routerMocks = vi.hoisted(() => ({ refresh: vi.fn() }));
@@ -78,13 +79,14 @@ describe("LockedIn", () => {
           { userId: "a", name: "Alice", status: "GOING" },
           { userId: "b", name: "Bob", status: "GOING" },
         ]}
+        userId="a"
         canReopen
       />
     );
 
     expect(screen.getByText("Sat, Oct 3, 2:00 PM EST")).toBeInTheDocument();
     expect(screen.getByText("Alice, Bob")).toBeInTheDocument();
-    expect(screen.getByText("Nobody yet")).toBeInTheDocument();
+    expect(screen.getAllByText("Nobody yet")).toHaveLength(2);
 
     fireEvent.click(screen.getByRole("button", { name: "Reopen availability" }));
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Availability reopened"));
@@ -93,15 +95,57 @@ describe("LockedIn", () => {
 
   it("does not reopen when cancelled or for members", () => {
     const { rerender } = render(
-      <LockedIn hangoutId="h1" startSlot="2026-10-03T14:00" attendees={[]} canReopen />
+      <LockedIn hangoutId="h1" startSlot="2026-10-03T14:00" attendees={[]} userId="a" canReopen />
     );
     vi.mocked(window.confirm).mockReturnValueOnce(false);
     fireEvent.click(screen.getByRole("button", { name: "Reopen availability" }));
     expect(actionMocks.reopenAvailabilityAction).not.toHaveBeenCalled();
 
     rerender(
-      <LockedIn hangoutId="h1" startSlot="2026-10-03T14:00" attendees={[]} canReopen={false} />
+      <LockedIn
+        hangoutId="h1"
+        startSlot="2026-10-03T14:00"
+        attendees={[]}
+        userId="a"
+        canReopen={false}
+      />
     );
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reopen availability" })).not.toBeInTheDocument();
+  });
+
+  it("sets the viewer's own attendance", async () => {
+    actionMocks.setAttendanceAction
+      .mockResolvedValueOnce({ error: "Hangout is not scheduled" })
+      .mockResolvedValueOnce({ success: true });
+    render(
+      <LockedIn
+        hangoutId="h1"
+        startSlot="2026-10-03T14:00"
+        attendees={[{ userId: "b", name: "Bob", status: "MAYBE" }]}
+        userId="b"
+        canReopen={false}
+      />
+    );
+
+    const group = screen.getByRole("group", { name: "Your attendance" });
+    expect(within(group).getByRole("button", { name: "Maybe" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    expect(within(group).getByRole("button", { name: "Going" })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
+
+    fireEvent.click(within(group).getByRole("button", { name: "Not going" }));
+    await waitFor(() => expect(toastMocks.error).toHaveBeenCalledWith("Hangout is not scheduled"));
+    expect(actionMocks.setAttendanceAction).toHaveBeenCalledWith({
+      hangoutId: "h1",
+      status: "NOT_GOING",
+    });
+
+    fireEvent.click(within(group).getByRole("button", { name: "Going" }));
+    await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Attendance saved"));
+    expect(routerMocks.refresh).toHaveBeenCalled();
   });
 });
