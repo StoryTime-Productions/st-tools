@@ -3,18 +3,19 @@ import { HubCalendar } from "@/app/hub/calendar/_components/hub-calendar";
 import { HubTabs } from "@/app/hub/_components/hub-tabs";
 import { todayKey } from "@/lib/calendar";
 import { getCurrentUser } from "@/lib/get-current-user";
+import { getCalendarHangouts } from "@/lib/hangouts";
 import { getCalendarCards } from "@/lib/hub";
 
 export default async function HubCalendarPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/auth/sign-in");
 
-  const cards = await getCalendarCards(user);
+  const [cards, hangouts] = await Promise.all([getCalendarCards(user), getCalendarHangouts()]);
 
   return (
     <div className="space-y-6">
       <HubTabs active="/hub/calendar" />
-      <HubCalendar cards={cards} today={todayKey()} />
+      <HubCalendar cards={cards} hangouts={hangouts} today={todayKey()} />
     </div>
   );
 }
