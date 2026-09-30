@@ -1,4 +1,4 @@
-import type { HangoutStatus } from "@prisma/client";
+import type { AttendanceStatus, HangoutStatus } from "@prisma/client";
 import type { AvailabilityResponse } from "@/lib/availability";
 import { prisma } from "@/lib/prisma";
 
@@ -7,6 +7,7 @@ export interface HangoutSummary {
   title: string;
   coverImageUrl: string | null;
   status: HangoutStatus;
+  startSlot: string | null;
 }
 
 export interface HangoutDetail extends HangoutSummary {
@@ -17,6 +18,7 @@ export interface HangoutDetail extends HangoutSummary {
   windowStartHour: number;
   windowEndHour: number;
   availabilityDeadline: Date | null;
+  attendees: { userId: string; name: string; status: AttendanceStatus }[];
 }
 
 export interface HangoutIdeaItem {
@@ -30,7 +32,7 @@ export interface HangoutIdeaItem {
 
 export async function getHangoutSummaries(): Promise<HangoutSummary[]> {
   return prisma.hangout.findMany({
-    select: { id: true, title: true, coverImageUrl: true, status: true },
+    select: { id: true, title: true, coverImageUrl: true, status: true, startSlot: true },
     orderBy: { createdAt: "desc" },
   });
 }
@@ -43,6 +45,7 @@ export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail
       title: true,
       coverImageUrl: true,
       status: true,
+      startSlot: true,
       description: true,
       discordThreadUrl: true,
       availabilityDates: true,
@@ -50,11 +53,23 @@ export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail
       windowEndHour: true,
       availabilityDeadline: true,
       idea: { select: { proposerName: true } },
+      attendees: {
+        select: { userId: true, status: true, user: { select: { name: true, email: true } } },
+        orderBy: { user: { name: "asc" } },
+      },
     },
   });
   if (!hangout) return null;
-  const { idea, ...detail } = hangout;
-  return { ...detail, proposerName: idea?.proposerName ?? null };
+  const { idea, attendees, ...detail } = hangout;
+  return {
+    ...detail,
+    proposerName: idea?.proposerName ?? null,
+    attendees: attendees.map(({ userId, status, user }) => ({
+      userId,
+      status,
+      name: user.name ?? user.email,
+    })),
+  };
 }
 
 export async function getAvailabilityResponses(hangoutId: string): Promise<AvailabilityResponse[]> {

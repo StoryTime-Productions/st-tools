@@ -27,6 +27,10 @@ async function loadModule() {
       deleteMany: vi.fn(),
       upsert: vi.fn(),
     },
+    hangoutAttendee: {
+      deleteMany: vi.fn(),
+      createMany: vi.fn(),
+    },
     hangoutIdea: {
       findFirst: vi.fn().mockResolvedValue({ title: "Karaoke", details: "Friday?" }),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -361,5 +365,80 @@ describe("hangout actions", () => {
     await expect(mod.saveAvailabilityAction({ hangoutId: HANGOUT_ID, slots: [] })).resolves.toEqual(
       { error: "Unauthorized" }
     );
+  });
+
+  it("locks in a top option and seeds Going / Maybe", async () => {
+    const mod = await loadModule();
+    mod.prisma.hangout.findUnique.mockResolvedValue({
+      status: "COLLECTING",
+      availabilityDates: ["2026-10-03"],
+      windowStartHour: 10,
+      windowEndHour: 11,
+      availability: [
+        { userId: admin.id, slots: ["2026-10-03T10:00", "2026-10-03T10:15"] },
+        { userId: member.id, slots: ["2026-10-03T10:15"] },
+      ],
+    });
+
+    await expect(
+      mod.lockInHangoutAction({ hangoutId: HANGOUT_ID, slot: "2026-10-03T10:00" })
+    ).resolves.toEqual({ success: true });
+    expect(mod.prisma.hangout.updateMany).toHaveBeenCalledWith({
+      where: { id: HANGOUT_ID, status: "COLLECTING" },
+      data: { status: "SCHEDULED", startSlot: "2026-10-03T10:00" },
+    });
+    expect(mod.prisma.hangoutAttendee.createMany).toHaveBeenCalledWith({
+      data: [
+        { hangoutId: HANGOUT_ID, userId: admin.id, status: "GOING" },
+        { hangoutId: HANGOUT_ID, userId: member.id, status: "MAYBE" },
+      ],
+    });
+    expect(mod.revalidatePath).toHaveBeenCalledWith(`/hub/hangouts/${HANGOUT_ID}`);
+
+    await expect(
+      mod.lockInHangoutAction({ hangoutId: HANGOUT_ID, slot: "2026-10-03T10:30" })
+    ).resolves.toEqual({ error: "That time is no longer a top option" });
+
+    mod.prisma.hangout.updateMany.mockResolvedValueOnce({ count: 0 });
+    await expect(
+      mod.lockInHangoutAction({ hangoutId: HANGOUT_ID, slot: "2026-10-03T10:15" })
+    ).resolves.toEqual({ error: "Hangout not found or no longer collecting availability" });
+
+    mod.prisma.hangout.findUnique.mockResolvedValue({ status: "SCHEDULED" });
+    await expect(
+      mod.lockInHangoutAction({ hangoutId: HANGOUT_ID, slot: "2026-10-03T10:00" })
+    ).resolves.toEqual({ error: "Hangout not found or no longer collecting availability" });
+    await expect(mod.lockInHangoutAction({ hangoutId: HANGOUT_ID, slot: "soon" })).resolves.toEqual(
+      { error: "Invalid time" }
+    );
+
+    mod.getCurrentUser.mockResolvedValue(member);
+    await expect(
+      mod.lockInHangoutAction({ hangoutId: HANGOUT_ID, slot: "2026-10-03T10:00" })
+    ).resolves.toEqual({ error: "Forbidden: Admin access required" });
+  });
+
+  it("reopens a scheduled hangout and clears attendance", async () => {
+    const mod = await loadModule();
+
+    await expect(mod.reopenAvailabilityAction(HANGOUT_ID)).resolves.toEqual({ success: true });
+    expect(mod.prisma.hangout.updateMany).toHaveBeenCalledWith({
+      where: { id: HANGOUT_ID, status: "SCHEDULED" },
+      data: { status: "COLLECTING", startSlot: null },
+    });
+    expect(mod.prisma.hangoutAttendee.deleteMany).toHaveBeenCalledWith({
+      where: { hangoutId: HANGOUT_ID },
+    });
+
+    mod.prisma.hangout.updateMany.mockResolvedValueOnce({ count: 0 });
+    await expect(mod.reopenAvailabilityAction(HANGOUT_ID)).resolves.toEqual({
+      error: "Hangout not found or not scheduled",
+    });
+    await expect(mod.reopenAvailabilityAction("nope")).resolves.toHaveProperty("error");
+
+    mod.getCurrentUser.mockResolvedValue(member);
+    await expect(mod.reopenAvailabilityAction(HANGOUT_ID)).resolves.toEqual({
+      error: "Forbidden: Admin access required",
+    });
   });
 });

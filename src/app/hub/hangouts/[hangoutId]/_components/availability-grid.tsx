@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition, type PointerEvent, type ReactNode }
 import { toast } from "sonner";
 import { saveAvailabilityAction } from "@/app/actions/hangouts";
 import { slotTimes, type AvailabilityResponse, type AvailabilityWindow } from "@/lib/availability";
-import { dayLabel, hourLabel } from "@/lib/calendar";
+import { dayLabel, hourLabel, timeLabel } from "@/lib/calendar";
 import { cn } from "@/lib/utils";
 
 type Cell = [day: number, row: number];
@@ -16,9 +16,7 @@ interface Drag {
 }
 
 function slotLabel(day: string, time: string) {
-  const [hours, minutes] = time.split(":").map(Number);
-  const hour = hourLabel(hours).split(" ");
-  return `${dayLabel(day, { weekday: "short", month: "short", day: "numeric" })}, ${hour[0]}:${String(minutes).padStart(2, "0")} ${hour[1]}`;
+  return `${dayLabel(day, { weekday: "short", month: "short", day: "numeric" })}, ${timeLabel(time)}`;
 }
 
 export function AvailabilityGrid({

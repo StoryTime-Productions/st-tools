@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { HangoutStatus, Role } from "@prisma/client";
-import { keepInWindow } from "@/lib/availability";
+import { AttendanceStatus, HangoutStatus, Role } from "@prisma/client";
+import { keepInWindow, rankRuns } from "@/lib/availability";
 import { torontoToUtc } from "@/lib/calendar";
 import { uploadCover } from "@/lib/cover-upload";
 import { getCurrentUser } from "@/lib/get-current-user";
@@ -305,5 +305,83 @@ export async function saveAvailabilityAction(
     });
 
   revalidatePath(`/hub/hangouts/${hangoutId}`);
+  return { success: true };
+}
+
+const lockInSchema = z.object({
+  hangoutId: z.string().uuid(),
+  slot: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Invalid time"),
+});
+
+export async function lockInHangoutAction(
+  values: z.infer<typeof lockInSchema>
+): Promise<HangoutActionResult> {
+  if (!(await requireAdmin())) return { error: FORBIDDEN };
+
+  const parsed = lockInSchema.safeParse(values);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const { hangoutId, slot } = parsed.data;
+
+  const hangout = await prisma.hangout.findUnique({
+    where: { id: hangoutId },
+    select: {
+      status: true,
+      availabilityDates: true,
+      windowStartHour: true,
+      windowEndHour: true,
+      availability: { select: { userId: true, slots: true } },
+    },
+  });
+  if (hangout?.status !== HangoutStatus.COLLECTING) return { error: NOT_COLLECTING };
+
+  const responses = hangout.availability;
+  const window = {
+    dates: hangout.availabilityDates,
+    startHour: hangout.windowStartHour,
+    endHour: hangout.windowEndHour,
+  };
+  const run = rankRuns(window, responses).find((r) => `${r.day}T${r.start}` === slot);
+  if (!run) return { error: "That time is no longer a top option" };
+
+  const locked = await prisma.$transaction(async (tx) => {
+    const result = await tx.hangout.updateMany({
+      where: { id: hangoutId, status: HangoutStatus.COLLECTING },
+      data: { status: HangoutStatus.SCHEDULED, startSlot: slot },
+    });
+    if (result.count === 0) return false;
+    await tx.hangoutAttendee.deleteMany({ where: { hangoutId } });
+    await tx.hangoutAttendee.createMany({
+      data: responses.map(({ userId }) => ({
+        hangoutId,
+        userId,
+        status: run.free.includes(userId) ? AttendanceStatus.GOING : AttendanceStatus.MAYBE,
+      })),
+    });
+    return true;
+  });
+  if (!locked) return { error: NOT_COLLECTING };
+
+  revalidateHangout(hangoutId);
+  return { success: true };
+}
+
+export async function reopenAvailabilityAction(hangoutId: string): Promise<HangoutActionResult> {
+  if (!(await requireAdmin())) return { error: FORBIDDEN };
+
+  const parsed = z.string().uuid().safeParse(hangoutId);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const reopened = await prisma.$transaction(async (tx) => {
+    const result = await tx.hangout.updateMany({
+      where: { id: parsed.data, status: HangoutStatus.SCHEDULED },
+      data: { status: HangoutStatus.COLLECTING, startSlot: null },
+    });
+    if (result.count === 0) return false;
+    await tx.hangoutAttendee.deleteMany({ where: { hangoutId: parsed.data } });
+    return true;
+  });
+  if (!reopened) return { error: "Hangout not found or not scheduled" };
+
+  revalidateHangout(parsed.data);
   return { success: true };
 }

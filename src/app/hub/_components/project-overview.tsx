@@ -90,14 +90,16 @@ type Item =
       hangout: HangoutSummary;
     };
 
-// ponytail: hangouts are undated until lock-in; HG6 derives their quarter from the locked date.
 function hangoutItem(hangout: HangoutSummary): Item {
+  const quarter = hangout.startSlot
+    ? `${hangout.startSlot.slice(0, 4)}-Q${Math.ceil(Number(hangout.startSlot.slice(5, 7)) / 3)}`
+    : null;
   return {
     kind: "hangout",
     id: hangout.id,
     title: hangout.title,
-    startQuarter: null,
-    endQuarter: null,
+    startQuarter: quarter,
+    endQuarter: quarter,
     initiativeName: "Hangouts",
     hangout,
   };

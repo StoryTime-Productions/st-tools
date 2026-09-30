@@ -33,6 +33,8 @@ const HANGOUT = {
   windowStartHour: 9,
   windowEndHour: 17,
   availabilityDeadline: null as Date | null,
+  startSlot: null as string | null,
+  attendees: [],
 };
 
 async function loadHub() {
@@ -135,6 +137,18 @@ async function loadHub() {
     }) => (
       <p data-testid="availability-grid">
         {user.name} {responses.length} {editable ? "editable" : "read-only"}
+      </p>
+    ),
+  }));
+  vi.doMock("@/app/hub/hangouts/[hangoutId]/_components/lock-in", () => ({
+    RankedSlots: ({ total, canLock }: { total: number; canLock: boolean }) => (
+      <p data-testid="ranked-slots">
+        {total} {canLock ? "lockable" : "view-only"}
+      </p>
+    ),
+    LockedIn: ({ startSlot, canReopen }: { startSlot: string; canReopen: boolean }) => (
+      <p data-testid="locked-in">
+        {startSlot} {canReopen ? "reopenable" : "fixed"}
       </p>
     ),
   }));
@@ -458,6 +472,7 @@ describe("hub pages", () => {
     expect(screen.getByText("Fri, Oct 2, Sat, Oct 3")).toBeInTheDocument();
     expect(screen.getByText("6 PM – 10 PM EST · Fill in by Oct 1, 6:00 PM")).toBeInTheDocument();
     expect(screen.getByTestId("availability-grid")).toHaveTextContent("m@storytime.gg 1 editable");
+    expect(screen.getByTestId("ranked-slots")).toHaveTextContent("1 view-only");
     expect(hangouts.getAvailabilityResponses).toHaveBeenCalledWith("h1");
     summary.unmount();
 
@@ -477,9 +492,17 @@ describe("hub pages", () => {
     render(await HangoutPage(params()));
     expect(screen.getByTestId("availability-setup")).toHaveTextContent("no deadline");
 
-    hangouts.getHangoutDetail.mockResolvedValueOnce({ ...setUp, status: "SCHEDULED" });
+    expect(screen.getAllByTestId("ranked-slots").at(-1)).toHaveTextContent("0 lockable");
+
+    hangouts.getHangoutDetail.mockResolvedValueOnce({
+      ...setUp,
+      status: "SCHEDULED",
+      startSlot: "2026-10-02T19:00",
+    });
     render(await HangoutPage(params()));
     expect(screen.getAllByTestId("availability-setup")).toHaveLength(1);
     expect(screen.getAllByTestId("availability-grid").at(-1)).toHaveTextContent("read-only");
+    expect(screen.getAllByTestId("ranked-slots")).toHaveLength(1);
+    expect(screen.getByTestId("locked-in")).toHaveTextContent("2026-10-02T19:00 reopenable");
   });
 });

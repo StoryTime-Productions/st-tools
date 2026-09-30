@@ -51,8 +51,8 @@ const PROJECTS = [
 ];
 
 const HANGOUTS: HangoutSummary[] = [
-  { id: "h1", title: "Beach day", coverImageUrl: null, status: "COLLECTING" },
-  { id: "h2", title: "Bowling", coverImageUrl: null, status: "CANCELLED" },
+  { id: "h1", title: "Beach day", coverImageUrl: null, status: "COLLECTING", startSlot: null },
+  { id: "h2", title: "Bowling", coverImageUrl: null, status: "CANCELLED", startSlot: null },
 ];
 
 async function renderOverview(projects = PROJECTS, hangouts: HangoutSummary[] = []) {
@@ -181,6 +181,21 @@ describe("ProjectOverview", () => {
     fireEvent.click(screen.getByRole("button", { name: "Past" }));
     expect(titles()).toEqual(["Bowling", "Shipped"]);
     expect(screen.getByText("Cancelled")).toBeInTheDocument();
+  });
+
+  it("files a locked-in hangout under its quarter", async () => {
+    await renderOverview(PROJECTS, [
+      {
+        id: "h3",
+        title: "Picnic",
+        coverImageUrl: null,
+        status: "SCHEDULED",
+        startSlot: "2026-08-15T12:00",
+      },
+    ]);
+
+    fireEvent.click(screen.getByRole("button", { name: "By quarter" }));
+    expect(screen.getByRole("region", { name: "Q3 2026" })).toHaveTextContent("Picnic");
   });
 
   it("separates hangouts from projects and remembers the layout", async () => {
