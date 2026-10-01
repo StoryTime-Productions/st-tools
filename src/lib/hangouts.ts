@@ -21,6 +21,33 @@ export interface HangoutDetail extends HangoutSummary {
   availabilityDeadline: Date | null;
   attendees: { userId: string; name: string; status: AttendanceStatus }[];
   stops: HangoutStopItem[];
+  cars: HangoutCarItem[];
+}
+
+interface Person {
+  userId: string;
+  name: string;
+  homeAddress: string | null;
+}
+
+export interface HangoutCarItem {
+  id: string;
+  seats: number;
+  startAddress: string | null;
+  commonPoint: string | null;
+  driver: Person;
+  riders: (Person & { atCommonPoint: boolean })[];
+}
+
+const PERSON_SELECT = { id: true, name: true, email: true, homeAddress: true } as const;
+
+function person(user: {
+  id: string;
+  name: string | null;
+  email: string;
+  homeAddress: string | null;
+}) {
+  return { userId: user.id, name: user.name ?? user.email, homeAddress: user.homeAddress };
 }
 
 export interface HangoutStopItem {
@@ -86,13 +113,32 @@ export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail
         orderBy: { user: { name: "asc" } },
       },
       stops: { select: STOP_SELECT, orderBy: { position: "asc" } },
+      cars: {
+        select: {
+          id: true,
+          seats: true,
+          startAddress: true,
+          commonPoint: true,
+          driver: { select: PERSON_SELECT },
+          riders: {
+            select: { atCommonPoint: true, user: { select: PERSON_SELECT } },
+            orderBy: { user: { name: "asc" } },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
   if (!hangout) return null;
-  const { idea, attendees, ...detail } = hangout;
+  const { idea, attendees, cars, ...detail } = hangout;
   return {
     ...detail,
     proposerName: idea?.proposerName ?? null,
+    cars: cars.map(({ driver, riders, ...car }) => ({
+      ...car,
+      driver: person(driver),
+      riders: riders.map(({ atCommonPoint, user }) => ({ ...person(user), atCommonPoint })),
+    })),
     attendees: attendees.map(({ userId, status, user }) => ({
       userId,
       status,

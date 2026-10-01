@@ -6,6 +6,8 @@ const THREAD = "https://discord.com/channels/123/456";
 const admin = { id: "33333333-3333-4333-8333-333333333333", role: "ADMIN" };
 const member = { id: "44444444-4444-4444-8444-444444444444", role: "MEMBER" };
 
+type Locate = typeof import("@/lib/tomtom").locateAddress;
+
 async function loadModule() {
   const revalidatePath = vi.fn();
   const getCurrentUser = vi.fn().mockResolvedValue(admin);
@@ -34,6 +36,8 @@ async function loadModule() {
       delete: vi.fn(),
       findFirst: vi.fn(),
     },
+    hangoutCar: { deleteMany: vi.fn() },
+    hangoutRider: { deleteMany: vi.fn() },
     hangoutAttendee: {
       deleteMany: vi.fn(),
       createMany: vi.fn(),
@@ -50,15 +54,21 @@ async function loadModule() {
     async (arg: ((tx: typeof prisma) => Promise<unknown>) | Promise<unknown>[]) =>
       typeof arg === "function" ? arg(prisma) : Promise.all(arg)
   );
-  const geocodeAddress = vi.fn().mockResolvedValue(null);
-  vi.doMock("@/lib/tomtom", () => ({ geocodeAddress }));
+  const locateAddress = vi.fn<Locate>(async (address, previous) =>
+    !address
+      ? { address: null, lat: null, lon: null }
+      : address === previous
+        ? null
+        : { address, lat: null, lon: null }
+  );
+  vi.doMock("@/lib/tomtom", () => ({ locateAddress }));
   const uploadCover = vi.fn();
   vi.doMock("next/cache", () => ({ revalidatePath }));
   vi.doMock("@/lib/get-current-user", () => ({ getCurrentUser }));
   vi.doMock("@/lib/prisma", () => ({ prisma }));
   vi.doMock("@/lib/cover-upload", () => ({ uploadCover }));
   const actions = await import("@/app/actions/hangouts");
-  return { ...actions, revalidatePath, getCurrentUser, prisma, uploadCover, geocodeAddress };
+  return { ...actions, revalidatePath, getCurrentUser, prisma, uploadCover, locateAddress };
 }
 
 describe("hangout actions", () => {
@@ -440,6 +450,9 @@ describe("hangout actions", () => {
     expect(mod.prisma.hangoutAttendee.deleteMany).toHaveBeenCalledWith({
       where: { hangoutId: HANGOUT_ID },
     });
+    expect(mod.prisma.hangoutCar.deleteMany).toHaveBeenCalledWith({
+      where: { hangoutId: HANGOUT_ID },
+    });
 
     mod.prisma.hangout.updateMany.mockResolvedValueOnce({ count: 0 });
     await expect(mod.reopenAvailabilityAction(HANGOUT_ID)).resolves.toEqual({
@@ -468,6 +481,14 @@ describe("hangout actions", () => {
       update: { status: "NOT_GOING" },
     });
     expect(mod.revalidatePath).toHaveBeenCalledWith(`/hub/hangouts/${HANGOUT_ID}`);
+    expect(mod.prisma.hangoutRider.deleteMany).toHaveBeenCalledWith({ where: key });
+    expect(mod.prisma.hangoutCar.deleteMany).toHaveBeenCalledWith({
+      where: { hangoutId: HANGOUT_ID, driverId: member.id },
+    });
+
+    mod.prisma.hangoutRider.deleteMany.mockClear();
+    await mod.setAttendanceAction({ hangoutId: HANGOUT_ID, status: "GOING" });
+    expect(mod.prisma.hangoutRider.deleteMany).not.toHaveBeenCalled();
 
     mod.prisma.hangout.findUnique.mockResolvedValue({ status: "COLLECTING" });
     await expect(
@@ -498,7 +519,7 @@ describe("hangout actions", () => {
 
   it("adds a geocoded stop at the end of the itinerary", async () => {
     const mod = await loadModule();
-    mod.geocodeAddress.mockResolvedValueOnce({
+    mod.locateAddress.mockResolvedValueOnce({
       address: "290 Bremner Blvd",
       lat: 43.6,
       lon: -79.4,
@@ -551,7 +572,7 @@ describe("hangout actions", () => {
       error: "Hangout not found",
     });
 
-    mod.geocodeAddress.mockResolvedValueOnce("no-match");
+    mod.locateAddress.mockResolvedValueOnce({ error: NO_MATCH });
     await expect(mod.addStopAction(HANGOUT_ID, stopValues)).resolves.toEqual({ error: NO_MATCH });
 
     mod.prisma.hangout.findFirst.mockResolvedValueOnce(null);
@@ -577,14 +598,14 @@ describe("hangout actions", () => {
     mod.prisma.hangoutStop.findFirst.mockResolvedValue(stop);
 
     await expect(mod.updateStopAction(STOP_ID, stopValues)).resolves.toEqual({ success: true });
-    expect(mod.geocodeAddress).not.toHaveBeenCalled();
+    expect(mod.locateAddress).toHaveBeenCalledWith("290 bremner", "290 bremner");
     expect(mod.prisma.hangoutStop.update).toHaveBeenCalledWith({
       where: { id: STOP_ID },
       data: expect.objectContaining({ title: "Dinner", address: "290 bremner" }),
     });
     expect(mod.prisma.hangoutStop.update.mock.calls[0][0].data).not.toHaveProperty("lat");
 
-    mod.geocodeAddress.mockResolvedValueOnce("no-match");
+    mod.locateAddress.mockResolvedValueOnce({ error: NO_MATCH });
     await expect(
       mod.updateStopAction(STOP_ID, { ...stopValues, address: "zzqq" })
     ).resolves.toEqual({ error: NO_MATCH });

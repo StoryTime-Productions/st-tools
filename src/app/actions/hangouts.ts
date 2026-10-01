@@ -8,7 +8,7 @@ import { torontoToUtc } from "@/lib/calendar";
 import { uploadCover } from "@/lib/cover-upload";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { prisma } from "@/lib/prisma";
-import { geocodeAddress } from "@/lib/tomtom";
+import { locateAddress } from "@/lib/tomtom";
 
 export type HangoutActionResult = { error: string } | { success: true };
 export type CreateHangoutResult = { error: string } | { success: true; hangoutId: string };
@@ -379,6 +379,7 @@ export async function reopenAvailabilityAction(hangoutId: string): Promise<Hango
     });
     if (result.count === 0) return false;
     await tx.hangoutAttendee.deleteMany({ where: { hangoutId: parsed.data } });
+    await tx.hangoutCar.deleteMany({ where: { hangoutId: parsed.data } });
     return true;
   });
   if (!reopened) return { error: "Hangout not found or not scheduled" };
@@ -408,11 +409,20 @@ export async function setAttendanceAction(
   });
   if (hangout?.status !== HangoutStatus.SCHEDULED) return { error: "Hangout is not scheduled" };
 
-  await prisma.hangoutAttendee.upsert({
-    where: { hangoutId_userId: { hangoutId, userId: currentUser.id } },
-    create: { hangoutId, userId: currentUser.id, status },
-    update: { status },
-  });
+  const key = { hangoutId, userId: currentUser.id };
+  await prisma.$transaction([
+    prisma.hangoutAttendee.upsert({
+      where: { hangoutId_userId: key },
+      create: { ...key, status },
+      update: { status },
+    }),
+    ...(status === AttendanceStatus.GOING
+      ? []
+      : [
+          prisma.hangoutRider.deleteMany({ where: key }),
+          prisma.hangoutCar.deleteMany({ where: { hangoutId, driverId: currentUser.id } }),
+        ]),
+  ]);
 
   revalidateHangout(hangoutId);
   return { success: true };
@@ -444,14 +454,6 @@ export type StopValues = z.input<typeof stopSchema>;
 const EDITABLE = { not: HangoutStatus.CANCELLED };
 const STOP_NOT_FOUND = "Stop not found or hangout cancelled";
 
-async function locate(address: string | null, previous?: { address: string | null }) {
-  if (!address) return { address: null, lat: null, lon: null };
-  if (previous?.address === address) return {};
-  const match = await geocodeAddress(address);
-  if (match === "no-match") return { error: "Couldn't find that address. Check it and try again." };
-  return { address: match?.address ?? address, lat: match?.lat ?? null, lon: match?.lon ?? null };
-}
-
 export async function addStopAction(
   hangoutId: string,
   values: StopValues
@@ -468,8 +470,8 @@ export async function addStopAction(
   });
   if (!hangout) return { error: "Hangout not found or cancelled" };
 
-  const place = await locate(parsed.data.address);
-  if ("error" in place) return { error: place.error! };
+  const place = await locateAddress(parsed.data.address);
+  if (place && "error" in place) return { error: place.error! };
 
   await prisma.hangoutStop.create({
     data: {
@@ -504,8 +506,8 @@ export async function updateStopAction(
   const stop = await findEditableStop(stopId);
   if (!stop) return { error: STOP_NOT_FOUND };
 
-  const place = await locate(parsed.data.address, stop);
-  if ("error" in place) return { error: place.error! };
+  const place = await locateAddress(parsed.data.address, stop.address);
+  if (place && "error" in place) return { error: place.error! };
 
   await prisma.hangoutStop.update({ where: { id: stop.id }, data: { ...parsed.data, ...place } });
 
