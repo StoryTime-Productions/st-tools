@@ -23,3 +23,16 @@ export async function geocodeAddress(query: string): Promise<GeocodedAddress | "
     return null;
   }
 }
+
+/**
+ * Resolve a typed address for saving: null when it is unchanged from `previous`,
+ * cleared fields for an empty one, an error for no match, the raw text without
+ * coordinates when TomTom is unavailable.
+ */
+export async function locateAddress(address: string | null, previous?: string | null) {
+  if (!address) return { address: null, lat: null, lon: null };
+  if (address === previous) return null;
+  const match = await geocodeAddress(address);
+  if (match === "no-match") return { error: "Couldn't find that address. Check it and try again." };
+  return { address: match?.address ?? address, lat: match?.lat ?? null, lon: match?.lon ?? null };
+}

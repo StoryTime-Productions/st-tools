@@ -47,8 +47,23 @@ describe("hangout data loaders", () => {
           { userId: "a", status: "GOING", user: { name: "Alice", email: "a@x.gg" } },
           { userId: "b", status: "MAYBE", user: { name: null, email: "b@x.gg" } },
         ],
+        cars: [
+          {
+            id: "car1",
+            seats: 3,
+            startAddress: null,
+            commonPoint: "Union Station",
+            driver: { id: "a", name: "Alice", email: "a@x.gg", homeAddress: "1 Main St" },
+            riders: [
+              {
+                atCommonPoint: true,
+                user: { id: "b", name: null, email: "b@x.gg", homeAddress: null },
+              },
+            ],
+          },
+        ],
       })
-      .mockResolvedValueOnce({ ...base, idea: null, attendees: [] });
+      .mockResolvedValueOnce({ ...base, idea: null, attendees: [], cars: [] });
 
     await expect(getHangoutDetail("h1")).resolves.toEqual({
       ...base,
@@ -57,11 +72,22 @@ describe("hangout data loaders", () => {
         { userId: "a", status: "GOING", name: "Alice" },
         { userId: "b", status: "MAYBE", name: "b@x.gg" },
       ],
+      cars: [
+        {
+          id: "car1",
+          seats: 3,
+          startAddress: null,
+          commonPoint: "Union Station",
+          driver: { userId: "a", name: "Alice", homeAddress: "1 Main St" },
+          riders: [{ userId: "b", name: "b@x.gg", homeAddress: null, atCommonPoint: true }],
+        },
+      ],
     });
     await expect(getHangoutDetail("h1")).resolves.toEqual({
       ...base,
       proposerName: null,
       attendees: [],
+      cars: [],
     });
   });
 

@@ -36,6 +36,7 @@ const HANGOUT = {
   startSlot: null as string | null,
   attendees: [],
   stops: [] as { id: string }[],
+  cars: [] as { id: string }[],
 };
 
 async function loadHub() {
@@ -139,6 +140,13 @@ async function loadHub() {
     }) => (
       <p data-testid="availability-grid">
         {user.name} {responses.length} {editable ? "editable" : "read-only"}
+      </p>
+    ),
+  }));
+  vi.doMock("@/app/hub/hangouts/[hangoutId]/_components/carpools", () => ({
+    Carpools: ({ cars, viewer }: { cars: unknown[]; viewer: { going: boolean } }) => (
+      <p data-testid="carpools">
+        {cars.length} {viewer.going ? "going" : "not going"}
       </p>
     ),
   }));
@@ -519,11 +527,26 @@ describe("hub pages", () => {
       ...setUp,
       status: "SCHEDULED",
       startSlot: "2026-10-02T19:00",
+      attendees: [
+        { userId: member.id, name: "M", status: "GOING" },
+        { userId: admin.id, name: "A", status: "MAYBE" },
+      ],
     });
     render(await HangoutPage(params()));
     expect(screen.getAllByTestId("availability-setup")).toHaveLength(1);
     expect(screen.getAllByTestId("availability-grid").at(-1)).toHaveTextContent("read-only");
     expect(screen.getAllByTestId("ranked-slots")).toHaveLength(1);
     expect(screen.getByTestId("locked-in")).toHaveTextContent("2026-10-02T19:00 reopenable");
+    expect(screen.getByTestId("carpools")).toHaveTextContent("0 not going");
+
+    getCurrentUser.mockResolvedValue(member);
+    hangouts.getHangoutDetail.mockResolvedValueOnce({
+      ...setUp,
+      status: "SCHEDULED",
+      startSlot: "2026-10-02T19:00",
+      attendees: [{ userId: member.id, name: "M", status: "GOING" }],
+    });
+    render(await HangoutPage(params()));
+    expect(screen.getAllByTestId("carpools").at(-1)).toHaveTextContent("0 going");
   });
 });

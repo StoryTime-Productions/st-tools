@@ -51,6 +51,8 @@ model User {
   pages                        Page[]
   hangoutAvailability          HangoutAvailability[]
   hangoutAttendance            HangoutAttendee[]
+  hangoutCars                  HangoutCar[]
+  hangoutRides                 HangoutRider[]
 
   @@map("users")
 }
@@ -283,6 +285,8 @@ model Hangout {
   availability HangoutAvailability[]
   attendees    HangoutAttendee[]
   stops        HangoutStop[]
+  cars         HangoutCar[]
+  riders       HangoutRider[]
 
   @@map("hangouts")
 }
@@ -482,4 +486,45 @@ model HangoutStop {
 
   @@index([hangoutId, position])
   @@map("hangout_stops")
+}
+
+model HangoutCar {
+  id           String   @id @default(uuid())
+  seats        Int
+  startAddress String?
+  startLat     Float?
+  startLon     Float?
+  commonPoint  String?
+  commonLat    Float?
+  commonLon    Float?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  hangoutId String
+  hangout   Hangout @relation(fields: [hangoutId], references: [id], onDelete: Cascade)
+
+  driverId String
+  driver   User   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  riders HangoutRider[]
+
+  @@unique([hangoutId, driverId])
+  @@map("hangout_cars")
+}
+
+model HangoutRider {
+  atCommonPoint Boolean @default(false)
+
+  hangoutId String
+  hangout   Hangout @relation(fields: [hangoutId], references: [id], onDelete: Cascade)
+
+  carId String
+  car   HangoutCar @relation(fields: [carId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([hangoutId, userId])
+  @@index([carId])
+  @@map("hangout_riders")
 }

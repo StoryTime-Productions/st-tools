@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { geocodeAddress } from "@/lib/tomtom";
+import { geocodeAddress, locateAddress } from "@/lib/tomtom";
 
 function reply(status: number, body: unknown) {
   return new Response(JSON.stringify(body), { status });
@@ -55,5 +55,34 @@ describe("geocodeAddress", () => {
     vi.stubEnv("TOMTOM_API_KEY", "");
     await expect(geocodeAddress("zzqq")).resolves.toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("resolves addresses for saving: cleared, unchanged, no match, located or raw text", async () => {
+    await expect(locateAddress(null)).resolves.toEqual({ address: null, lat: null, lon: null });
+    await expect(locateAddress("12 Elm St", "12 Elm St")).resolves.toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fetchMock.mockResolvedValueOnce(reply(200, { results: [] }));
+    await expect(locateAddress("zzqq")).resolves.toEqual({
+      error: "Couldn't find that address. Check it and try again.",
+    });
+
+    fetchMock.mockResolvedValueOnce(
+      reply(200, {
+        results: [{ address: { freeformAddress: "12 Elm Street" }, position: { lat: 1, lon: 2 } }],
+      })
+    );
+    await expect(locateAddress("12 elm", "old")).resolves.toEqual({
+      address: "12 Elm Street",
+      lat: 1,
+      lon: 2,
+    });
+
+    fetchMock.mockResolvedValueOnce(reply(403, {}));
+    await expect(locateAddress("12 elm")).resolves.toEqual({
+      address: "12 elm",
+      lat: null,
+      lon: null,
+    });
   });
 });

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AvailabilityGrid } from "@/app/hub/hangouts/[hangoutId]/_components/availability-grid";
 import { AvailabilitySetup } from "@/app/hub/hangouts/[hangoutId]/_components/availability-setup";
+import { Carpools } from "@/app/hub/hangouts/[hangoutId]/_components/carpools";
 import { Itinerary } from "@/app/hub/hangouts/[hangoutId]/_components/itinerary";
 import { LockedIn, RankedSlots } from "@/app/hub/hangouts/[hangoutId]/_components/lock-in";
 import { CancelHangoutButton, HangoutDialog } from "@/app/hub/_components/hangout-dialog";
@@ -175,6 +176,27 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
               startSlot={hangout.startSlot}
               stops={hangout.stops}
               canEdit={canEdit}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {hangout.status === "SCHEDULED" ? (
+        <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
+          <CardHeader>
+            <CardTitle className="text-base">Carpools</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Carpools
+              hangoutId={hangout.id}
+              cars={hangout.cars}
+              viewer={{
+                id: user.id,
+                isAdmin: user.role === "ADMIN",
+                going: hangout.attendees.some(
+                  (attendee) => attendee.userId === user.id && attendee.status === "GOING"
+                ),
+              }}
             />
           </CardContent>
         </Card>
