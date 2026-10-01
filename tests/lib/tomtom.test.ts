@@ -37,9 +37,29 @@ describe("geocodeAddress", () => {
       lon: -79.39,
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.tomtom.com/search/2/geocode/290%20Bremner%20Blvd%2C%20Toronto.json?limit=1&key=tt-key",
+      "https://api.tomtom.com/search/2/search/290%20Bremner%20Blvd%2C%20Toronto.json?limit=1&countrySet=CA&key=tt-key",
       { cache: "no-store" }
     );
+  });
+
+  it("keeps a named place's name in front of its address", async () => {
+    fetchMock.mockResolvedValue(
+      reply(200, {
+        results: [
+          {
+            poi: { name: "Union Station" },
+            address: { freeformAddress: "65 Front Street West, Toronto ON M5J 1E6" },
+            position: { lat: 43.64, lon: -79.38 },
+          },
+        ],
+      })
+    );
+
+    await expect(geocodeAddress("union station toronto")).resolves.toEqual({
+      address: "Union Station, 65 Front Street West, Toronto ON M5J 1E6",
+      lat: 43.64,
+      lon: -79.38,
+    });
   });
 
   it("tells a real no-match apart from TomTom being unavailable", async () => {
