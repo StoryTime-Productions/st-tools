@@ -8,6 +8,7 @@ import { torontoToUtc } from "@/lib/calendar";
 import { uploadCover } from "@/lib/cover-upload";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { prisma } from "@/lib/prisma";
+import { recomputeRoutes } from "@/lib/routes";
 import { locateAddress } from "@/lib/tomtom";
 
 export type HangoutActionResult = { error: string } | { success: true };
@@ -424,6 +425,7 @@ export async function setAttendanceAction(
         ]),
   ]);
 
+  if (status !== AttendanceStatus.GOING) await recomputeRoutes(hangoutId);
   revalidateHangout(hangoutId);
   return { success: true };
 }
@@ -482,6 +484,7 @@ export async function addStopAction(
     },
   });
 
+  await recomputeRoutes(hangoutId);
   revalidateHangout(hangoutId);
   return { success: true };
 }
@@ -511,6 +514,7 @@ export async function updateStopAction(
 
   await prisma.hangoutStop.update({ where: { id: stop.id }, data: { ...parsed.data, ...place } });
 
+  await recomputeRoutes(stop.hangoutId);
   revalidateHangout(stop.hangoutId);
   return { success: true };
 }
@@ -523,6 +527,7 @@ export async function deleteStopAction(stopId: string): Promise<HangoutActionRes
 
   await prisma.hangoutStop.delete({ where: { id: stop.id } });
 
+  await recomputeRoutes(stop.hangoutId);
   revalidateHangout(stop.hangoutId);
   return { success: true };
 }
@@ -551,6 +556,7 @@ export async function moveStopAction(
     prisma.hangoutStop.update({ where: { id: neighbour.id }, data: { position: stop.position } }),
   ]);
 
+  await recomputeRoutes(stop.hangoutId);
   revalidateHangout(stop.hangoutId);
   return { success: true };
 }

@@ -5,6 +5,7 @@ import type { HangoutCarItem } from "@/lib/hangouts";
 
 const actionMocks = vi.hoisted(() => ({
   offerCarAction: vi.fn(),
+  recomputeRoutesAction: vi.fn(),
   updateCarAction: vi.fn(),
   removeCarAction: vi.fn(),
   joinCarAction: vi.fn(),
@@ -24,6 +25,7 @@ const CAR: HangoutCarItem = {
   seats: 2,
   startAddress: null,
   commonPoint: "Union Station",
+  schedule: null,
   driver: alice,
   riders: [{ userId: "b", name: "Bob", homeAddress: "9 Elm St", atCommonPoint: false }],
 };
@@ -164,5 +166,48 @@ describe("Carpools", () => {
     renderCarpools([CAR], viewer("z", { isAdmin: true }));
     expect(screen.getByRole("button", { name: "Edit Alice's car" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Remove Bob" })).toBeInTheDocument();
+  });
+
+  it("shows routed times on the car and each rider, or why there are none", () => {
+    const routed = {
+      ...CAR,
+      schedule: {
+        there: {
+          start: "2026-10-03T22:44:00Z",
+          end: "2026-10-03T23:31:00Z",
+          stops: { b: "2026-10-03T23:01:00Z" },
+        },
+        back: {
+          start: "2026-10-04T02:30:00Z",
+          end: "2026-10-04T03:07:00Z",
+          stops: { b: "2026-10-04T02:42:00Z" },
+        },
+      },
+    };
+    const { rerender } = renderCarpools([routed]);
+    expect(screen.getByText(/Drive:/).parentElement).toHaveTextContent(
+      "Drive: leaves 6:44 PM, arrives 7:31 PM · back 10:30 PM – 11:07 PM"
+    );
+    expect(screen.getByRole("list", { name: "Riders" })).toHaveTextContent(
+      "Bob · 9 Elm St · pick-up 7:01 PM · drop-off 10:42 PM"
+    );
+
+    rerender(
+      <Carpools
+        hangoutId="h1"
+        cars={[{ ...CAR, schedule: { error: "Routing failed (429)" } }]}
+        viewer={viewer("c")}
+      />
+    );
+    expect(screen.getByText("No drive times: Routing failed (429)")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Recompute routes" })).not.toBeInTheDocument();
+  });
+
+  it("lets admins recompute routes", async () => {
+    renderCarpools([CAR], viewer("z", { isAdmin: true }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Recompute routes" }));
+    await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Routes recomputed"));
+    expect(actionMocks.recomputeRoutesAction).toHaveBeenCalledWith("h1");
   });
 });

@@ -62,13 +62,23 @@ async function loadModule() {
         : { address, lat: null, lon: null }
   );
   vi.doMock("@/lib/tomtom", () => ({ locateAddress }));
+  const recomputeRoutes = vi.fn();
+  vi.doMock("@/lib/routes", () => ({ recomputeRoutes }));
   const uploadCover = vi.fn();
   vi.doMock("next/cache", () => ({ revalidatePath }));
   vi.doMock("@/lib/get-current-user", () => ({ getCurrentUser }));
   vi.doMock("@/lib/prisma", () => ({ prisma }));
   vi.doMock("@/lib/cover-upload", () => ({ uploadCover }));
   const actions = await import("@/app/actions/hangouts");
-  return { ...actions, revalidatePath, getCurrentUser, prisma, uploadCover, locateAddress };
+  return {
+    ...actions,
+    revalidatePath,
+    getCurrentUser,
+    prisma,
+    uploadCover,
+    locateAddress,
+    recomputeRoutes,
+  };
 }
 
 describe("hangout actions", () => {
@@ -486,9 +496,13 @@ describe("hangout actions", () => {
       where: { hangoutId: HANGOUT_ID, driverId: member.id },
     });
 
+    expect(mod.recomputeRoutes).toHaveBeenCalledWith(HANGOUT_ID);
+
     mod.prisma.hangoutRider.deleteMany.mockClear();
+    mod.recomputeRoutes.mockClear();
     await mod.setAttendanceAction({ hangoutId: HANGOUT_ID, status: "GOING" });
     expect(mod.prisma.hangoutRider.deleteMany).not.toHaveBeenCalled();
+    expect(mod.recomputeRoutes).not.toHaveBeenCalled();
 
     mod.prisma.hangout.findUnique.mockResolvedValue({ status: "COLLECTING" });
     await expect(
@@ -546,6 +560,7 @@ describe("hangout actions", () => {
       },
     });
     expect(mod.revalidatePath).toHaveBeenCalledWith(`/hub/hangouts/${HANGOUT_ID}`);
+    expect(mod.recomputeRoutes).toHaveBeenCalledWith(HANGOUT_ID);
 
     mod.prisma.hangout.findFirst.mockResolvedValueOnce({ stops: [] });
     await mod.addStopAction(HANGOUT_ID, { ...stopValues, address: null });
@@ -629,6 +644,7 @@ describe("hangout actions", () => {
 
     await expect(mod.deleteStopAction(STOP_ID)).resolves.toEqual({ success: true });
     expect(mod.prisma.hangoutStop.delete).toHaveBeenCalledWith({ where: { id: STOP_ID } });
+    expect(mod.recomputeRoutes).toHaveBeenCalledWith(HANGOUT_ID);
 
     mod.prisma.hangoutStop.findFirst
       .mockResolvedValueOnce(stop)

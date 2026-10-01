@@ -5,6 +5,7 @@ import { z } from "zod";
 import { AttendanceStatus, HangoutStatus, Role } from "@prisma/client";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { prisma } from "@/lib/prisma";
+import { recomputeRoutes } from "@/lib/routes";
 import { locateAddress } from "@/lib/tomtom";
 
 export type CarpoolActionResult = { error: string } | { success: true };
@@ -17,7 +18,8 @@ const NOT_YOURS = "Only the driver or an admin can change this car";
 const uuid = z.string().uuid();
 const seatsSchema = z.number().int().min(1, "At least 1 seat").max(12, "12 seats or fewer");
 
-function revalidate(hangoutId: string) {
+async function reroute(hangoutId: string) {
+  await recomputeRoutes(hangoutId);
   revalidatePath(`/hub/hangouts/${hangoutId}`);
 }
 
@@ -77,7 +79,7 @@ export async function offerCarAction(
   await prisma.hangoutCar.create({
     data: { hangoutId, driverId: going.user.id, seats: parsedSeats.data },
   });
-  revalidate(hangoutId);
+  await reroute(hangoutId);
   return { success: true };
 }
 
@@ -127,7 +129,7 @@ export async function updateCarAction(
         ]
       : []),
   ]);
-  revalidate(car.hangoutId);
+  await reroute(car.hangoutId);
   return { success: true };
 }
 
@@ -136,7 +138,7 @@ export async function removeCarAction(carId: string): Promise<CarpoolActionResul
   if (!owned.car) return { error: owned.error };
 
   await prisma.hangoutCar.delete({ where: { id: owned.car.id } });
-  revalidate(owned.car.hangoutId);
+  revalidatePath(`/hub/hangouts/${owned.car.hangoutId}`);
   return { success: true };
 }
 
@@ -168,7 +170,7 @@ export async function joinCarAction(
     create: { ...key, ...data },
     update: data,
   });
-  revalidate(car.hangoutId);
+  await reroute(car.hangoutId);
   return { success: true };
 }
 
@@ -178,7 +180,7 @@ export async function leaveCarAction(hangoutId: string): Promise<CarpoolActionRe
   if (!uuid.safeParse(hangoutId).success) return { error: "Hangout not found" };
 
   await prisma.hangoutRider.deleteMany({ where: { hangoutId, userId: user.id } });
-  revalidate(hangoutId);
+  await reroute(hangoutId);
   return { success: true };
 }
 
@@ -190,6 +192,15 @@ export async function removeRiderAction(
   if (!owned.car) return { error: owned.error };
 
   await prisma.hangoutRider.deleteMany({ where: { carId: owned.car.id, userId } });
-  revalidate(owned.car.hangoutId);
+  await reroute(owned.car.hangoutId);
+  return { success: true };
+}
+
+export async function recomputeRoutesAction(hangoutId: string): Promise<CarpoolActionResult> {
+  const user = await getCurrentUser();
+  if (user?.role !== Role.ADMIN) return { error: "Forbidden: Admin access required" };
+  if (!uuid.safeParse(hangoutId).success) return { error: "Hangout not found" };
+
+  await reroute(hangoutId);
   return { success: true };
 }

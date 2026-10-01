@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { geocodeAddress, locateAddress } from "@/lib/tomtom";
+import { geocodeAddress, locateAddress, routeVia } from "@/lib/tomtom";
 
 function reply(status: number, body: unknown) {
   return new Response(JSON.stringify(body), { status });
@@ -103,6 +103,72 @@ describe("geocodeAddress", () => {
       address: "12 elm",
       lat: null,
       lon: null,
+    });
+  });
+
+  const A = { lat: 1, lon: 1 };
+  const B = { lat: 2, lon: 2 };
+  const C = { lat: 3, lon: 3 };
+  const D = { lat: 4, lon: 4 };
+
+  it("routes with the best waypoint order and maps arrivals back to the given order", async () => {
+    fetchMock.mockResolvedValue(
+      reply(200, {
+        routes: [
+          {
+            summary: { departureTime: "T18:44", arrivalTime: "T19:31" },
+            legs: [
+              { summary: { arrivalTime: "T19:01" } },
+              { summary: { arrivalTime: "T19:11" } },
+              { summary: { arrivalTime: "T19:31" } },
+            ],
+          },
+        ],
+        optimizedWaypoints: [
+          { providedIndex: 0, optimizedIndex: 1 },
+          { providedIndex: 1, optimizedIndex: 0 },
+        ],
+      })
+    );
+
+    await expect(
+      routeVia(A, [B, C], D, { arriveAt: new Date("2026-10-03T23:30:00Z") })
+    ).resolves.toEqual({ depart: "T18:44", arrive: "T19:31", waypoints: ["T19:11", "T19:01"] });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.tomtom.com/routing/1/calculateRoute/1,1:2,2:3,3:4,4/json?arriveAt=2026-10-03T23:30:00.000Z&traffic=true&computeBestOrder=true&key=tt-key",
+      { cache: "no-store" }
+    );
+  });
+
+  it("departs at a time, keeps a single waypoint in place, and reports failures", async () => {
+    fetchMock.mockResolvedValueOnce(
+      reply(200, {
+        routes: [
+          {
+            summary: { departureTime: "T22:30", arrivalTime: "T23:07" },
+            legs: [{ summary: { arrivalTime: "T22:42" } }, { summary: { arrivalTime: "T23:07" } }],
+          },
+        ],
+      })
+    );
+    await expect(
+      routeVia(A, [B], D, { departAt: new Date("2026-10-04T02:30:00Z") })
+    ).resolves.toEqual({ depart: "T22:30", arrive: "T23:07", waypoints: ["T22:42"] });
+    expect(fetchMock.mock.calls[0][0]).toContain(
+      "departAt=2026-10-04T02:30:00.000Z&traffic=true&computeBestOrder=false"
+    );
+
+    fetchMock.mockResolvedValueOnce(reply(403, {}));
+    await expect(routeVia(A, [], D, { departAt: new Date(0) })).resolves.toEqual({
+      error: "Routing failed (403)",
+    });
+    fetchMock.mockRejectedValueOnce(new Error("offline"));
+    await expect(routeVia(A, [], D, { departAt: new Date(0) })).resolves.toEqual({
+      error: "Routing failed",
+    });
+    vi.stubEnv("TOMTOM_API_KEY", "");
+    await expect(routeVia(A, [], D, { departAt: new Date(0) })).resolves.toEqual({
+      error: "Routing isn't set up",
     });
   });
 });
