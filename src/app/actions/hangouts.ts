@@ -2,12 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { AttendanceStatus, HangoutStatus, Role } from "@prisma/client";
+import { AttendanceStatus, HangoutStatus, Role, StopType } from "@prisma/client";
 import { keepInWindow, rankRuns } from "@/lib/availability";
 import { torontoToUtc } from "@/lib/calendar";
 import { uploadCover } from "@/lib/cover-upload";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { prisma } from "@/lib/prisma";
+import { geocodeAddress } from "@/lib/tomtom";
 
 export type HangoutActionResult = { error: string } | { success: true };
 export type CreateHangoutResult = { error: string } | { success: true; hangoutId: string };
@@ -414,5 +415,140 @@ export async function setAttendanceAction(
   });
 
   revalidateHangout(hangoutId);
+  return { success: true };
+}
+
+const optionalText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .nullable()
+    .transform((value) => value || null);
+
+const stopSchema = z.object({
+  type: z.nativeEnum(StopType),
+  title: z.string().trim().min(1, "Stop name is required").max(120, "Stop name is too long"),
+  address: optionalText(300),
+  durationMinutes: z.number().int().min(0).max(1440, "Duration must be 24 hours or less"),
+  arriveBy: z
+    .string()
+    .regex(/^([1-9]|1[0-4])T([01]\d|2[0-3]):[0-5]\d$/, "Arrive-by needs a day (1-14) and a time")
+    .nullable(),
+  notes: optionalText(2000),
+  bring: optionalText(500),
+  cashCents: z.number().int().min(0).max(1_000_000).nullable(),
+});
+
+export type StopValues = z.input<typeof stopSchema>;
+const EDITABLE = { not: HangoutStatus.CANCELLED };
+const STOP_NOT_FOUND = "Stop not found or hangout cancelled";
+
+async function locate(address: string | null, previous?: { address: string | null }) {
+  if (!address) return { address: null, lat: null, lon: null };
+  if (previous?.address === address) return {};
+  const match = await geocodeAddress(address);
+  if (match === "no-match") return { error: "Couldn't find that address. Check it and try again." };
+  return { address: match?.address ?? address, lat: match?.lat ?? null, lon: match?.lon ?? null };
+}
+
+export async function addStopAction(
+  hangoutId: string,
+  values: StopValues
+): Promise<HangoutActionResult> {
+  if (!(await requireAdmin())) return { error: FORBIDDEN };
+
+  const parsed = stopSchema.safeParse(values);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  if (!z.string().uuid().safeParse(hangoutId).success) return { error: NOT_FOUND };
+
+  const hangout = await prisma.hangout.findFirst({
+    where: { id: hangoutId, status: EDITABLE },
+    select: { stops: { select: { position: true }, orderBy: { position: "desc" }, take: 1 } },
+  });
+  if (!hangout) return { error: "Hangout not found or cancelled" };
+
+  const place = await locate(parsed.data.address);
+  if ("error" in place) return { error: place.error! };
+
+  await prisma.hangoutStop.create({
+    data: {
+      ...parsed.data,
+      ...place,
+      hangoutId,
+      position: (hangout.stops[0]?.position ?? -1) + 1,
+    },
+  });
+
+  revalidateHangout(hangoutId);
+  return { success: true };
+}
+
+async function findEditableStop(stopId: string) {
+  if (!z.string().uuid().safeParse(stopId).success) return null;
+  return prisma.hangoutStop.findFirst({
+    where: { id: stopId, hangout: { status: EDITABLE } },
+    select: { id: true, hangoutId: true, position: true, address: true },
+  });
+}
+
+export async function updateStopAction(
+  stopId: string,
+  values: StopValues
+): Promise<HangoutActionResult> {
+  if (!(await requireAdmin())) return { error: FORBIDDEN };
+
+  const parsed = stopSchema.safeParse(values);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const stop = await findEditableStop(stopId);
+  if (!stop) return { error: STOP_NOT_FOUND };
+
+  const place = await locate(parsed.data.address, stop);
+  if ("error" in place) return { error: place.error! };
+
+  await prisma.hangoutStop.update({ where: { id: stop.id }, data: { ...parsed.data, ...place } });
+
+  revalidateHangout(stop.hangoutId);
+  return { success: true };
+}
+
+export async function deleteStopAction(stopId: string): Promise<HangoutActionResult> {
+  if (!(await requireAdmin())) return { error: FORBIDDEN };
+
+  const stop = await findEditableStop(stopId);
+  if (!stop) return { error: STOP_NOT_FOUND };
+
+  await prisma.hangoutStop.delete({ where: { id: stop.id } });
+
+  revalidateHangout(stop.hangoutId);
+  return { success: true };
+}
+
+export async function moveStopAction(
+  stopId: string,
+  direction: -1 | 1
+): Promise<HangoutActionResult> {
+  if (!(await requireAdmin())) return { error: FORBIDDEN };
+
+  const stop = await findEditableStop(stopId);
+  if (!stop) return { error: STOP_NOT_FOUND };
+
+  const neighbour = await prisma.hangoutStop.findFirst({
+    where: {
+      hangoutId: stop.hangoutId,
+      position: direction < 0 ? { lt: stop.position } : { gt: stop.position },
+    },
+    orderBy: { position: direction < 0 ? "desc" : "asc" },
+    select: { id: true, position: true },
+  });
+  if (!neighbour) return { success: true };
+
+  await prisma.$transaction([
+    prisma.hangoutStop.update({ where: { id: stop.id }, data: { position: neighbour.position } }),
+    prisma.hangoutStop.update({ where: { id: neighbour.id }, data: { position: stop.position } }),
+  ]);
+
+  revalidateHangout(stop.hangoutId);
   return { success: true };
 }

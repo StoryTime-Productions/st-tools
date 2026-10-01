@@ -1,5 +1,6 @@
-import type { AttendanceStatus, HangoutStatus } from "@prisma/client";
+import type { AttendanceStatus, HangoutStatus, StopType } from "@prisma/client";
 import type { AvailabilityResponse } from "@/lib/availability";
+import { scheduleStops, spanDays } from "@/lib/itinerary";
 import { prisma } from "@/lib/prisma";
 
 export interface HangoutSummary {
@@ -19,7 +20,34 @@ export interface HangoutDetail extends HangoutSummary {
   windowEndHour: number;
   availabilityDeadline: Date | null;
   attendees: { userId: string; name: string; status: AttendanceStatus }[];
+  stops: HangoutStopItem[];
 }
+
+export interface HangoutStopItem {
+  id: string;
+  type: StopType;
+  title: string;
+  address: string | null;
+  lat: number | null;
+  durationMinutes: number;
+  arriveBy: string | null;
+  notes: string | null;
+  bring: string | null;
+  cashCents: number | null;
+}
+
+const STOP_SELECT = {
+  id: true,
+  type: true,
+  title: true,
+  address: true,
+  lat: true,
+  durationMinutes: true,
+  arriveBy: true,
+  notes: true,
+  bring: true,
+  cashCents: true,
+} as const;
 
 export interface HangoutIdeaItem {
   id: string;
@@ -57,6 +85,7 @@ export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail
         select: { userId: true, status: true, user: { select: { name: true, email: true } } },
         orderBy: { user: { name: "asc" } },
       },
+      stops: { select: STOP_SELECT, orderBy: { position: "asc" } },
     },
   });
   if (!hangout) return null;
@@ -119,7 +148,7 @@ export interface CalendarHangout {
   goingCount: number;
 }
 
-/** Scheduled hangouts on their day; collecting ones on every candidate date. */
+/** Scheduled hangouts on every day from start to itinerary end; collecting ones on each candidate date. */
 export async function getCalendarHangouts(): Promise<CalendarHangout[]> {
   const hangouts = await prisma.hangout.findMany({
     where: { status: { in: ["COLLECTING", "SCHEDULED"] } },
@@ -129,13 +158,16 @@ export async function getCalendarHangouts(): Promise<CalendarHangout[]> {
       status: true,
       startSlot: true,
       availabilityDates: true,
+      stops: { select: { durationMinutes: true, arriveBy: true }, orderBy: { position: "asc" } },
       _count: { select: { attendees: { where: { status: "GOING" } } } },
     },
     orderBy: { title: "asc" },
   });
-  return hangouts.map(({ availabilityDates, _count, ...hangout }) => ({
+  return hangouts.map(({ availabilityDates, stops, _count, ...hangout }) => ({
     ...hangout,
-    days: hangout.startSlot ? [hangout.startSlot.slice(0, 10)] : availabilityDates,
+    days: hangout.startSlot
+      ? spanDays(hangout.startSlot.slice(0, 10), scheduleStops(hangout.startSlot, stops).end)
+      : availabilityDates,
     goingCount: _count.attendees,
   }));
 }

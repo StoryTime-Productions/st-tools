@@ -116,7 +116,7 @@ describe("hangout data loaders", () => {
     );
   });
 
-  it("places calendar hangouts on their locked day or every candidate date", async () => {
+  it("spans locked hangouts to their itinerary end and collecting ones over candidate dates", async () => {
     const { getCalendarHangouts, prisma } = await loadHangoutsLib();
     prisma.hangout.findMany.mockResolvedValue([
       {
@@ -125,6 +125,10 @@ describe("hangout data loaders", () => {
         status: "SCHEDULED",
         startSlot: "2026-10-03T19:30",
         availabilityDates: ["2026-10-02", "2026-10-03"],
+        stops: [
+          { durationMinutes: 60, arriveBy: null },
+          { durationMinutes: 180, arriveBy: "1T23:00" },
+        ],
         _count: { attendees: 3 },
       },
       {
@@ -133,6 +137,7 @@ describe("hangout data loaders", () => {
         status: "COLLECTING",
         startSlot: null,
         availabilityDates: ["2026-10-09", "2026-10-10"],
+        stops: [],
         _count: { attendees: 0 },
       },
     ]);
@@ -143,7 +148,7 @@ describe("hangout data loaders", () => {
         title: "Board games",
         status: "SCHEDULED",
         startSlot: "2026-10-03T19:30",
-        days: ["2026-10-03"],
+        days: ["2026-10-03", "2026-10-04"],
         goingCount: 3,
       },
       {

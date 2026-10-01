@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AvailabilityGrid } from "@/app/hub/hangouts/[hangoutId]/_components/availability-grid";
 import { AvailabilitySetup } from "@/app/hub/hangouts/[hangoutId]/_components/availability-setup";
+import { Itinerary } from "@/app/hub/hangouts/[hangoutId]/_components/itinerary";
 import { LockedIn, RankedSlots } from "@/app/hub/hangouts/[hangoutId]/_components/lock-in";
 import { CancelHangoutButton, HangoutDialog } from "@/app/hub/_components/hangout-dialog";
 import { ProjectCover } from "@/app/hub/_components/project-cover";
@@ -159,6 +160,22 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
                 canLock={user.role === "ADMIN"}
               />
             ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {canEdit || hangout.stops.length > 0 ? (
+        <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
+          <CardHeader>
+            <CardTitle className="text-base">Itinerary</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Itinerary
+              hangoutId={hangout.id}
+              startSlot={hangout.startSlot}
+              stops={hangout.stops}
+              canEdit={canEdit}
+            />
           </CardContent>
         </Card>
       ) : null}

@@ -13,6 +13,7 @@ async function loadModule() {
     hangout: {
       create: vi.fn().mockResolvedValue({ id: HANGOUT_ID }),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      findFirst: vi.fn().mockResolvedValue({ stops: [{ position: 2 }] }),
       findUnique: vi.fn().mockResolvedValue({
         status: "COLLECTING",
         availabilityDates: ["2026-10-03"],
@@ -27,6 +28,12 @@ async function loadModule() {
       deleteMany: vi.fn(),
       upsert: vi.fn(),
     },
+    hangoutStop: {
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      findFirst: vi.fn(),
+    },
     hangoutAttendee: {
       deleteMany: vi.fn(),
       createMany: vi.fn(),
@@ -39,16 +46,19 @@ async function loadModule() {
     },
     $transaction: vi.fn(),
   };
-  prisma.$transaction.mockImplementation(async (fn: (tx: typeof prisma) => Promise<unknown>) =>
-    fn(prisma)
+  prisma.$transaction.mockImplementation(
+    async (arg: ((tx: typeof prisma) => Promise<unknown>) | Promise<unknown>[]) =>
+      typeof arg === "function" ? arg(prisma) : Promise.all(arg)
   );
+  const geocodeAddress = vi.fn().mockResolvedValue(null);
+  vi.doMock("@/lib/tomtom", () => ({ geocodeAddress }));
   const uploadCover = vi.fn();
   vi.doMock("next/cache", () => ({ revalidatePath }));
   vi.doMock("@/lib/get-current-user", () => ({ getCurrentUser }));
   vi.doMock("@/lib/prisma", () => ({ prisma }));
   vi.doMock("@/lib/cover-upload", () => ({ uploadCover }));
   const actions = await import("@/app/actions/hangouts");
-  return { ...actions, revalidatePath, getCurrentUser, prisma, uploadCover };
+  return { ...actions, revalidatePath, getCurrentUser, prisma, uploadCover, geocodeAddress };
 }
 
 describe("hangout actions", () => {
@@ -471,5 +481,166 @@ describe("hangout actions", () => {
     await expect(
       mod.setAttendanceAction({ hangoutId: HANGOUT_ID, status: "GOING" })
     ).resolves.toEqual({ error: "Unauthorized" });
+  });
+
+  const STOP_ID = "66666666-6666-4666-8666-666666666666";
+  const stopValues = {
+    type: "RESTAURANT" as const,
+    title: " Dinner ",
+    address: "290 bremner",
+    durationMinutes: 90,
+    arriveBy: "1T20:00",
+    notes: "",
+    bring: " ID ",
+    cashCents: 2500,
+  };
+  const NO_MATCH = "Couldn't find that address. Check it and try again.";
+
+  it("adds a geocoded stop at the end of the itinerary", async () => {
+    const mod = await loadModule();
+    mod.geocodeAddress.mockResolvedValueOnce({
+      address: "290 Bremner Blvd",
+      lat: 43.6,
+      lon: -79.4,
+    });
+
+    await expect(mod.addStopAction(HANGOUT_ID, stopValues)).resolves.toEqual({ success: true });
+    expect(mod.prisma.hangout.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: HANGOUT_ID, status: { not: "CANCELLED" } } })
+    );
+    expect(mod.prisma.hangoutStop.create).toHaveBeenCalledWith({
+      data: {
+        type: "RESTAURANT",
+        title: "Dinner",
+        address: "290 Bremner Blvd",
+        lat: 43.6,
+        lon: -79.4,
+        durationMinutes: 90,
+        arriveBy: "1T20:00",
+        notes: null,
+        bring: "ID",
+        cashCents: 2500,
+        hangoutId: HANGOUT_ID,
+        position: 3,
+      },
+    });
+    expect(mod.revalidatePath).toHaveBeenCalledWith(`/hub/hangouts/${HANGOUT_ID}`);
+
+    mod.prisma.hangout.findFirst.mockResolvedValueOnce({ stops: [] });
+    await mod.addStopAction(HANGOUT_ID, { ...stopValues, address: null });
+    expect(mod.prisma.hangoutStop.create).toHaveBeenLastCalledWith({
+      data: expect.objectContaining({ address: null, lat: null, lon: null, position: 0 }),
+    });
+
+    await mod.addStopAction(HANGOUT_ID, stopValues);
+    expect(mod.prisma.hangoutStop.create).toHaveBeenLastCalledWith({
+      data: expect.objectContaining({ address: "290 bremner", lat: null, lon: null }),
+    });
+  });
+
+  it("rejects bad stops, unknown addresses, cancelled hangouts and non-admins", async () => {
+    const mod = await loadModule();
+
+    await expect(mod.addStopAction(HANGOUT_ID, { ...stopValues, title: " " })).resolves.toEqual({
+      error: "Stop name is required",
+    });
+    await expect(
+      mod.addStopAction(HANGOUT_ID, { ...stopValues, arriveBy: "2026-10-03T20:00" })
+    ).resolves.toEqual({ error: "Arrive-by needs a day (1-14) and a time" });
+    await expect(mod.addStopAction("nope", stopValues)).resolves.toEqual({
+      error: "Hangout not found",
+    });
+
+    mod.geocodeAddress.mockResolvedValueOnce("no-match");
+    await expect(mod.addStopAction(HANGOUT_ID, stopValues)).resolves.toEqual({ error: NO_MATCH });
+
+    mod.prisma.hangout.findFirst.mockResolvedValueOnce(null);
+    await expect(mod.addStopAction(HANGOUT_ID, stopValues)).resolves.toEqual({
+      error: "Hangout not found or cancelled",
+    });
+    expect(mod.prisma.hangoutStop.create).not.toHaveBeenCalled();
+
+    mod.getCurrentUser.mockResolvedValue(member);
+    for (const result of [
+      mod.addStopAction(HANGOUT_ID, stopValues),
+      mod.updateStopAction(STOP_ID, stopValues),
+      mod.deleteStopAction(STOP_ID),
+      mod.moveStopAction(STOP_ID, 1),
+    ]) {
+      await expect(result).resolves.toEqual({ error: "Forbidden: Admin access required" });
+    }
+  });
+
+  it("updates a stop and only re-geocodes a changed address", async () => {
+    const mod = await loadModule();
+    const stop = { id: STOP_ID, hangoutId: HANGOUT_ID, position: 1, address: "290 bremner" };
+    mod.prisma.hangoutStop.findFirst.mockResolvedValue(stop);
+
+    await expect(mod.updateStopAction(STOP_ID, stopValues)).resolves.toEqual({ success: true });
+    expect(mod.geocodeAddress).not.toHaveBeenCalled();
+    expect(mod.prisma.hangoutStop.update).toHaveBeenCalledWith({
+      where: { id: STOP_ID },
+      data: expect.objectContaining({ title: "Dinner", address: "290 bremner" }),
+    });
+    expect(mod.prisma.hangoutStop.update.mock.calls[0][0].data).not.toHaveProperty("lat");
+
+    mod.geocodeAddress.mockResolvedValueOnce("no-match");
+    await expect(
+      mod.updateStopAction(STOP_ID, { ...stopValues, address: "zzqq" })
+    ).resolves.toEqual({ error: NO_MATCH });
+    await expect(mod.updateStopAction(STOP_ID, { ...stopValues, title: "" })).resolves.toEqual({
+      error: "Stop name is required",
+    });
+
+    mod.prisma.hangoutStop.findFirst.mockResolvedValue(null);
+    await expect(mod.updateStopAction(STOP_ID, stopValues)).resolves.toEqual({
+      error: "Stop not found or hangout cancelled",
+    });
+    await expect(mod.updateStopAction("nope", stopValues)).resolves.toEqual({
+      error: "Stop not found or hangout cancelled",
+    });
+  });
+
+  it("deletes stops and swaps positions with the neighbour when moving", async () => {
+    const mod = await loadModule();
+    const stop = { id: STOP_ID, hangoutId: HANGOUT_ID, position: 1, address: null };
+    mod.prisma.hangoutStop.findFirst.mockResolvedValue(stop);
+
+    await expect(mod.deleteStopAction(STOP_ID)).resolves.toEqual({ success: true });
+    expect(mod.prisma.hangoutStop.delete).toHaveBeenCalledWith({ where: { id: STOP_ID } });
+
+    mod.prisma.hangoutStop.findFirst
+      .mockResolvedValueOnce(stop)
+      .mockResolvedValueOnce({ id: "s0", position: 0 });
+    await expect(mod.moveStopAction(STOP_ID, -1)).resolves.toEqual({ success: true });
+    expect(mod.prisma.hangoutStop.findFirst).toHaveBeenLastCalledWith({
+      where: { hangoutId: HANGOUT_ID, position: { lt: 1 } },
+      orderBy: { position: "desc" },
+      select: { id: true, position: true },
+    });
+    expect(mod.prisma.hangoutStop.update).toHaveBeenCalledWith({
+      where: { id: STOP_ID },
+      data: { position: 0 },
+    });
+    expect(mod.prisma.hangoutStop.update).toHaveBeenCalledWith({
+      where: { id: "s0" },
+      data: { position: 1 },
+    });
+
+    mod.prisma.hangoutStop.update.mockClear();
+    mod.prisma.hangoutStop.findFirst.mockResolvedValueOnce(stop).mockResolvedValueOnce(null);
+    await expect(mod.moveStopAction(STOP_ID, 1)).resolves.toEqual({ success: true });
+    expect(mod.prisma.hangoutStop.findFirst).toHaveBeenLastCalledWith(
+      expect.objectContaining({ where: { hangoutId: HANGOUT_ID, position: { gt: 1 } } })
+    );
+    expect(mod.prisma.hangoutStop.update).not.toHaveBeenCalled();
+
+    mod.prisma.hangoutStop.findFirst.mockResolvedValue(null);
+    await expect(mod.deleteStopAction(STOP_ID)).resolves.toEqual({
+      error: "Stop not found or hangout cancelled",
+    });
+    await expect(mod.moveStopAction(STOP_ID, 1)).resolves.toEqual({
+      error: "Stop not found or hangout cancelled",
+    });
   });
 });
