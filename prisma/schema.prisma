@@ -244,6 +244,14 @@ model ProjectLink {
   @@map("project_links")
 }
 
+enum StopType {
+  COMMUTE
+  LOCATION
+  RESTAURANT
+  POINT_OF_INTEREST
+  BREAK
+}
+
 enum AttendanceStatus {
   GOING
   MAYBE
@@ -274,6 +282,7 @@ model Hangout {
   idea         HangoutIdea?
   availability HangoutAvailability[]
   attendees    HangoutAttendee[]
+  stops        HangoutStop[]
 
   @@map("hangouts")
 }
@@ -451,4 +460,26 @@ model Page {
   children Page[]  @relation("PageChildren")
 
   @@map("pages")
+}
+
+model HangoutStop {
+  id              String   @id @default(uuid())
+  position        Int
+  type            StopType
+  title           String
+  address         String?
+  lat             Float?
+  lon             Float?
+  durationMinutes Int      @default(60)
+  arriveBy        String?
+  notes           String?
+  bring           String?
+  cashCents       Int?
+  updatedAt       DateTime @updatedAt
+
+  hangoutId String
+  hangout   Hangout @relation(fields: [hangoutId], references: [id], onDelete: Cascade)
+
+  @@index([hangoutId, position])
+  @@map("hangout_stops")
 }

@@ -35,6 +35,7 @@ const HANGOUT = {
   availabilityDeadline: null as Date | null,
   startSlot: null as string | null,
   attendees: [],
+  stops: [] as { id: string }[],
 };
 
 async function loadHub() {
@@ -138,6 +139,13 @@ async function loadHub() {
     }) => (
       <p data-testid="availability-grid">
         {user.name} {responses.length} {editable ? "editable" : "read-only"}
+      </p>
+    ),
+  }));
+  vi.doMock("@/app/hub/hangouts/[hangoutId]/_components/itinerary", () => ({
+    Itinerary: ({ stops, canEdit }: { stops: unknown[]; canEdit: boolean }) => (
+      <p data-testid="itinerary">
+        {stops.length} {canEdit ? "editable" : "read-only"}
       </p>
     ),
   }));
@@ -386,6 +394,7 @@ describe("hub pages", () => {
       "https://discord.com/channels/1/2"
     );
     expect(screen.queryByRole("button", { name: "Cancel hangout" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("itinerary")).not.toBeInTheDocument();
     members.unmount();
 
     getCurrentUser.mockResolvedValue(admin);
@@ -393,6 +402,7 @@ describe("hub pages", () => {
     expect(screen.getByRole("button", { name: "Edit Beach day" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel hangout" })).toBeInTheDocument();
     expect(screen.getByTestId("cover-editor")).toHaveTextContent("hangout");
+    expect(screen.getByTestId("itinerary")).toHaveTextContent("0 editable");
     admins.unmount();
 
     hangouts.getHangoutDetail.mockResolvedValueOnce({
@@ -400,9 +410,11 @@ describe("hub pages", () => {
       status: "CANCELLED",
       description: null,
       discordThreadUrl: null,
+      stops: [{ id: "s1" }],
     });
     render(await HangoutPage(params()));
     expect(screen.getByText("Cancelled")).toBeInTheDocument();
+    expect(screen.getByTestId("itinerary")).toHaveTextContent("1 read-only");
     expect(screen.queryByRole("button", { name: "Cancel hangout" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Discord thread" })).not.toBeInTheDocument();
 
