@@ -41,3 +41,54 @@ export async function locateAddress(address: string | null, previous?: string | 
   if (match === "no-match") return { error: "Couldn't find that address. Check it and try again." };
   return { address: match?.address ?? address, lat: match?.lat ?? null, lon: match?.lon ?? null };
 }
+
+export interface Point {
+  lat: number;
+  lon: number;
+}
+
+export interface Route {
+  depart: string;
+  arrive: string;
+  /** Arrival at each waypoint, in the order the waypoints were given. */
+  waypoints: string[];
+}
+
+/** One car trip with the best waypoint order, live traffic, and either an arrival or departure time. */
+export async function routeVia(
+  origin: Point,
+  waypoints: Point[],
+  destination: Point,
+  time: { arriveAt: Date } | { departAt: Date }
+): Promise<Route | { error: string }> {
+  const key = process.env.TOMTOM_API_KEY;
+  if (!key) return { error: "Routing isn't set up" };
+
+  const points = [origin, ...waypoints, destination].map((p) => `${p.lat},${p.lon}`).join(":");
+  const when =
+    "arriveAt" in time
+      ? `arriveAt=${time.arriveAt.toISOString()}`
+      : `departAt=${time.departAt.toISOString()}`;
+  const url = `https://api.tomtom.com/routing/1/calculateRoute/${points}/json?${when}&traffic=true&computeBestOrder=${waypoints.length > 1}&key=${key}`;
+  try {
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) return { error: `Routing failed (${response.status})` };
+    const { routes, optimizedWaypoints } = (await response.json()) as {
+      routes: {
+        summary: { departureTime: string; arrivalTime: string };
+        legs: { summary: { arrivalTime: string } }[];
+      }[];
+      optimizedWaypoints?: { providedIndex: number; optimizedIndex: number }[];
+    };
+    const [route] = routes;
+    const legOf = (index: number) =>
+      optimizedWaypoints?.find((w) => w.providedIndex === index)?.optimizedIndex ?? index;
+    return {
+      depart: route.summary.departureTime,
+      arrive: route.summary.arrivalTime,
+      waypoints: waypoints.map((_, index) => route.legs[legOf(index)].summary.arrivalTime),
+    };
+  } catch {
+    return { error: "Routing failed" };
+  }
+}

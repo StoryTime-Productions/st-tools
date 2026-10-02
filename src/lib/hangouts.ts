@@ -2,6 +2,7 @@ import type { AttendanceStatus, HangoutStatus, StopType } from "@prisma/client";
 import type { AvailabilityResponse } from "@/lib/availability";
 import { scheduleStops, spanDays } from "@/lib/itinerary";
 import { prisma } from "@/lib/prisma";
+import type { CarSchedule } from "@/lib/routes";
 
 export interface HangoutSummary {
   id: string;
@@ -35,6 +36,7 @@ export interface HangoutCarItem {
   seats: number;
   startAddress: string | null;
   commonPoint: string | null;
+  schedule: CarSchedule | null;
   driver: Person;
   riders: (Person & { atCommonPoint: boolean })[];
 }
@@ -119,6 +121,7 @@ export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail
           seats: true,
           startAddress: true,
           commonPoint: true,
+          schedule: true,
           driver: { select: PERSON_SELECT },
           riders: {
             select: { atCommonPoint: true, user: { select: PERSON_SELECT } },
@@ -134,8 +137,9 @@ export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail
   return {
     ...detail,
     proposerName: idea?.proposerName ?? null,
-    cars: cars.map(({ driver, riders, ...car }) => ({
+    cars: cars.map(({ driver, riders, schedule, ...car }) => ({
       ...car,
+      schedule: schedule as CarSchedule | null,
       driver: person(driver),
       riders: riders.map(({ atCommonPoint, user }) => ({ ...person(user), atCommonPoint })),
     })),

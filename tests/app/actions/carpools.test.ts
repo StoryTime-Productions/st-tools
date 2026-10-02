@@ -39,8 +39,10 @@ async function loadModule() {
   vi.doMock("@/lib/get-current-user", () => ({ getCurrentUser }));
   vi.doMock("@/lib/prisma", () => ({ prisma }));
   vi.doMock("@/lib/tomtom", () => ({ locateAddress }));
+  const recomputeRoutes = vi.fn();
+  vi.doMock("@/lib/routes", () => ({ recomputeRoutes }));
   const actions = await import("@/app/actions/carpools");
-  return { ...actions, revalidatePath, getCurrentUser, prisma, locateAddress };
+  return { ...actions, revalidatePath, getCurrentUser, prisma, locateAddress, recomputeRoutes };
 }
 
 const ownedCar = (overrides = {}) => ({
@@ -75,6 +77,7 @@ describe("carpool actions", () => {
       data: { hangoutId: HANGOUT_ID, driverId: driver.id, seats: 3 },
     });
     expect(mod.revalidatePath).toHaveBeenCalledWith(`/hub/hangouts/${HANGOUT_ID}`);
+    expect(mod.recomputeRoutes).toHaveBeenCalledWith(HANGOUT_ID);
 
     mod.prisma.hangoutCar.findFirst.mockResolvedValueOnce({ id: CAR_ID });
     await expect(mod.offerCarAction(HANGOUT_ID, 3)).resolves.toEqual({
@@ -177,6 +180,7 @@ describe("carpool actions", () => {
 
     await expect(mod.removeCarAction(CAR_ID)).resolves.toEqual({ success: true });
     expect(mod.prisma.hangoutCar.delete).toHaveBeenCalledWith({ where: { id: CAR_ID } });
+    expect(mod.recomputeRoutes).not.toHaveBeenCalled();
     await expect(mod.removeRiderAction(CAR_ID, rider.id)).resolves.toEqual({ success: true });
     expect(mod.prisma.hangoutRider.deleteMany).toHaveBeenCalledWith({
       where: { carId: CAR_ID, userId: rider.id },
@@ -267,5 +271,22 @@ describe("carpool actions", () => {
     await expect(mod.leaveCarAction("nope")).resolves.toEqual({ error: "Hangout not found" });
     mod.getCurrentUser.mockResolvedValue(null);
     await expect(mod.leaveCarAction(HANGOUT_ID)).resolves.toEqual({ error: "Unauthorized" });
+  });
+
+  it("lets admins recompute every route", async () => {
+    const mod = await loadModule();
+    mod.getCurrentUser.mockResolvedValue(admin);
+
+    await expect(mod.recomputeRoutesAction(HANGOUT_ID)).resolves.toEqual({ success: true });
+    expect(mod.recomputeRoutes).toHaveBeenCalledWith(HANGOUT_ID);
+    await expect(mod.recomputeRoutesAction("nope")).resolves.toEqual({
+      error: "Hangout not found",
+    });
+
+    mod.getCurrentUser.mockResolvedValue(driver);
+    await expect(mod.recomputeRoutesAction(HANGOUT_ID)).resolves.toEqual({
+      error: "Forbidden: Admin access required",
+    });
+    expect(mod.recomputeRoutes).toHaveBeenCalledTimes(1);
   });
 });

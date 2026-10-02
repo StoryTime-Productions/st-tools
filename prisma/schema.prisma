@@ -497,6 +497,7 @@ model HangoutCar {
   commonPoint  String?
   commonLat    Float?
   commonLon    Float?
+  schedule     Json?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

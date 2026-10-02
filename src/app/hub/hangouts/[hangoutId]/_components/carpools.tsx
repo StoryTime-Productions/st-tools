@@ -9,6 +9,7 @@ import {
   joinCarAction,
   leaveCarAction,
   offerCarAction,
+  recomputeRoutesAction,
   removeCarAction,
   removeRiderAction,
   updateCarAction,
@@ -27,6 +28,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { HangoutCarItem } from "@/lib/hangouts";
+
+const clock = (iso: string) =>
+  new Date(iso).toLocaleTimeString("en-US", {
+    timeZone: "America/Toronto",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 
 function useRun() {
   const router = useRouter();
@@ -108,6 +116,15 @@ export function Carpools({
                       <span className="text-muted-foreground">Common point:</span> {car.commonPoint}
                     </p>
                   ) : null}
+                  {car.schedule && "there" in car.schedule ? (
+                    <p>
+                      <span className="text-muted-foreground">Drive:</span> leaves{" "}
+                      {clock(car.schedule.there.start)}, arrives {clock(car.schedule.there.end)} ·
+                      back {clock(car.schedule.back.start)} – {clock(car.schedule.back.end)}
+                    </p>
+                  ) : car.schedule ? (
+                    <p className="text-muted-foreground">No drive times: {car.schedule.error}</p>
+                  ) : null}
                 </div>
                 {canManage ? (
                   <div className="flex gap-1">
@@ -152,6 +169,13 @@ export function Carpools({
                             ) : null}
                           </span>
                         )}
+                        {car.schedule && "there" in car.schedule ? (
+                          <span className="text-muted-foreground">
+                            {" "}
+                            · pick-up {clock(car.schedule.there.stops[rider.userId])} · drop-off{" "}
+                            {clock(car.schedule.back.stops[rider.userId])}
+                          </span>
+                        ) : null}
                       </span>
                       {canManage ? (
                         <Button
@@ -193,6 +217,16 @@ export function Carpools({
           );
         })}
       </ul>
+      {viewer.isAdmin && cars.length > 0 ? (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={isPending}
+          onClick={() => run(() => recomputeRoutesAction(hangoutId), "Routes recomputed")}
+        >
+          Recompute routes
+        </Button>
+      ) : null}
       {!viewer.going ? (
         <p className="text-muted-foreground">Mark yourself Going to drive or ride.</p>
       ) : !driving && !riding ? (
