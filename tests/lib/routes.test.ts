@@ -144,6 +144,37 @@ describe("recomputeRoutes", () => {
     });
   });
 
+  it("keeps typed-in times when routing fails, until a route succeeds", async () => {
+    const { recomputeRoutes, prisma, routeVia } = await loadModule();
+    const trip = { start: "s", end: "e", stops: { bob: "x", carol: "x", dan: "x" } };
+    const manual = { there: trip, back: trip, manual: true };
+    const stale = { there: { ...trip, stops: {} }, back: trip, manual: true };
+
+    routeVia.mockResolvedValue({ error: "Routing failed (429)" });
+    prisma.hangout.findUnique.mockResolvedValueOnce(hangout({ cars: [car({ schedule: manual })] }));
+    await recomputeRoutes("h1");
+    expect(prisma.hangoutCar.update).toHaveBeenLastCalledWith({
+      where: { id: "car1" },
+      data: { schedule: manual },
+    });
+
+    prisma.hangout.findUnique.mockResolvedValueOnce(hangout({ cars: [car({ schedule: stale })] }));
+    await recomputeRoutes("h1");
+    expect(prisma.hangoutCar.update).toHaveBeenLastCalledWith({
+      where: { id: "car1" },
+      data: { schedule: { error: "Routing failed (429)" } },
+    });
+
+    routeVia.mockImplementation(async () => ({
+      depart: "d",
+      arrive: "a",
+      waypoints: ["w", "w", "w"],
+    }));
+    prisma.hangout.findUnique.mockResolvedValueOnce(hangout({ cars: [car({ schedule: manual })] }));
+    await recomputeRoutes("h1");
+    expect(prisma.hangoutCar.update.mock.lastCall?.[0].data.schedule).not.toHaveProperty("manual");
+  });
+
   it("does nothing for hangouts that aren't scheduled", async () => {
     const { recomputeRoutes, prisma } = await loadModule();
     prisma.hangout.findUnique.mockResolvedValueOnce(hangout({ status: "COLLECTING" }));

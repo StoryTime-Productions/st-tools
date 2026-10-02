@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2, X } from "lucide-react";
+import { Clock, Pencil, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   joinCarAction,
@@ -12,6 +12,7 @@ import {
   recomputeRoutesAction,
   removeCarAction,
   removeRiderAction,
+  setCarTimesAction,
   updateCarAction,
   type CarpoolActionResult,
 } from "@/app/actions/carpools";
@@ -27,6 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { torontoInputValue } from "@/lib/calendar";
 import type { HangoutCarItem } from "@/lib/hangouts";
 
 const clock = (iso: string) =>
@@ -118,9 +120,12 @@ export function Carpools({
                   ) : null}
                   {car.schedule && "there" in car.schedule ? (
                     <p>
-                      <span className="text-muted-foreground">Drive:</span> leaves{" "}
-                      {clock(car.schedule.there.start)}, arrives {clock(car.schedule.there.end)} ·
-                      back {clock(car.schedule.back.start)} – {clock(car.schedule.back.end)}
+                      <span className="text-muted-foreground">
+                        Drive{car.schedule.manual ? " (typed in)" : ""}:
+                      </span>{" "}
+                      leaves {clock(car.schedule.there.start)}, arrives{" "}
+                      {clock(car.schedule.there.end)} · back {clock(car.schedule.back.start)} –{" "}
+                      {clock(car.schedule.back.end)}
                     </p>
                   ) : car.schedule ? (
                     <p className="text-muted-foreground">No drive times: {car.schedule.error}</p>
@@ -128,6 +133,9 @@ export function Carpools({
                 </div>
                 {canManage ? (
                   <div className="flex gap-1">
+                    {car.schedule && "there" in car.schedule && !car.schedule.manual ? null : (
+                      <TimesDialog car={car} />
+                    )}
                     <CarDialog car={car} />
                     <Button
                       size="icon"
@@ -334,6 +342,97 @@ function CarDialog({ car }: { car: HangoutCarItem }) {
           <DialogFooter showCloseButton>
             <Button type="submit" disabled={isPending}>
               {isPending ? "Saving..." : "Save car"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const local = (iso?: string) => (iso ? torontoInputValue(new Date(iso)) : "");
+
+/** Fallback for cars routing couldn't handle: type the leave, pick-up and drop-off times. */
+function TimesDialog({ car }: { car: HangoutCarItem }) {
+  const initial = () => {
+    const kept = car.schedule && "there" in car.schedule ? car.schedule : null;
+    const trip = (t?: { start: string; end: string; stops: Record<string, string> }) => ({
+      start: local(t?.start),
+      end: local(t?.end),
+      stops: Object.fromEntries(car.riders.map((r) => [r.userId, local(t?.stops[r.userId])])),
+    });
+    return { there: trip(kept?.there), back: trip(kept?.back) };
+  };
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState(initial);
+  const [isPending, run] = useRun();
+  type Leg = "there" | "back";
+  const field = (leg: Leg, label: string, value: string, change: (v: string) => void) => (
+    <div className="space-y-1">
+      <Label htmlFor={`car-${car.id}-${leg}-${label}`}>{label}</Label>
+      <Input
+        id={`car-${car.id}-${leg}-${label}`}
+        type="datetime-local"
+        required
+        value={value}
+        onChange={(event) => change(event.target.value)}
+      />
+    </div>
+  );
+  const edit = (leg: Leg, patch: Partial<(typeof form)["there"]>) =>
+    setForm({ ...form, [leg]: { ...form[leg], ...patch } });
+  const section = (leg: Leg, title: string, start: string, end: string) => (
+    <fieldset className="space-y-2">
+      <legend className="font-medium">{title}</legend>
+      {field(leg, start, form[leg].start, (v) => edit(leg, { start: v }))}
+      {car.riders.map((rider) =>
+        field(
+          leg,
+          `${rider.name} ${leg === "there" ? "pick-up" : "drop-off"}`,
+          form[leg].stops[rider.userId],
+          (v) => edit(leg, { stops: { ...form[leg].stops, [rider.userId]: v } })
+        )
+      )}
+      {field(leg, end, form[leg].end, (v) => edit(leg, { end: v }))}
+    </fieldset>
+  );
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) setForm(initial());
+        setOpen(next);
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button size="icon" variant="ghost" aria-label={`Set ${car.driver.name}'s drive times`}>
+          <Clock />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Drive times</DialogTitle>
+          <DialogDescription>
+            Type the times yourself. The next successful route recompute replaces them.
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            run(
+              () => setCarTimesAction(car.id, form),
+              "Drive times saved",
+              () => setOpen(false)
+            );
+          }}
+          className="space-y-4"
+        >
+          {section("there", "Way there", "Leaves", "Arrives")}
+          {section("back", "Way back", "Leaves the last stop", "Home")}
+          <DialogFooter showCloseButton>
+            <Button type="submit" disabled={isPending}>
+              {isPending ? "Saving..." : "Save times"}
             </Button>
           </DialogFooter>
         </form>
