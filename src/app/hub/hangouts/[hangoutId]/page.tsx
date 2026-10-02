@@ -16,6 +16,8 @@ import { rankRuns } from "@/lib/availability";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { getAvailabilityResponses, getHangoutDetail } from "@/lib/hangouts";
 import { HANGOUT_STATUS_LABEL } from "@/lib/hub-format";
+import { scheduleStops } from "@/lib/itinerary";
+import { getStopWeather } from "@/lib/weather";
 
 export default async function HangoutPage({ params }: { params: Promise<{ hangoutId: string }> }) {
   const user = await getCurrentUser();
@@ -29,6 +31,23 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
   const collecting = hangout.status === "COLLECTING";
   const hasDates = hangout.availabilityDates.length > 0;
   const responses = hasDates ? await getAvailabilityResponses(hangout.id) : [];
+  const startSlot = hangout.status === "SCHEDULED" ? hangout.startSlot : null;
+  const { times } = scheduleStops(startSlot, hangout.stops);
+  const weather =
+    startSlot && hangout.stops.length > 0
+      ? await getStopWeather(
+          startSlot.slice(0, 10),
+          hangout.stops.map((stop, index) => ({
+            lat: stop.lat,
+            lon: stop.lon,
+            at: "at" in times[index] ? times[index].at : null,
+            durationMinutes: stop.durationMinutes,
+          }))
+        )
+      : [];
+  const warnings = [
+    ...new Set(weather.flatMap((stop) => (stop.status === "ok" ? stop.warnings : []))),
+  ];
   const setup = {
     dates: hangout.availabilityDates,
     startHour: hangout.windowStartHour,
@@ -176,6 +195,7 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
               startSlot={hangout.startSlot}
               stops={hangout.stops}
               canEdit={canEdit}
+              weather={weather}
             />
           </CardContent>
         </Card>
@@ -190,6 +210,11 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
             <Carpools
               hangoutId={hangout.id}
               cars={hangout.cars}
+              weather={{
+                warnings,
+                bufferMinutes: hangout.weatherBufferMinutes,
+                checked: weather.length > 0,
+              }}
               viewer={{
                 id: user.id,
                 isAdmin: user.role === "ADMIN",

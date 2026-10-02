@@ -24,6 +24,7 @@ function stop(overrides: Partial<HangoutStopItem>): HangoutStopItem {
     title: "Drive downtown",
     address: null,
     lat: null,
+    lon: null,
     durationMinutes: 30,
     arriveBy: null,
     notes: null,
@@ -41,6 +42,7 @@ const STOPS = [
     title: "Dinner",
     address: "290 Bremner Blvd",
     lat: 43.6,
+    lon: -79.4,
     durationMinutes: 90,
     bring: "ID",
     cashCents: 2500,
@@ -214,5 +216,51 @@ describe("Itinerary", () => {
       bring: "",
       cashCents: null,
     });
+  });
+  it("shows a forecast chip per stop with warnings and the Open-Meteo credit", () => {
+    render(
+      <Itinerary
+        hangoutId="h1"
+        startSlot="2026-10-03T19:30"
+        stops={STOPS}
+        canEdit={false}
+        weather={[
+          {
+            status: "ok",
+            temperature: -2,
+            chance: 80,
+            code: 73,
+            warnings: ["Snow", "80% precipitation"],
+          },
+          { status: "ok", temperature: 11, chance: 5, code: 1, warnings: [] },
+          { status: "none" },
+        ]}
+      />
+    );
+
+    const items = screen.getAllByRole("listitem");
+    expect(items[0]).toHaveTextContent("Snow, -2°C · 80% precipitationSnow, 80% precipitation");
+    expect(items[1]).toHaveTextContent("Partly cloudy, 11°C · 5% precipitation");
+    expect(items[1]).not.toHaveTextContent("precipitationSnow");
+    expect(items[2]).toHaveTextContent("No forecast (stop not on the map)");
+    expect(screen.getByRole("link", { name: "Open-Meteo.com" })).toHaveAttribute(
+      "href",
+      "https://open-meteo.com/"
+    );
+  });
+
+  it("explains forecasts that are too far out or unavailable", () => {
+    render(
+      <Itinerary
+        hangoutId="h1"
+        startSlot="2026-10-03T19:30"
+        stops={STOPS.slice(0, 2)}
+        canEdit={false}
+        weather={[{ status: "far" }, { status: "unavailable" }]}
+      />
+    );
+
+    expect(screen.getByText("Forecast not available yet")).toBeInTheDocument();
+    expect(screen.getByText("Forecast unavailable")).toBeInTheDocument();
   });
 });
