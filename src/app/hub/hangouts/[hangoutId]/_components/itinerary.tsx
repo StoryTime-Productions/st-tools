@@ -36,6 +36,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { addDays, dayLabel, timeLabel } from "@/lib/calendar";
 import type { HangoutStopItem } from "@/lib/hangouts";
 import { dayAndClock, scheduleStops, type StopTime } from "@/lib/itinerary";
+import type { StopWeather } from "@/lib/weather";
+import { WeatherChip, WeatherCredit } from "@/app/hub/hangouts/[hangoutId]/_components/weather";
 
 const STOP_TYPES: Array<[StopType, string]> = [
   ["COMMUTE", "Commute"],
@@ -85,11 +87,13 @@ export function Itinerary({
   startSlot,
   stops,
   canEdit,
+  weather = [],
 }: {
   hangoutId: string;
   startSlot: string | null;
   stops: HangoutStopItem[];
   canEdit: boolean;
+  weather?: StopWeather[];
 }) {
   const [isPending, run] = useRun();
   const { times, end } = scheduleStops(startSlot, stops);
@@ -160,6 +164,7 @@ export function Itinerary({
                 {"lateBy" in time && time.lateBy > 0 ? (
                   <p className="text-destructive text-xs">Running {duration(time.lateBy)} late</p>
                 ) : null}
+                {weather[index] ? <WeatherChip weather={weather[index]} /> : null}
                 {stop.address ? (
                   <p>
                     {stop.address}
@@ -191,6 +196,7 @@ export function Itinerary({
         </p>
       ) : null}
       {canEdit ? <StopDialog hangoutId={hangoutId} /> : null}
+      {weather.length > 0 ? <WeatherCredit /> : null}
     </div>
   );
 }

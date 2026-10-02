@@ -15,7 +15,10 @@ const actionMocks = vi.hoisted(() => ({
 const toastMocks = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 const routerMocks = vi.hoisted(() => ({ refresh: vi.fn() }));
 
+const bufferMock = vi.hoisted(() => vi.fn());
+
 vi.mock("@/app/actions/carpools", () => actionMocks);
+vi.mock("@/app/actions/hangouts", () => ({ setWeatherBufferAction: bufferMock }));
 vi.mock("sonner", () => ({ toast: toastMocks }));
 vi.mock("next/navigation", () => ({ useRouter: () => routerMocks }));
 
@@ -38,6 +41,7 @@ function renderCarpools(cars: HangoutCarItem[], who = viewer("c")) {
 describe("Carpools", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    bufferMock.mockResolvedValue({ success: true });
     vi.spyOn(window, "confirm").mockReturnValue(true);
     for (const action of Object.values(actionMocks)) action.mockResolvedValue({ success: true });
   });
@@ -209,5 +213,74 @@ describe("Carpools", () => {
     fireEvent.click(screen.getByRole("button", { name: "Recompute routes" }));
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Routes recomputed"));
     expect(actionMocks.recomputeRoutesAction).toHaveBeenCalledWith("h1");
+  });
+  describe("weather buffer", () => {
+    const routed = (manual?: true): HangoutCarItem => ({
+      ...CAR,
+      schedule: {
+        there: {
+          start: "2026-10-03T23:01:00.000Z",
+          end: "2026-10-03T23:31:00.000Z",
+          stops: { b: "2026-10-03T23:10:00.000Z" },
+        },
+        back: {
+          start: "2026-10-04T02:30:00.000Z",
+          end: "2026-10-04T03:00:00.000Z",
+          stops: { b: "2026-10-04T02:50:00.000Z" },
+        },
+        ...(manual ? { manual } : {}),
+      },
+    });
+    const warned = { warnings: ["Snow"], bufferMinutes: 15, checked: true };
+    const listing = () => screen.getByRole("listitem", { name: "Alice's car" });
+
+    it("moves routed leave and pick-up times earlier and keeps the arrival", () => {
+      render(<Carpools hangoutId="h1" cars={[routed()]} viewer={viewer("c")} weather={warned} />);
+
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Weather warning: Snow. Routed leave and pick-up times include a 15 min buffer."
+      );
+      expect(listing()).toHaveTextContent(
+        "leaves 6:46 PM (7:01 PM without weather buffer), arrives 7:31 PM"
+      );
+      expect(listing()).toHaveTextContent("pick-up 6:55 PM");
+    });
+
+    it("leaves typed-in times alone and shows no banner without a warning", () => {
+      const { rerender } = render(
+        <Carpools hangoutId="h1" cars={[routed(true)]} viewer={viewer("c")} weather={warned} />
+      );
+      expect(listing()).toHaveTextContent("leaves 7:01 PM, arrives");
+
+      rerender(
+        <Carpools
+          hangoutId="h1"
+          cars={[routed()]}
+          viewer={viewer("c")}
+          weather={{ warnings: [], bufferMinutes: 15, checked: true }}
+        />
+      );
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+      expect(listing()).toHaveTextContent("leaves 7:01 PM, arrives");
+      expect(screen.getByText(/Open-Meteo\.com/)).toBeInTheDocument();
+    });
+
+    it("lets an admin save the buffer", async () => {
+      render(
+        <Carpools
+          hangoutId="h1"
+          cars={[CAR]}
+          viewer={viewer("c", { isAdmin: true })}
+          weather={warned}
+        />
+      );
+
+      fireEvent.change(screen.getByLabelText("Weather buffer (minutes)"), {
+        target: { value: "30" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Save buffer" }));
+      await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Buffer saved"));
+      expect(bufferMock).toHaveBeenCalledWith("h1", 30);
+    });
   });
 });

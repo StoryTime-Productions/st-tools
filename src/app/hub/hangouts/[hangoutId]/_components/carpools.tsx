@@ -29,7 +29,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { torontoInputValue } from "@/lib/calendar";
+import { setWeatherBufferAction } from "@/app/actions/hangouts";
 import type { HangoutCarItem } from "@/lib/hangouts";
+import { WeatherCredit } from "@/app/hub/hangouts/[hangoutId]/_components/weather";
 
 const clock = (iso: string) =>
   new Date(iso).toLocaleTimeString("en-US", {
@@ -37,6 +39,17 @@ const clock = (iso: string) =>
     hour: "numeric",
     minute: "2-digit",
   });
+
+const shift = (iso: string, minutes: number) =>
+  minutes === 0 ? iso : new Date(new Date(iso).getTime() - minutes * 60_000).toISOString();
+
+export interface CarpoolWeather {
+  /** Distinct warnings across the stops; empty = no buffer applies. */
+  warnings: string[];
+  bufferMinutes: number;
+  /** Whether forecasts were looked up at all (Scheduled with stops). */
+  checked: boolean;
+}
 
 function useRun() {
   const router = useRouter();
@@ -60,24 +73,39 @@ export function Carpools({
   hangoutId,
   cars,
   viewer,
+  weather = { warnings: [], bufferMinutes: 0, checked: false },
 }: {
   hangoutId: string;
   cars: HangoutCarItem[];
   viewer: { id: string; isAdmin: boolean; going: boolean };
+  weather?: CarpoolWeather;
 }) {
   const [isPending, run] = useRun();
+  const [buffer, setBuffer] = useState(String(weather.bufferMinutes));
+  const buffered = weather.warnings.length > 0 ? weather.bufferMinutes : 0;
   const [seats, setSeats] = useState("4");
   const driving = cars.some((car) => car.driver.userId === viewer.id);
   const riding = cars.find((car) => car.riders.some((rider) => rider.userId === viewer.id));
 
   return (
     <div className="space-y-4 text-sm">
+      {weather.warnings.length > 0 ? (
+        <p role="status" className="text-destructive rounded-2xl border px-4 py-3">
+          Weather warning: {weather.warnings.join(", ")}.{" "}
+          {buffered > 0
+            ? `Routed leave and pick-up times include a ${buffered} min buffer.`
+            : "No buffer is set."}{" "}
+          Times you typed in are unchanged; consider leaving earlier.
+        </p>
+      ) : null}
       {cars.length === 0 ? <p className="text-muted-foreground">No cars yet.</p> : null}
       <ul className="space-y-3">
         {cars.map((car) => {
           const canManage = car.driver.userId === viewer.id || viewer.isAdmin;
           const mine = car.riders.find((rider) => rider.userId === viewer.id);
           const full = car.riders.length >= car.seats;
+          const typedIn = Boolean(car.schedule && "there" in car.schedule && car.schedule.manual);
+          const shiftThere = (iso: string) => (typedIn ? iso : shift(iso, buffered));
           const join = (atCommonPoint: boolean, label: string) => (
             <Button
               size="sm"
@@ -123,9 +151,12 @@ export function Carpools({
                       <span className="text-muted-foreground">
                         Drive{car.schedule.manual ? " (typed in)" : ""}:
                       </span>{" "}
-                      leaves {clock(car.schedule.there.start)}, arrives{" "}
-                      {clock(car.schedule.there.end)} · back {clock(car.schedule.back.start)} –{" "}
-                      {clock(car.schedule.back.end)}
+                      leaves {clock(shiftThere(car.schedule.there.start))}
+                      {shiftThere(car.schedule.there.start) !== car.schedule.there.start
+                        ? ` (${clock(car.schedule.there.start)} without weather buffer)`
+                        : ""}
+                      , arrives {clock(car.schedule.there.end)} · back{" "}
+                      {clock(car.schedule.back.start)} – {clock(car.schedule.back.end)}
                     </p>
                   ) : car.schedule ? (
                     <p className="text-muted-foreground">No drive times: {car.schedule.error}</p>
@@ -180,8 +211,8 @@ export function Carpools({
                         {car.schedule && "there" in car.schedule ? (
                           <span className="text-muted-foreground">
                             {" "}
-                            · pick-up {clock(car.schedule.there.stops[rider.userId])} · drop-off{" "}
-                            {clock(car.schedule.back.stops[rider.userId])}
+                            · pick-up {clock(shiftThere(car.schedule.there.stops[rider.userId]))} ·
+                            drop-off {clock(car.schedule.back.stops[rider.userId])}
                           </span>
                         ) : null}
                       </span>
@@ -235,6 +266,32 @@ export function Carpools({
           Recompute routes
         </Button>
       ) : null}
+      {viewer.isAdmin && weather.checked ? (
+        <form
+          className="flex flex-wrap items-end gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            run(() => setWeatherBufferAction(hangoutId, Number(buffer)), "Buffer saved");
+          }}
+        >
+          <div className="space-y-2">
+            <Label htmlFor="weather-buffer">Weather buffer (minutes)</Label>
+            <Input
+              id="weather-buffer"
+              type="number"
+              min={0}
+              max={120}
+              className="w-24"
+              value={buffer}
+              onChange={(event) => setBuffer(event.target.value)}
+            />
+          </div>
+          <Button type="submit" variant="outline" size="sm" disabled={isPending}>
+            Save buffer
+          </Button>
+        </form>
+      ) : null}
+      {weather.checked ? <WeatherCredit /> : null}
       {!viewer.going ? (
         <p className="text-muted-foreground">Mark yourself Going to drive or ride.</p>
       ) : !driving && !riding ? (

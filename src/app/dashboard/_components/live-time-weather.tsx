@@ -1,17 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  Cloud,
-  CloudDrizzle,
-  CloudFog,
-  CloudLightning,
-  CloudRain,
-  CloudSnow,
-  CloudSun,
-  LoaderCircle,
-  Sun,
-} from "lucide-react";
+import { LoaderCircle } from "lucide-react";
+import { describeWeather } from "@/lib/weather-codes";
 
 type WeatherInfo = {
   temperature: number;
@@ -35,18 +26,6 @@ type CachedWeatherRecord = {
 
 const WEATHER_REFRESH_MS = 60 * 60 * 1000;
 const WEATHER_CACHE_KEY = "dashboard-weather-cache-v1";
-
-function describeWeather(code: number): { label: string; Icon: typeof Sun } {
-  if (code === 0) return { label: "Clear sky", Icon: Sun };
-  if (code === 1 || code === 2) return { label: "Partly cloudy", Icon: CloudSun };
-  if (code === 3) return { label: "Overcast", Icon: Cloud };
-  if (code === 45 || code === 48) return { label: "Fog", Icon: CloudFog };
-  if ([51, 53, 55, 56, 57].includes(code)) return { label: "Drizzle", Icon: CloudDrizzle };
-  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return { label: "Rain", Icon: CloudRain };
-  if ([71, 73, 75, 77, 85, 86].includes(code)) return { label: "Snow", Icon: CloudSnow };
-  if ([95, 96, 99].includes(code)) return { label: "Thunderstorm", Icon: CloudLightning };
-  return { label: "Weather available", Icon: Cloud };
-}
 
 function isValidWeatherInfo(value: unknown): value is WeatherInfo {
   if (!value || typeof value !== "object" || Array.isArray(value)) {

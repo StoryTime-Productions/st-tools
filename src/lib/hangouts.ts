@@ -13,6 +13,7 @@ export interface HangoutSummary {
 }
 
 export interface HangoutDetail extends HangoutSummary {
+  weatherBufferMinutes: number;
   description: string | null;
   discordThreadUrl: string | null;
   proposerName: string | null;
@@ -58,6 +59,7 @@ export interface HangoutStopItem {
   title: string;
   address: string | null;
   lat: number | null;
+  lon: number | null;
   durationMinutes: number;
   arriveBy: string | null;
   notes: string | null;
@@ -71,6 +73,7 @@ const STOP_SELECT = {
   title: true,
   address: true,
   lat: true,
+  lon: true,
   durationMinutes: true,
   arriveBy: true,
   notes: true,
@@ -103,6 +106,7 @@ export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail
       coverImageUrl: true,
       status: true,
       startSlot: true,
+      weatherBufferMinutes: true,
       description: true,
       discordThreadUrl: true,
       availabilityDates: true,
