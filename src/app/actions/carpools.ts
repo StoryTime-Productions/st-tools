@@ -2,10 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { AttendanceStatus, HangoutStatus, Role } from "@prisma/client";
+import { AttendanceStatus, HangoutStatus, Role, type Prisma } from "@prisma/client";
+import { torontoToUtc } from "@/lib/calendar";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { prisma } from "@/lib/prisma";
-import { recomputeRoutes } from "@/lib/routes";
+import { recomputeRoutes, type CarSchedule, type Trip } from "@/lib/routes";
 import { locateAddress } from "@/lib/tomtom";
 
 export type CarpoolActionResult = { error: string } | { success: true };
@@ -52,6 +53,8 @@ async function ownedCar(carId: string) {
       driverId: true,
       startAddress: true,
       commonPoint: true,
+      hangout: { select: { status: true } },
+      riders: { select: { userId: true } },
       _count: { select: { riders: true } },
     },
   });
@@ -202,5 +205,59 @@ export async function recomputeRoutesAction(hangoutId: string): Promise<CarpoolA
   if (!uuid.safeParse(hangoutId).success) return { error: "Hangout not found" };
 
   await reroute(hangoutId);
+  return { success: true };
+}
+
+/** Local `YYYY-MM-DDTHH:mm` Toronto times, as a `datetime-local` input gives them. */
+const localTime = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Fill in every time");
+const tripSchema = z.object({
+  start: localTime,
+  end: localTime,
+  stops: z.record(z.string(), localTime),
+});
+
+const toInstant = (local: string) =>
+  torontoToUtc(
+    local.slice(0, 10),
+    Number(local.slice(11, 13)) * 60 + Number(local.slice(14))
+  ).toISOString();
+
+/** Typed trip times -> ISO, or the first problem. Needs a time for exactly the car's riders. */
+function toTrip(input: z.infer<typeof tripSchema>, riderIds: string[]): Trip | string {
+  if (input.end < input.start) return "A trip can't arrive before it leaves";
+  const stops: Record<string, string> = {};
+  for (const id of riderIds) {
+    if (!input.stops[id]) return "Fill in every pick-up and drop-off";
+    stops[id] = toInstant(input.stops[id]);
+  }
+  return { start: toInstant(input.start), end: toInstant(input.end), stops };
+}
+
+/** Driver/admin types a car's times when routing couldn't (M4); the next good recompute replaces them. */
+export async function setCarTimesAction(
+  carId: string,
+  values: { there: z.input<typeof tripSchema>; back: z.input<typeof tripSchema> }
+): Promise<CarpoolActionResult> {
+  const parsed = z.object({ there: tripSchema, back: tripSchema }).safeParse(values);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const owned = await ownedCar(carId);
+  if (!owned.car) return { error: owned.error };
+  const { car } = owned;
+  if (car.hangout.status !== HangoutStatus.SCHEDULED)
+    return { error: "This hangout isn't scheduled" };
+
+  const riderIds = car.riders.map((rider) => rider.userId);
+  const there = toTrip(parsed.data.there, riderIds);
+  const back = toTrip(parsed.data.back, riderIds);
+  if (typeof there === "string") return { error: there };
+  if (typeof back === "string") return { error: back };
+
+  const schedule: CarSchedule = { there, back, manual: true };
+  await prisma.hangoutCar.update({
+    where: { id: car.id },
+    data: { schedule: schedule as unknown as Prisma.InputJsonValue },
+  });
+  revalidatePath(`/hub/hangouts/${car.hangoutId}`);
   return { success: true };
 }

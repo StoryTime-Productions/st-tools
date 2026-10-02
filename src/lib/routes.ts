@@ -11,7 +11,7 @@ export interface Trip {
   stops: Record<string, string>;
 }
 
-export type CarSchedule = { there: Trip; back: Trip } | { error: string };
+export type CarSchedule = { there: Trip; back: Trip; manual?: true } | { error: string };
 
 const located = (lat: number | null, lon: number | null): Point | null =>
   lat === null || lon === null ? null : { lat, lon };
@@ -31,6 +31,7 @@ export async function recomputeRoutes(hangoutId: string) {
       cars: {
         select: {
           id: true,
+          schedule: true,
           startLat: true,
           startLon: true,
           commonLat: true,
@@ -64,7 +65,18 @@ export async function recomputeRoutes(hangoutId: string) {
   const last = placed[placed.length - 1];
 
   for (const car of hangout.cars) {
-    const schedule = await routeCar(car, first, last, instant);
+    const routed = await routeCar(car, first, last, instant);
+    // Manual times are only a fallback (M6): keep them when routing fails and they still cover every rider.
+    const kept = car.schedule as CarSchedule | null;
+    const schedule =
+      "error" in routed &&
+      kept &&
+      "manual" in kept &&
+      car.riders.every(
+        (rider) => rider.userId in kept.there.stops && rider.userId in kept.back.stops
+      )
+        ? kept
+        : routed;
     await prisma.hangoutCar.update({
       where: { id: car.id },
       data: { schedule: schedule as unknown as Prisma.InputJsonValue },
@@ -73,6 +85,7 @@ export async function recomputeRoutes(hangoutId: string) {
 }
 
 type RoutableCar = {
+  schedule?: unknown;
   startLat: number | null;
   startLon: number | null;
   commonLat: number | null;
