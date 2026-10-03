@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AvailabilityGrid } from "@/app/hub/hangouts/[hangoutId]/_components/availability-grid";
 import { AvailabilitySetup } from "@/app/hub/hangouts/[hangoutId]/_components/availability-setup";
 import { Carpools } from "@/app/hub/hangouts/[hangoutId]/_components/carpools";
+import { Costs } from "@/app/hub/hangouts/[hangoutId]/_components/costs";
 import { CommuteMap } from "@/app/hub/hangouts/[hangoutId]/_components/commute-map";
 import { Itinerary } from "@/app/hub/hangouts/[hangoutId]/_components/itinerary";
 import { LockedIn, RankedSlots } from "@/app/hub/hangouts/[hangoutId]/_components/lock-in";
@@ -15,7 +16,7 @@ import { ProjectCoverEditor } from "@/app/hub/projects/[projectId]/_components/p
 import { dayLabel, hourLabel, todayKey, torontoInputValue } from "@/lib/calendar";
 import { rankRuns } from "@/lib/availability";
 import { getCurrentUser } from "@/lib/get-current-user";
-import { getAvailabilityResponses, getHangoutDetail } from "@/lib/hangouts";
+import { getAvailabilityResponses, getHangoutDetail, getMemberOptions } from "@/lib/hangouts";
 import { HANGOUT_STATUS_LABEL } from "@/lib/hub-format";
 import { buildCommuteMap } from "@/lib/commute-map";
 import { scheduleStops, timeText } from "@/lib/itinerary";
@@ -33,6 +34,11 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
   const collecting = hangout.status === "COLLECTING";
   const hasDates = hangout.availabilityDates.length > 0;
   const responses = hasDates ? await getAvailabilityResponses(hangout.id) : [];
+  const scheduled = hangout.status === "SCHEDULED";
+  const going = hangout.attendees.filter((attendee) => attendee.status === "GOING").length;
+  const headcount = scheduled ? going : responses.length;
+  const showCosts = canEdit || hangout.costs.length > 0;
+  const members = canEdit ? await getMemberOptions() : [];
   const startSlot = hangout.status === "SCHEDULED" ? hangout.startSlot : null;
   const { times } = scheduleStops(startSlot, hangout.stops);
   const weather =
@@ -198,6 +204,8 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
               stops={hangout.stops}
               canEdit={canEdit}
               weather={weather}
+              costs={hangout.costs}
+              headcount={headcount}
             />
           </CardContent>
         </Card>
@@ -245,6 +253,30 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
                 going: hangout.attendees.some(
                   (attendee) => attendee.userId === user.id && attendee.status === "GOING"
                 ),
+              }}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {showCosts ? (
+        <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
+          <CardHeader>
+            <CardTitle className="text-base">Costs</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Costs
+              hangoutId={hangout.id}
+              items={hangout.costs}
+              members={members}
+              scheduled={scheduled}
+              headcount={headcount}
+              canEdit={canEdit}
+              viewer={{
+                id: user.id,
+                isAdmin: user.role === "ADMIN",
+                status:
+                  hangout.attendees.find((attendee) => attendee.userId === user.id)?.status ?? null,
               }}
             />
           </CardContent>

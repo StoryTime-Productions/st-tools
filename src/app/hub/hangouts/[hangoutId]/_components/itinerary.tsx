@@ -33,6 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { estimateCents } from "@/lib/costs";
 import type { HangoutStopItem } from "@/lib/hangouts";
 import { scheduleStops, timeText } from "@/lib/itinerary";
 import type { StopWeather } from "@/lib/weather";
@@ -45,6 +46,13 @@ const STOP_TYPES: Array<[StopType, string]> = [
   ["POINT_OF_INTEREST", "Point of interest"],
   ["BREAK", "Break"],
 ];
+export interface StopCost {
+  id: string;
+  title: string;
+  amountCents: number;
+}
+
+const NO_COST = "none";
 const TYPE_LABEL = Object.fromEntries(STOP_TYPES) as Record<StopType, string>;
 
 function duration(minutes: number) {
@@ -77,12 +85,17 @@ export function Itinerary({
   stops,
   canEdit,
   weather = [],
+  costs = [],
+  headcount = 0,
 }: {
   hangoutId: string;
   startSlot: string | null;
   stops: HangoutStopItem[];
   canEdit: boolean;
   weather?: StopWeather[];
+  costs?: StopCost[];
+  /** People the cost items are split across (Going, or those who answered before lock-in). */
+  headcount?: number;
 }) {
   const [isPending, run] = useRun();
   const { times, end } = scheduleStops(startSlot, stops);
@@ -96,6 +109,8 @@ export function Itinerary({
         <ol className="space-y-3">
           {stops.map((stop, index) => {
             const time = times[index];
+            const linked = costs.find((cost) => cost.id === stop.costItemId);
+            const cash = linked ? estimateCents(linked.amountCents, headcount) : stop.cashCents;
             return (
               <li key={stop.id} className="space-y-1 rounded-2xl border px-4 py-3 text-sm">
                 <div className="flex flex-wrap items-start justify-between gap-2">
@@ -134,7 +149,7 @@ export function Itinerary({
                       >
                         <ArrowDown />
                       </Button>
-                      <StopDialog hangoutId={hangoutId} stop={stop} />
+                      <StopDialog hangoutId={hangoutId} stop={stop} costs={costs} />
                       <Button
                         size="icon"
                         variant="ghost"
@@ -162,12 +177,14 @@ export function Itinerary({
                     ) : null}
                   </p>
                 ) : null}
-                {stop.bring || stop.cashCents ? (
+                {stop.bring || cash ? (
                   <p>
                     <span className="text-muted-foreground">Bring:</span>{" "}
                     {[
                       stop.bring,
-                      stop.cashCents ? `$${(stop.cashCents / 100).toFixed(2)} cash each` : null,
+                      cash
+                        ? `${linked ? "about " : ""}$${(cash / 100).toFixed(2)} cash each`
+                        : null,
                     ]
                       .filter(Boolean)
                       .join(" · ")}
@@ -184,13 +201,21 @@ export function Itinerary({
           Ends {timeText({ at: end, lateBy: 0 }, startDay)}
         </p>
       ) : null}
-      {canEdit ? <StopDialog hangoutId={hangoutId} /> : null}
+      {canEdit ? <StopDialog hangoutId={hangoutId} costs={costs} /> : null}
       {weather.length > 0 ? <WeatherCredit /> : null}
     </div>
   );
 }
 
-function StopDialog({ hangoutId, stop }: { hangoutId: string; stop?: HangoutStopItem }) {
+function StopDialog({
+  hangoutId,
+  stop,
+  costs,
+}: {
+  hangoutId: string;
+  stop?: HangoutStopItem;
+  costs: StopCost[];
+}) {
   const initial = () => ({
     type: stop?.type ?? ("LOCATION" as StopType),
     title: stop?.title ?? "",
@@ -201,6 +226,7 @@ function StopDialog({ hangoutId, stop }: { hangoutId: string; stop?: HangoutStop
     notes: stop?.notes ?? "",
     bring: stop?.bring ?? "",
     cash: stop?.cashCents ? (stop.cashCents / 100).toFixed(2) : "",
+    costItemId: stop?.costItemId ?? NO_COST,
   });
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(initial);
@@ -221,6 +247,7 @@ function StopDialog({ hangoutId, stop }: { hangoutId: string; stop?: HangoutStop
       notes: form.notes,
       bring: form.bring,
       cashCents: form.cash ? Math.round(Number(form.cash) * 100) : null,
+      costItemId: form.costItemId === NO_COST ? null : form.costItemId,
     };
     run(
       () => (stop ? updateStopAction(stop.id, values) : addStopAction(hangoutId, values)),
@@ -333,9 +360,31 @@ function StopDialog({ hangoutId, stop }: { hangoutId: string; stop?: HangoutStop
                 step={0.01}
                 value={form.cash}
                 onChange={set("cash")}
+                disabled={form.costItemId !== NO_COST}
               />
             </div>
           </div>
+          {costs.length > 0 ? (
+            <div className="space-y-2">
+              <Label>Cost item (sets the cash each)</Label>
+              <Select
+                value={form.costItemId}
+                onValueChange={(costItemId) => setForm({ ...form, costItemId })}
+              >
+                <SelectTrigger aria-label="Cost item" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_COST}>None (use the cash field)</SelectItem>
+                  {costs.map((cost) => (
+                    <SelectItem key={cost.id} value={cost.id}>
+                      {cost.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
           <div className="space-y-2">
             <Label htmlFor={id("notes")}>Notes (optional)</Label>
             <Textarea id={id("notes")} value={form.notes} onChange={set("notes")} rows={3} />

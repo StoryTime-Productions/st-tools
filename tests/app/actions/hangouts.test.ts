@@ -37,6 +37,8 @@ async function loadModule() {
       findFirst: vi.fn(),
     },
     hangoutCar: { deleteMany: vi.fn() },
+    hangoutCostShare: { deleteMany: vi.fn() },
+    hangoutCost: { findFirst: vi.fn() },
     hangoutRider: { deleteMany: vi.fn() },
     hangoutAttendee: {
       deleteMany: vi.fn(),
@@ -64,6 +66,8 @@ async function loadModule() {
   vi.doMock("@/lib/tomtom", () => ({ locateAddress }));
   const recomputeRoutes = vi.fn();
   vi.doMock("@/lib/routes", () => ({ recomputeRoutes }));
+  const resplitCosts = vi.fn();
+  vi.doMock("@/lib/cost-shares", () => ({ resplitCosts }));
   const uploadCover = vi.fn();
   vi.doMock("next/cache", () => ({ revalidatePath }));
   vi.doMock("@/lib/get-current-user", () => ({ getCurrentUser }));
@@ -78,6 +82,7 @@ async function loadModule() {
     uploadCover,
     locateAddress,
     recomputeRoutes,
+    resplitCosts,
   };
 }
 
@@ -424,6 +429,7 @@ describe("hangout actions", () => {
         { hangoutId: HANGOUT_ID, userId: member.id, status: "MAYBE" },
       ],
     });
+    expect(mod.resplitCosts).toHaveBeenCalledWith(HANGOUT_ID);
     expect(mod.revalidatePath).toHaveBeenCalledWith(`/hub/hangouts/${HANGOUT_ID}`);
 
     await expect(
@@ -462,6 +468,9 @@ describe("hangout actions", () => {
     });
     expect(mod.prisma.hangoutCar.deleteMany).toHaveBeenCalledWith({
       where: { hangoutId: HANGOUT_ID },
+    });
+    expect(mod.prisma.hangoutCostShare.deleteMany).toHaveBeenCalledWith({
+      where: { cost: { hangoutId: HANGOUT_ID } },
     });
 
     mod.prisma.hangout.updateMany.mockResolvedValueOnce({ count: 0 });
@@ -520,6 +529,7 @@ describe("hangout actions", () => {
       create: { ...key, status: "NOT_GOING" },
       update: { status: "NOT_GOING" },
     });
+    expect(mod.resplitCosts).toHaveBeenCalledWith(HANGOUT_ID);
     expect(mod.revalidatePath).toHaveBeenCalledWith(`/hub/hangouts/${HANGOUT_ID}`);
     expect(mod.prisma.hangoutRider.deleteMany).toHaveBeenCalledWith({ where: key });
     expect(mod.prisma.hangoutCar.deleteMany).toHaveBeenCalledWith({
@@ -585,6 +595,7 @@ describe("hangout actions", () => {
         notes: null,
         bring: "ID",
         cashCents: 2500,
+        costItemId: null,
         hangoutId: HANGOUT_ID,
         position: 3,
       },
@@ -635,6 +646,39 @@ describe("hangout actions", () => {
     ]) {
       await expect(result).resolves.toEqual({ error: "Forbidden: Admin access required" });
     }
+  });
+
+  it("links a stop to a cost item of the same hangout and drops the typed cash", async () => {
+    const COST_ID = "77777777-7777-4777-8777-777777777777";
+    const mod = await loadModule();
+    mod.prisma.hangoutCost.findFirst.mockResolvedValueOnce({ id: COST_ID });
+
+    await expect(
+      mod.addStopAction(HANGOUT_ID, { ...stopValues, costItemId: COST_ID })
+    ).resolves.toEqual({ success: true });
+    expect(mod.prisma.hangoutCost.findFirst).toHaveBeenCalledWith({
+      where: { id: COST_ID, hangoutId: HANGOUT_ID },
+      select: { id: true },
+    });
+    expect(mod.prisma.hangoutStop.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ cashCents: null, costItemId: COST_ID }),
+    });
+
+    mod.prisma.hangoutCost.findFirst.mockResolvedValueOnce(null);
+    await expect(
+      mod.addStopAction(HANGOUT_ID, { ...stopValues, costItemId: COST_ID })
+    ).resolves.toEqual({ error: "Cost item not found" });
+
+    mod.prisma.hangoutStop.findFirst.mockResolvedValue({
+      id: STOP_ID,
+      hangoutId: HANGOUT_ID,
+      position: 1,
+      address: null,
+    });
+    mod.prisma.hangoutCost.findFirst.mockResolvedValueOnce(null);
+    await expect(
+      mod.updateStopAction(STOP_ID, { ...stopValues, costItemId: COST_ID })
+    ).resolves.toEqual({ error: "Cost item not found" });
   });
 
   it("updates a stop and only re-geocodes a changed address", async () => {

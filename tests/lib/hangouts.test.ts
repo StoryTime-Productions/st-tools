@@ -76,8 +76,26 @@ describe("hangout data loaders", () => {
             ],
           },
         ],
+        costs: [
+          {
+            id: "c1",
+            title: "Dinner",
+            amountCents: 6000,
+            notes: null,
+            collector: { id: "a", name: "Alice", email: "a@x.gg" },
+            shares: [
+              {
+                amountCents: 2000,
+                paidCents: 0,
+                status: "UNPAID",
+                method: null,
+                user: { id: "b", name: null, email: "b@x.gg" },
+              },
+            ],
+          },
+        ],
       })
-      .mockResolvedValueOnce({ ...base, idea: null, attendees: [], cars: [] });
+      .mockResolvedValueOnce({ ...base, idea: null, attendees: [], cars: [], costs: [] });
 
     await expect(getHangoutDetail("h1")).resolves.toEqual({
       ...base,
@@ -111,13 +129,45 @@ describe("hangout data loaders", () => {
           ],
         },
       ],
+      costs: [
+        {
+          id: "c1",
+          title: "Dinner",
+          amountCents: 6000,
+          notes: null,
+          collector: { userId: "a", name: "Alice" },
+          shares: [
+            {
+              userId: "b",
+              name: "b@x.gg",
+              amountCents: 2000,
+              paidCents: 0,
+              status: "UNPAID",
+              method: null,
+            },
+          ],
+        },
+      ],
     });
     await expect(getHangoutDetail("h1")).resolves.toEqual({
       ...base,
       proposerName: null,
       attendees: [],
       cars: [],
+      costs: [],
     });
+  });
+
+  it("lists members by name, falling back to email", async () => {
+    const { getMemberOptions, prisma } = await loadHangoutsLib();
+    prisma.user.findMany.mockResolvedValue([
+      { id: "a", name: "Alice", email: "a@x.gg" },
+      { id: "b", name: null, email: "b@x.gg" },
+    ]);
+    await expect(getMemberOptions()).resolves.toEqual([
+      { id: "a", name: "Alice" },
+      { id: "b", name: "b@x.gg" },
+    ]);
   });
 
   it("lists open ideas with linked accounts preferred over Discord names", async () => {
