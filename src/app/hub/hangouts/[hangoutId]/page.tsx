@@ -124,7 +124,10 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
       ) : null}
 
       {collecting || hasDates ? (
-        <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
+        <Card
+          id="availability"
+          className="border-border/70 bg-background/85 rounded-3xl shadow-none"
+        >
           <CardHeader>
             <CardTitle className="text-base">Availability</CardTitle>
           </CardHeader>
@@ -202,7 +205,7 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
       ) : null}
 
       {canEdit || hangout.stops.length > 0 ? (
-        <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
+        <Card id="itinerary" className="border-border/70 bg-background/85 rounded-3xl shadow-none">
           <CardHeader>
             <CardTitle className="text-base">Itinerary</CardTitle>
           </CardHeader>
@@ -243,7 +246,7 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
       ) : null}
 
       {hangout.status === "SCHEDULED" ? (
-        <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
+        <Card id="carpools" className="border-border/70 bg-background/85 rounded-3xl shadow-none">
           <CardHeader>
             <CardTitle className="text-base">Carpools</CardTitle>
           </CardHeader>
@@ -271,7 +274,7 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
       ) : null}
 
       {showCosts ? (
-        <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
+        <Card id="costs" className="border-border/70 bg-background/85 rounded-3xl shadow-none">
           <CardHeader>
             <CardTitle className="text-base">Costs</CardTitle>
           </CardHeader>

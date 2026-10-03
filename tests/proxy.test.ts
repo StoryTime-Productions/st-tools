@@ -164,4 +164,20 @@ describe("proxy", () => {
     expect(redirect).not.toHaveBeenCalled();
     expect(result).toBe(response);
   });
+
+  it("lets the bot API answer 401 itself instead of redirecting", async () => {
+    const { proxy, getSupabaseConfig, createServerClient, next, redirect } =
+      await loadProxyModule();
+    const response = { cookies: { set: vi.fn() } };
+    next.mockReturnValue(response);
+    getSupabaseConfig.mockReturnValue({ url: "https://example.supabase.co", anonKey: "anon" });
+    createServerClient.mockReturnValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
+    });
+
+    const result = await proxy(createRequest("/api/bot/attendance") as never);
+
+    expect(redirect).not.toHaveBeenCalled();
+    expect(result).toBe(response);
+  });
 });

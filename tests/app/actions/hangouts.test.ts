@@ -71,6 +71,13 @@ async function loadModule() {
   const uploadCover = vi.fn();
   const hangoutEnded = vi.fn().mockResolvedValue(false);
   vi.doMock("@/lib/hangouts", () => ({ hangoutEnded }));
+  const announceHangout = vi.fn();
+  const announceCancel = vi.fn();
+  const announceLockIn = vi.fn();
+  const queueUpdate = vi.fn();
+  vi.doMock("@/lib/hangout-updates", () => ({ announceCancel, announceLockIn, queueUpdate }));
+  const renameHangoutThread = vi.fn();
+  vi.doMock("@/lib/hangout-discord", () => ({ announceHangout, renameHangoutThread }));
   vi.doMock("next/cache", () => ({ revalidatePath }));
   vi.doMock("@/lib/get-current-user", () => ({ getCurrentUser }));
   vi.doMock("@/lib/prisma", () => ({ prisma }));
@@ -86,6 +93,11 @@ async function loadModule() {
     recomputeRoutes,
     resplitCosts,
     hangoutEnded,
+    announceHangout,
+    renameHangoutThread,
+    announceCancel,
+    announceLockIn,
+    queueUpdate,
   };
 }
 
@@ -104,6 +116,7 @@ describe("hangout actions", () => {
       data: { title: "Beach day", description: null, discordThreadUrl: THREAD },
       select: { id: true },
     });
+    expect(mod.announceHangout).toHaveBeenCalledWith(HANGOUT_ID);
     expect(mod.revalidatePath).toHaveBeenCalledWith("/hub");
     expect(mod.revalidatePath).toHaveBeenCalledWith(`/hub/hangouts/${HANGOUT_ID}`);
   });
@@ -167,11 +180,14 @@ describe("hangout actions", () => {
       where: { id: HANGOUT_ID },
       data: { status: "CANCELLED" },
     });
+    expect(mod.announceCancel).toHaveBeenCalledWith(HANGOUT_ID);
+    mod.announceCancel.mockClear();
     await expect(mod.cancelHangoutAction("bad")).resolves.toHaveProperty("error");
 
     mod.prisma.hangout.updateMany.mockResolvedValue({ count: 0 });
     const missing = { error: "Hangout not found" };
     await expect(mod.cancelHangoutAction(HANGOUT_ID)).resolves.toEqual(missing);
+    expect(mod.announceCancel).toHaveBeenCalledTimes(0);
     await expect(
       mod.updateHangoutAction({
         hangoutId: HANGOUT_ID,
@@ -249,6 +265,7 @@ describe("hangout actions", () => {
       data: { hangoutId: HANGOUT_ID },
     });
     expect(mod.revalidatePath).toHaveBeenCalledWith("/hub/ideas");
+    expect(mod.announceHangout).toHaveBeenCalledWith(HANGOUT_ID);
 
     const gone = { error: "Idea not found or already promoted" };
     mod.prisma.hangoutIdea.updateMany.mockResolvedValueOnce({ count: 0 });
@@ -433,6 +450,8 @@ describe("hangout actions", () => {
       ],
     });
     expect(mod.resplitCosts).toHaveBeenCalledWith(HANGOUT_ID);
+    expect(mod.renameHangoutThread).toHaveBeenCalledWith(HANGOUT_ID);
+    expect(mod.announceLockIn).toHaveBeenCalledWith(HANGOUT_ID);
     expect(mod.revalidatePath).toHaveBeenCalledWith(`/hub/hangouts/${HANGOUT_ID}`);
 
     await expect(
@@ -637,6 +656,7 @@ describe("hangout actions", () => {
     });
     expect(mod.revalidatePath).toHaveBeenCalledWith(`/hub/hangouts/${HANGOUT_ID}`);
     expect(mod.recomputeRoutes).toHaveBeenCalledWith(HANGOUT_ID);
+    expect(mod.queueUpdate).toHaveBeenCalledWith(HANGOUT_ID, "Itinerary", "—", "Added Dinner");
 
     mod.prisma.hangout.findFirst.mockResolvedValueOnce({ stops: [] });
     await mod.addStopAction(HANGOUT_ID, { ...stopValues, address: null });
@@ -718,7 +738,13 @@ describe("hangout actions", () => {
 
   it("updates a stop and only re-geocodes a changed address", async () => {
     const mod = await loadModule();
-    const stop = { id: STOP_ID, hangoutId: HANGOUT_ID, position: 1, address: "290 bremner" };
+    const stop = {
+      id: STOP_ID,
+      hangoutId: HANGOUT_ID,
+      position: 1,
+      address: "290 bremner",
+      title: "Dinner",
+    };
     mod.prisma.hangoutStop.findFirst.mockResolvedValue(stop);
 
     await expect(mod.updateStopAction(STOP_ID, stopValues)).resolves.toEqual({ success: true });
@@ -728,6 +754,19 @@ describe("hangout actions", () => {
       data: expect.objectContaining({ title: "Dinner", address: "290 bremner" }),
     });
     expect(mod.prisma.hangoutStop.update.mock.calls[0][0].data).not.toHaveProperty("lat");
+    expect(mod.queueUpdate).toHaveBeenLastCalledWith(
+      HANGOUT_ID,
+      "Itinerary",
+      "Dinner",
+      "details changed"
+    );
+    await mod.updateStopAction(STOP_ID, { ...stopValues, title: "Late supper" });
+    expect(mod.queueUpdate).toHaveBeenLastCalledWith(
+      HANGOUT_ID,
+      "Itinerary",
+      "Dinner",
+      "Late supper"
+    );
 
     mod.locateAddress.mockResolvedValueOnce({ error: NO_MATCH });
     await expect(
@@ -748,11 +787,18 @@ describe("hangout actions", () => {
 
   it("deletes stops and swaps positions with the neighbour when moving", async () => {
     const mod = await loadModule();
-    const stop = { id: STOP_ID, hangoutId: HANGOUT_ID, position: 1, address: null };
+    const stop = {
+      id: STOP_ID,
+      hangoutId: HANGOUT_ID,
+      position: 1,
+      address: null,
+      title: "Dinner",
+    };
     mod.prisma.hangoutStop.findFirst.mockResolvedValue(stop);
 
     await expect(mod.deleteStopAction(STOP_ID)).resolves.toEqual({ success: true });
     expect(mod.prisma.hangoutStop.delete).toHaveBeenCalledWith({ where: { id: STOP_ID } });
+    expect(mod.queueUpdate).toHaveBeenLastCalledWith(HANGOUT_ID, "Itinerary", "Dinner", "removed");
     expect(mod.recomputeRoutes).toHaveBeenCalledWith(HANGOUT_ID);
 
     mod.prisma.hangoutStop.findFirst
@@ -773,6 +819,7 @@ describe("hangout actions", () => {
       data: { position: 1 },
     });
 
+    expect(mod.queueUpdate).toHaveBeenLastCalledWith(HANGOUT_ID, "Itinerary", "Dinner", "moved up");
     mod.prisma.hangoutStop.update.mockClear();
     mod.prisma.hangoutStop.findFirst.mockResolvedValueOnce(stop).mockResolvedValueOnce(null);
     await expect(mod.moveStopAction(STOP_ID, 1)).resolves.toEqual({ success: true });
@@ -780,6 +827,12 @@ describe("hangout actions", () => {
       expect.objectContaining({ where: { hangoutId: HANGOUT_ID, position: { gt: 1 } } })
     );
     expect(mod.prisma.hangoutStop.update).not.toHaveBeenCalled();
+    mod.queueUpdate.mockClear();
+    mod.prisma.hangoutStop.findFirst
+      .mockResolvedValueOnce(stop)
+      .mockResolvedValueOnce({ id: "s2", position: 2 });
+    await mod.moveStopAction(STOP_ID, 1);
+    expect(mod.queueUpdate).toHaveBeenCalledWith(HANGOUT_ID, "Itinerary", "Dinner", "moved down");
 
     mod.prisma.hangoutStop.findFirst.mockResolvedValue(null);
     await expect(mod.deleteStopAction(STOP_ID)).resolves.toEqual({

@@ -70,13 +70,17 @@ describe("payment actions", () => {
       embeds: [
         expect.objectContaining({
           title: "Payment sent",
-          description: "Bob says they paid $10.00 by e-Transfer for Pizza (Movie night).",
           url,
+          fields: [
+            { name: "From", value: "Bob", inline: true },
+            { name: "Item", value: "Pizza", inline: true },
+            { name: "Amount", value: "$10.00", inline: true },
+            { name: "Method", value: "e-Transfer", inline: true },
+          ],
         }),
       ],
-      linkButton: { label: "Confirm payment", url },
+      components: [{ type: 1, components: [{ type: 2, style: 5, label: "Review payment", url }] }],
     });
-    expect(mod.sendDiscordDm.mock.calls[0][1].embeds[0].description).not.toContain("**");
   });
 
   it("skips the DM when the collector is not linked, the share is stale, or the DM fails", async () => {

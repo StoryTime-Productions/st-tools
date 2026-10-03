@@ -5,6 +5,7 @@ import { z } from "zod";
 import { HangoutStatus, Role } from "@prisma/client";
 import { resplitCosts } from "@/lib/cost-shares";
 import { getCurrentUser } from "@/lib/get-current-user";
+import { money, queueUpdate } from "@/lib/hangout-updates";
 import { prisma } from "@/lib/prisma";
 
 export type CostActionResult = { error: string } | { success: true };
@@ -65,6 +66,12 @@ export async function addCostAction(
   await prisma.hangoutCost.create({
     data: { ...parsed.data, hangoutId, position: hangout._count.costs },
   });
+  await queueUpdate(
+    hangoutId,
+    "Costs",
+    "—",
+    `${parsed.data.title} ${money(parsed.data.amountCents)}`
+  );
   return settle(hangoutId);
 }
 
@@ -74,7 +81,12 @@ async function editableCost(costId: string) {
   if (!z.string().uuid().safeParse(costId).success) return { error: "Cost not found" } as const;
   const cost = await prisma.hangoutCost.findUnique({
     where: { id: costId },
-    select: { hangoutId: true, hangout: { select: { status: true } } },
+    select: {
+      hangoutId: true,
+      title: true,
+      amountCents: true,
+      hangout: { select: { status: true } },
+    },
   });
   if (!cost) return { error: "Cost not found" } as const;
   if (cost.hangout.status === HangoutStatus.CANCELLED) return { error: CLOSED } as const;
@@ -93,6 +105,13 @@ export async function updateCostAction(
   if (!(await collectorExists(parsed.data.collectorId))) return { error: "Collector not found" };
 
   await prisma.hangoutCost.update({ where: { id: costId }, data: parsed.data });
+  const { cost } = found;
+  await queueUpdate(
+    cost.hangoutId,
+    "Costs",
+    `${cost.title} ${money(cost.amountCents)}`,
+    `${parsed.data.title} ${money(parsed.data.amountCents)}`
+  );
   return settle(found.cost.hangoutId);
 }
 
@@ -101,5 +120,6 @@ export async function deleteCostAction(costId: string): Promise<CostActionResult
   if (!found.cost) return { error: found.error };
 
   await prisma.hangoutCost.delete({ where: { id: costId } });
+  await queueUpdate(found.cost.hangoutId, "Costs", found.cost.title, "removed");
   return settle(found.cost.hangoutId);
 }

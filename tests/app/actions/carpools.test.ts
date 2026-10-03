@@ -5,8 +5,18 @@ type Locate = typeof import("@/lib/tomtom").locateAddress;
 const HANGOUT_ID = "22222222-2222-4222-8222-222222222222";
 const CAR_ID = "77777777-7777-4777-8777-777777777777";
 const admin = { id: "33333333-3333-4333-8333-333333333333", role: "ADMIN" };
-const driver = { id: "44444444-4444-4444-8444-444444444444", role: "MEMBER" };
-const rider = { id: "55555555-5555-4555-8555-555555555555", role: "MEMBER" };
+const driver = {
+  id: "44444444-4444-4444-8444-444444444444",
+  role: "MEMBER",
+  name: "Dana",
+  email: "dana@x.test",
+};
+const rider = {
+  id: "55555555-5555-4555-8555-555555555555",
+  role: "MEMBER",
+  name: null,
+  email: "riley@x.test",
+};
 
 async function loadModule() {
   const revalidatePath = vi.fn();
@@ -31,7 +41,7 @@ async function loadModule() {
       findUnique: vi.fn().mockResolvedValue(null),
       upsert: vi.fn(),
       updateMany: vi.fn(),
-      deleteMany: vi.fn(),
+      deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
   };
@@ -40,6 +50,11 @@ async function loadModule() {
   vi.doMock("@/lib/prisma", () => ({ prisma }));
   vi.doMock("@/lib/tomtom", () => ({ locateAddress }));
   const recomputeRoutes = vi.fn();
+  const queueUpdate = vi.fn();
+  vi.doMock("@/lib/hangout-updates", async (importActual) => ({
+    ...(await importActual<typeof import("@/lib/hangout-updates")>()),
+    queueUpdate,
+  }));
   vi.doMock("@/lib/routes", () => ({ recomputeRoutes }));
   const hangoutEnded = vi.fn().mockResolvedValue(false);
   vi.doMock("@/lib/hangouts", () => ({ hangoutEnded }));
@@ -52,6 +67,7 @@ async function loadModule() {
     locateAddress,
     recomputeRoutes,
     hangoutEnded,
+    queueUpdate,
   };
 }
 
@@ -61,6 +77,7 @@ const ownedCar = (overrides = {}) => ({
   driverId: driver.id,
   startAddress: null,
   commonPoint: "Union Station",
+  driver: { name: null, email: "dana@x.test" },
   _count: { riders: 2 },
   ...overrides,
 });
@@ -102,6 +119,12 @@ describe("carpool actions", () => {
     });
     expect(mod.revalidatePath).toHaveBeenCalledWith(`/hub/hangouts/${HANGOUT_ID}`);
     expect(mod.recomputeRoutes).toHaveBeenCalledWith(HANGOUT_ID);
+    expect(mod.queueUpdate).toHaveBeenCalledWith(
+      HANGOUT_ID,
+      "Carpools",
+      "—",
+      "Dana offers a car (3 seats)"
+    );
 
     mod.prisma.hangoutCar.findFirst.mockResolvedValueOnce({ id: CAR_ID });
     await expect(mod.offerCarAction(HANGOUT_ID, 3)).resolves.toEqual({
@@ -225,6 +248,7 @@ describe("carpool actions", () => {
       seats: 2,
       commonPoint: "Union Station",
       riders: [{ userId: "someone" }],
+      driver: { name: "Dana", email: "dana@x.test" },
     };
     mod.prisma.hangoutCar.findUnique.mockResolvedValue(car);
     const key = { hangoutId: HANGOUT_ID, userId: rider.id };
@@ -235,6 +259,12 @@ describe("carpool actions", () => {
       create: { ...key, carId: CAR_ID, atCommonPoint: true },
       update: { carId: CAR_ID, atCommonPoint: true },
     });
+    expect(mod.queueUpdate).toHaveBeenCalledWith(
+      HANGOUT_ID,
+      "Carpools",
+      "—",
+      "riley rides with Dana"
+    );
 
     mod.prisma.hangoutCar.findUnique.mockResolvedValue({
       ...car,
@@ -292,6 +322,11 @@ describe("carpool actions", () => {
     expect(mod.prisma.hangoutRider.deleteMany).toHaveBeenCalledWith({
       where: { hangoutId: HANGOUT_ID, userId: rider.id },
     });
+    expect(mod.queueUpdate).toHaveBeenCalledWith(HANGOUT_ID, "Carpools", "riley", "left their car");
+    mod.queueUpdate.mockClear();
+    mod.prisma.hangoutRider.deleteMany.mockResolvedValueOnce({ count: 0 });
+    await mod.leaveCarAction(HANGOUT_ID);
+    expect(mod.queueUpdate).toHaveBeenCalledTimes(0);
     await expect(mod.leaveCarAction("nope")).resolves.toEqual({ error: "Hangout not found" });
     mod.getCurrentUser.mockResolvedValue(null);
     await expect(mod.leaveCarAction(HANGOUT_ID)).resolves.toEqual({ error: "Unauthorized" });

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { AttendanceStatus, HangoutStatus, Role, type Prisma } from "@prisma/client";
 import { torontoToUtc } from "@/lib/calendar";
 import { getCurrentUser } from "@/lib/get-current-user";
+import { queueUpdate } from "@/lib/hangout-updates";
 import { hangoutEnded } from "@/lib/hangouts";
 import { prisma } from "@/lib/prisma";
 import { recomputeRoutes, type CarSchedule, type Trip } from "@/lib/routes";
@@ -19,6 +20,9 @@ const ENDED = "This hangout has already ended";
 const NOT_YOURS = "Only the driver or an admin can change this car";
 
 const uuid = z.string().uuid();
+
+const personName = (user: { name: string | null; email: string }) =>
+  user.name ?? user.email.split("@")[0];
 const seatsSchema = z.number().int().min(1, "At least 1 seat").max(12, "12 seats or fewer");
 
 async function reroute(hangoutId: string) {
@@ -57,6 +61,7 @@ async function ownedCar(carId: string) {
       driverId: true,
       startAddress: true,
       commonPoint: true,
+      driver: { select: { name: true, email: true } },
       hangout: { select: { status: true } },
       riders: { select: { userId: true } },
       _count: { select: { riders: true } },
@@ -87,6 +92,12 @@ export async function offerCarAction(
   await prisma.hangoutCar.create({
     data: { hangoutId, driverId: going.user.id, seats: parsedSeats.data },
   });
+  await queueUpdate(
+    hangoutId,
+    "Carpools",
+    "—",
+    `${personName(going.user)} offers a car (${parsedSeats.data} seats)`
+  );
   await reroute(hangoutId);
   return { success: true };
 }
@@ -146,6 +157,12 @@ export async function removeCarAction(carId: string): Promise<CarpoolActionResul
   if (!owned.car) return { error: owned.error };
 
   await prisma.hangoutCar.delete({ where: { id: owned.car.id } });
+  await queueUpdate(
+    owned.car.hangoutId,
+    "Carpools",
+    `${personName(owned.car.driver)}'s car`,
+    "removed"
+  );
   revalidatePath(`/hub/hangouts/${owned.car.hangoutId}`);
   return { success: true };
 }
@@ -157,7 +174,14 @@ export async function joinCarAction(
   if (!uuid.safeParse(carId).success) return { error: CAR_GONE };
   const car = await prisma.hangoutCar.findUnique({
     where: { id: carId },
-    select: { hangoutId: true, driverId: true, seats: true, commonPoint: true, riders: true },
+    select: {
+      hangoutId: true,
+      driverId: true,
+      seats: true,
+      commonPoint: true,
+      riders: true,
+      driver: { select: { name: true, email: true } },
+    },
   });
   if (!car) return { error: CAR_GONE };
 
@@ -178,6 +202,13 @@ export async function joinCarAction(
     create: { ...key, ...data },
     update: data,
   });
+  if (!alreadyIn)
+    await queueUpdate(
+      car.hangoutId,
+      "Carpools",
+      "—",
+      `${personName(going.user)} rides with ${personName(car.driver)}`
+    );
   await reroute(car.hangoutId);
   return { success: true };
 }
@@ -187,7 +218,8 @@ export async function leaveCarAction(hangoutId: string): Promise<CarpoolActionRe
   if (!user) return { error: UNAUTHORIZED };
   if (!uuid.safeParse(hangoutId).success) return { error: "Hangout not found" };
 
-  await prisma.hangoutRider.deleteMany({ where: { hangoutId, userId: user.id } });
+  const left = await prisma.hangoutRider.deleteMany({ where: { hangoutId, userId: user.id } });
+  if (left.count > 0) await queueUpdate(hangoutId, "Carpools", personName(user), "left their car");
   await reroute(hangoutId);
   return { success: true };
 }
