@@ -1,4 +1,4 @@
-import type { HangoutStatus } from "@prisma/client";
+import type { HangoutPhase } from "@/lib/lifecycle";
 
 export function formatQuarter(quarter: string): string {
   const [year, q] = quarter.split("-");
@@ -62,9 +62,11 @@ export function sortBySoonestEnd<T extends Groupable>(projects: T[]): T[] {
   });
 }
 
-export const HANGOUT_STATUS_LABEL: Record<HangoutStatus, string> = {
+export const HANGOUT_STATUS_LABEL: Record<HangoutPhase, string> = {
   COLLECTING: "Collecting availability",
   SCHEDULED: "Scheduled",
+  SETTLING_UP: "Settling up",
+  DONE: "Done",
   CANCELLED: "Cancelled",
 };
 

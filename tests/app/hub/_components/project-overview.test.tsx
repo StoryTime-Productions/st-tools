@@ -51,8 +51,24 @@ const PROJECTS = [
 ];
 
 const HANGOUTS: HangoutSummary[] = [
-  { id: "h1", title: "Beach day", coverImageUrl: null, status: "COLLECTING", startSlot: null },
-  { id: "h2", title: "Bowling", coverImageUrl: null, status: "CANCELLED", startSlot: null },
+  {
+    id: "h1",
+    title: "Beach day",
+    coverImageUrl: null,
+    status: "COLLECTING",
+    startSlot: null,
+    phase: "COLLECTING",
+    unpaid: 0,
+  },
+  {
+    id: "h2",
+    title: "Bowling",
+    coverImageUrl: null,
+    status: "CANCELLED",
+    startSlot: null,
+    phase: "CANCELLED",
+    unpaid: 0,
+  },
 ];
 
 async function renderOverview(projects = PROJECTS, hangouts: HangoutSummary[] = []) {
@@ -190,12 +206,38 @@ describe("ProjectOverview", () => {
         title: "Picnic",
         coverImageUrl: null,
         status: "SCHEDULED",
+        phase: "SCHEDULED",
+        unpaid: 0,
         startSlot: "2026-08-15T12:00",
       },
     ]);
 
     fireEvent.click(screen.getByRole("button", { name: "By quarter" }));
     expect(screen.getByRole("region", { name: "Q3 2026" })).toHaveTextContent("Picnic");
+  });
+
+  it("keeps settling-up hangouts in the main list with an unpaid badge and files done ones under Past", async () => {
+    await renderOverview(PROJECTS, [
+      {
+        ...HANGOUTS[0],
+        id: "h4",
+        title: "Bonfire",
+        status: "SCHEDULED",
+        phase: "SETTLING_UP",
+        unpaid: 2,
+      },
+      { ...HANGOUTS[0], id: "h5", title: "Arcade", status: "SCHEDULED", phase: "DONE" },
+    ]);
+
+    expect(titles()).toContain("Bonfire");
+    expect(titles()).not.toContain("Arcade");
+    expect(screen.getByText("Settling up")).toBeInTheDocument();
+    expect(screen.getByText("2 unpaid")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Past" }));
+    expect(titles()).toContain("Arcade");
+    expect(screen.getByText("Done")).toBeInTheDocument();
+    expect(screen.queryByText(/unpaid/)).not.toBeInTheDocument();
   });
 
   it("separates hangouts from projects and remembers the layout", async () => {

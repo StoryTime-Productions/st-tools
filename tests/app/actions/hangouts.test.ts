@@ -69,6 +69,8 @@ async function loadModule() {
   const resplitCosts = vi.fn();
   vi.doMock("@/lib/cost-shares", () => ({ resplitCosts }));
   const uploadCover = vi.fn();
+  const hangoutEnded = vi.fn().mockResolvedValue(false);
+  vi.doMock("@/lib/hangouts", () => ({ hangoutEnded }));
   vi.doMock("next/cache", () => ({ revalidatePath }));
   vi.doMock("@/lib/get-current-user", () => ({ getCurrentUser }));
   vi.doMock("@/lib/prisma", () => ({ prisma }));
@@ -83,6 +85,7 @@ async function loadModule() {
     locateAddress,
     recomputeRoutes,
     resplitCosts,
+    hangoutEnded,
   };
 }
 
@@ -513,6 +516,38 @@ describe("hangout actions", () => {
     await expect(mod.setWeatherBufferAction(HANGOUT_ID, 10)).resolves.toEqual({
       error: "Forbidden: Admin access required",
     });
+  });
+
+  it("freezes attendance, reopening and itinerary edits once the hangout has ended", async () => {
+    const mod = await loadModule();
+    mod.hangoutEnded.mockResolvedValue(true);
+    mod.prisma.hangout.findUnique.mockResolvedValue({ status: "SCHEDULED" });
+    mod.prisma.hangout.findFirst.mockResolvedValue({ stops: [] });
+    mod.prisma.hangoutStop.findFirst.mockResolvedValue({
+      id: STOP_ID,
+      hangoutId: HANGOUT_ID,
+      position: 1,
+      address: null,
+    });
+    const ended = { error: "This hangout has already ended" };
+
+    mod.getCurrentUser.mockResolvedValue(member);
+    await expect(
+      mod.setAttendanceAction({ hangoutId: HANGOUT_ID, status: "GOING" })
+    ).resolves.toEqual(ended);
+
+    mod.getCurrentUser.mockResolvedValue(admin);
+    for (const result of [
+      mod.reopenAvailabilityAction(HANGOUT_ID),
+      mod.addStopAction(HANGOUT_ID, stopValues),
+      mod.updateStopAction(STOP_ID, stopValues),
+      mod.deleteStopAction(STOP_ID),
+      mod.moveStopAction(STOP_ID, 1),
+    ]) {
+      await expect(result).resolves.toEqual(ended);
+    }
+    expect(mod.prisma.hangoutAttendee.upsert).not.toHaveBeenCalled();
+    expect(mod.prisma.hangoutStop.delete).not.toHaveBeenCalled();
   });
 
   it("sets the caller's own attendance on a scheduled hangout", async () => {

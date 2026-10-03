@@ -26,6 +26,8 @@ const HANGOUT = {
   title: "Beach day",
   coverImageUrl: null,
   status: "COLLECTING",
+  phase: "COLLECTING",
+  unpaid: 0,
   description: "Bring sunscreen",
   discordThreadUrl: "https://discord.com/channels/1/2",
   proposerName: null,
@@ -445,6 +447,7 @@ describe("hub pages", () => {
     hangouts.getHangoutDetail.mockResolvedValueOnce({
       ...HANGOUT,
       status: "CANCELLED",
+      phase: "CANCELLED",
       description: null,
       discordThreadUrl: null,
       stops: [{ id: "s1" }],
@@ -477,6 +480,7 @@ describe("hub pages", () => {
     hangouts.getHangoutDetail.mockResolvedValueOnce({
       ...HANGOUT,
       status: "SCHEDULED",
+      phase: "SCHEDULED",
       startSlot: "2026-10-03T19:30",
       attendees: [
         { userId: "u1", name: "Ann", status: "GOING" },
@@ -585,6 +589,7 @@ describe("hub pages", () => {
     hangouts.getHangoutDetail.mockResolvedValueOnce({
       ...setUp,
       status: "SCHEDULED",
+      phase: "SCHEDULED",
       startSlot: "2026-10-02T19:00",
       attendees: [
         { userId: member.id, name: "M", status: "GOING" },
@@ -604,6 +609,7 @@ describe("hub pages", () => {
     hangouts.getHangoutDetail.mockResolvedValueOnce({
       ...setUp,
       status: "SCHEDULED",
+      phase: "SCHEDULED",
       startSlot: "2026-10-02T19:00",
       attendees: [{ userId: member.id, name: "M", status: "GOING" }],
     });
@@ -614,10 +620,42 @@ describe("hub pages", () => {
     hangouts.getHangoutDetail.mockResolvedValueOnce({
       ...setUp,
       status: "SCHEDULED",
+      phase: "SCHEDULED",
       startSlot: "2026-10-02T19:00",
     });
     render(await HangoutPage(params()));
     expect(screen.getAllByTestId("commute-map").at(-1)).toHaveTextContent("key");
     vi.unstubAllEnvs();
+  });
+
+  it("keeps an ended hangout readable, with an unpaid badge until settled", async () => {
+    const { HangoutPage, getCurrentUser, hangouts } = await loadHub();
+    const params = () => ({ params: Promise.resolve({ hangoutId: "h1" }) });
+    getCurrentUser.mockResolvedValue(admin);
+    const ended = {
+      ...HANGOUT,
+      status: "SCHEDULED",
+      startSlot: "2026-10-02T19:00",
+      availabilityDates: ["2026-10-02"],
+    };
+
+    hangouts.getHangoutDetail.mockResolvedValueOnce({
+      ...ended,
+      phase: "SETTLING_UP",
+      unpaid: 2,
+    });
+    const settling = render(await HangoutPage(params()));
+    expect(screen.getByText("Settling up")).toBeInTheDocument();
+    expect(screen.getByText("2 unpaid")).toBeInTheDocument();
+    expect(screen.getByTestId("itinerary")).toHaveTextContent("0 read-only");
+    expect(screen.getByTestId("locked-in")).not.toHaveTextContent("reopenable");
+    expect(screen.getByRole("button", { name: "Cancel hangout" })).toBeInTheDocument();
+    settling.unmount();
+
+    hangouts.getHangoutDetail.mockResolvedValueOnce({ ...ended, phase: "DONE", unpaid: 0 });
+    render(await HangoutPage(params()));
+    expect(screen.getByText("Done")).toBeInTheDocument();
+    expect(screen.queryByText(/unpaid/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancel hangout" })).not.toBeInTheDocument();
   });
 });

@@ -30,7 +30,9 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
   const hangout = await getHangoutDetail(hangoutId);
   if (!hangout) notFound();
 
-  const canEdit = user.role === "ADMIN" && hangout.status !== "CANCELLED";
+  const ended = hangout.phase === "SETTLING_UP" || hangout.phase === "DONE";
+  const canEdit =
+    user.role === "ADMIN" && hangout.phase !== "CANCELLED" && hangout.phase !== "DONE";
   const collecting = hangout.status === "COLLECTING";
   const hasDates = hangout.availabilityDates.length > 0;
   const responses = hasDates ? await getAvailabilityResponses(hangout.id) : [];
@@ -81,9 +83,14 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
           />
           <div className="space-y-2">
             <h2 className="text-2xl font-semibold tracking-tight">{hangout.title}</h2>
-            <Badge variant={hangout.status === "CANCELLED" ? "outline" : "secondary"}>
-              {HANGOUT_STATUS_LABEL[hangout.status]}
-            </Badge>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant={hangout.status === "CANCELLED" ? "outline" : "secondary"}>
+                {HANGOUT_STATUS_LABEL[hangout.phase]}
+              </Badge>
+              {hangout.phase === "SETTLING_UP" ? (
+                <Badge variant="outline">{hangout.unpaid} unpaid</Badge>
+              ) : null}
+            </div>
             {hangout.proposerName ? (
               <p className="text-muted-foreground text-xs">
                 Idea by {hangout.proposerName} in Discord
@@ -123,13 +130,15 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
           </CardHeader>
           <CardContent className="space-y-8">
             {hangout.status === "SCHEDULED" && hangout.startSlot ? (
-              <LockedIn
-                hangoutId={hangout.id}
-                startSlot={hangout.startSlot}
-                attendees={hangout.attendees}
-                userId={user.id}
-                canReopen={user.role === "ADMIN"}
-              />
+              <fieldset disabled={ended} className="min-w-0">
+                <LockedIn
+                  hangoutId={hangout.id}
+                  startSlot={hangout.startSlot}
+                  attendees={hangout.attendees}
+                  userId={user.id}
+                  canReopen={user.role === "ADMIN" && !ended}
+                />
+              </fieldset>
             ) : null}
             {collecting && user.role === "ADMIN" ? (
               <AvailabilitySetup
@@ -202,7 +211,7 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
               hangoutId={hangout.id}
               startSlot={hangout.startSlot}
               stops={hangout.stops}
-              canEdit={canEdit}
+              canEdit={canEdit && !ended}
               weather={weather}
               costs={hangout.costs}
               headcount={headcount}
@@ -239,22 +248,24 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
             <CardTitle className="text-base">Carpools</CardTitle>
           </CardHeader>
           <CardContent>
-            <Carpools
-              hangoutId={hangout.id}
-              cars={hangout.cars}
-              weather={{
-                warnings,
-                bufferMinutes: hangout.weatherBufferMinutes,
-                checked: weather.length > 0,
-              }}
-              viewer={{
-                id: user.id,
-                isAdmin: user.role === "ADMIN",
-                going: hangout.attendees.some(
-                  (attendee) => attendee.userId === user.id && attendee.status === "GOING"
-                ),
-              }}
-            />
+            <fieldset disabled={ended} className="min-w-0">
+              <Carpools
+                hangoutId={hangout.id}
+                cars={hangout.cars}
+                weather={{
+                  warnings,
+                  bufferMinutes: hangout.weatherBufferMinutes,
+                  checked: weather.length > 0,
+                }}
+                viewer={{
+                  id: user.id,
+                  isAdmin: user.role === "ADMIN",
+                  going: hangout.attendees.some(
+                    (attendee) => attendee.userId === user.id && attendee.status === "GOING"
+                  ),
+                }}
+              />
+            </fieldset>
           </CardContent>
         </Card>
       ) : null}

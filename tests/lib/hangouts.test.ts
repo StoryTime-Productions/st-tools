@@ -18,12 +18,51 @@ describe("hangout data loaders", () => {
 
   it("lists every hangout, newest first", async () => {
     const { getHangoutSummaries, prisma } = await loadHangoutsLib();
-    prisma.hangout.findMany.mockResolvedValue([{ id: "h1" }]);
+    prisma.hangout.findMany.mockResolvedValue([
+      { id: "h1", status: "COLLECTING", startSlot: null, stops: [], costs: [] },
+      {
+        id: "h2",
+        status: "SCHEDULED",
+        startSlot: "2020-01-01T19:30",
+        stops: [],
+        costs: [
+          { shares: [{ status: "SENT", amountCents: 1000, paidCents: 1000 }] },
+          { shares: [{ status: "CONFIRMED", amountCents: 1000, paidCents: 1000 }] },
+        ],
+      },
+    ]);
 
-    await expect(getHangoutSummaries()).resolves.toEqual([{ id: "h1" }]);
+    await expect(getHangoutSummaries()).resolves.toEqual([
+      { id: "h1", status: "COLLECTING", startSlot: null, phase: "COLLECTING", unpaid: 0 },
+      {
+        id: "h2",
+        status: "SCHEDULED",
+        startSlot: "2020-01-01T19:30",
+        phase: "SETTLING_UP",
+        unpaid: 1,
+      },
+    ]);
     expect(prisma.hangout.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ orderBy: { createdAt: "desc" } })
     );
+  });
+
+  it("knows a hangout has ended only once its scheduled end time passes", async () => {
+    const { hangoutEnded, prisma } = await loadHangoutsLib();
+    const stops = [{ durationMinutes: 60, arriveBy: null }];
+    const check = (hangout: object | null) => {
+      prisma.hangout.findUnique.mockResolvedValueOnce(hangout);
+      return hangoutEnded("h1");
+    };
+
+    await expect(check(null)).resolves.toBe(false);
+    await expect(check({ status: "COLLECTING", startSlot: null, stops })).resolves.toBe(false);
+    await expect(
+      check({ status: "SCHEDULED", startSlot: "2999-01-01T19:30", stops })
+    ).resolves.toBe(false);
+    await expect(
+      check({ status: "SCHEDULED", startSlot: "2020-01-01T19:30", stops })
+    ).resolves.toBe(true);
   });
 
   it("loads one hangout by id", async () => {
@@ -99,6 +138,7 @@ describe("hangout data loaders", () => {
 
     await expect(getHangoutDetail("h1")).resolves.toEqual({
       ...base,
+      unpaid: 1,
       proposerName: "sam#1",
       attendees: [
         { userId: "a", status: "GOING", name: "Alice" },
@@ -151,6 +191,7 @@ describe("hangout data loaders", () => {
     });
     await expect(getHangoutDetail("h1")).resolves.toEqual({
       ...base,
+      unpaid: 0,
       proposerName: null,
       attendees: [],
       cars: [],

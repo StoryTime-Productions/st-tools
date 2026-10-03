@@ -5,6 +5,7 @@ import { z } from "zod";
 import { AttendanceStatus, HangoutStatus, Role, type Prisma } from "@prisma/client";
 import { torontoToUtc } from "@/lib/calendar";
 import { getCurrentUser } from "@/lib/get-current-user";
+import { hangoutEnded } from "@/lib/hangouts";
 import { prisma } from "@/lib/prisma";
 import { recomputeRoutes, type CarSchedule, type Trip } from "@/lib/routes";
 import { locateAddress } from "@/lib/tomtom";
@@ -14,6 +15,7 @@ export type CarpoolActionResult = { error: string } | { success: true };
 const UNAUTHORIZED = "Unauthorized";
 const NOT_GOING = "Only people going can drive or ride";
 const CAR_GONE = "Car not found";
+const ENDED = "This hangout has already ended";
 const NOT_YOURS = "Only the driver or an admin can change this car";
 
 const uuid = z.string().uuid();
@@ -37,7 +39,9 @@ async function goingUser(hangoutId: string) {
     },
     select: { userId: true },
   });
-  return attendee ? { user } : ({ error: NOT_GOING } as const);
+  if (!attendee) return { error: NOT_GOING } as const;
+  if (await hangoutEnded(hangoutId)) return { error: ENDED } as const;
+  return { user };
 }
 
 /** The car, if the caller is its driver or an admin. */
@@ -60,6 +64,7 @@ async function ownedCar(carId: string) {
   });
   if (!car) return { error: CAR_GONE } as const;
   if (car.driverId !== user.id && user.role !== Role.ADMIN) return { error: NOT_YOURS } as const;
+  if (await hangoutEnded(car.hangoutId)) return { error: ENDED } as const;
   return { car };
 }
 
@@ -203,6 +208,7 @@ export async function recomputeRoutesAction(hangoutId: string): Promise<CarpoolA
   const user = await getCurrentUser();
   if (user?.role !== Role.ADMIN) return { error: "Forbidden: Admin access required" };
   if (!uuid.safeParse(hangoutId).success) return { error: "Hangout not found" };
+  if (await hangoutEnded(hangoutId)) return { error: ENDED };
 
   await reroute(hangoutId);
   return { success: true };

@@ -8,6 +8,7 @@ import { torontoToUtc } from "@/lib/calendar";
 import { resplitCosts } from "@/lib/cost-shares";
 import { uploadCover } from "@/lib/cover-upload";
 import { getCurrentUser } from "@/lib/get-current-user";
+import { hangoutEnded } from "@/lib/hangouts";
 import { prisma } from "@/lib/prisma";
 import { recomputeRoutes } from "@/lib/routes";
 import { locateAddress } from "@/lib/tomtom";
@@ -403,6 +404,8 @@ export async function reopenAvailabilityAction(hangoutId: string): Promise<Hango
   const parsed = z.string().uuid().safeParse(hangoutId);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
+  if (await hangoutEnded(parsed.data)) return { error: ENDED };
+
   const reopened = await prisma.$transaction(async (tx) => {
     const result = await tx.hangout.updateMany({
       where: { id: parsed.data, status: HangoutStatus.SCHEDULED },
@@ -440,6 +443,7 @@ export async function setAttendanceAction(
     select: { status: true },
   });
   if (hangout?.status !== HangoutStatus.SCHEDULED) return { error: "Hangout is not scheduled" };
+  if (await hangoutEnded(hangoutId)) return { error: ENDED };
 
   const key = { hangoutId, userId: currentUser.id };
   await prisma.$transaction([
@@ -498,6 +502,7 @@ async function stopCost(hangoutId: string, values: z.output<typeof stopSchema>) 
   if (!cost) return { error: "Cost item not found" };
   return { data: { ...rest, cashCents: null, costItemId } };
 }
+const ENDED = "This hangout has already ended";
 const EDITABLE = { not: HangoutStatus.CANCELLED };
 const STOP_NOT_FOUND = "Stop not found or hangout cancelled";
 
@@ -516,6 +521,7 @@ export async function addStopAction(
     select: { stops: { select: { position: true }, orderBy: { position: "desc" }, take: 1 } },
   });
   if (!hangout) return { error: "Hangout not found or cancelled" };
+  if (await hangoutEnded(hangoutId)) return { error: ENDED };
 
   const place = await locateAddress(parsed.data.address);
   if (place && "error" in place) return { error: place.error! };
@@ -555,6 +561,7 @@ export async function updateStopAction(
 
   const stop = await findEditableStop(stopId);
   if (!stop) return { error: STOP_NOT_FOUND };
+  if (await hangoutEnded(stop.hangoutId)) return { error: ENDED };
 
   const place = await locateAddress(parsed.data.address, stop.address);
   if (place && "error" in place) return { error: place.error! };
@@ -574,6 +581,7 @@ export async function deleteStopAction(stopId: string): Promise<HangoutActionRes
 
   const stop = await findEditableStop(stopId);
   if (!stop) return { error: STOP_NOT_FOUND };
+  if (await hangoutEnded(stop.hangoutId)) return { error: ENDED };
 
   await prisma.hangoutStop.delete({ where: { id: stop.id } });
 
@@ -590,6 +598,7 @@ export async function moveStopAction(
 
   const stop = await findEditableStop(stopId);
   if (!stop) return { error: STOP_NOT_FOUND };
+  if (await hangoutEnded(stop.hangoutId)) return { error: ENDED };
 
   const neighbour = await prisma.hangoutStop.findFirst({
     where: {
