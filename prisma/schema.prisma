@@ -52,6 +52,8 @@ model User {
   hangoutAvailability          HangoutAvailability[]
   hangoutAttendance            HangoutAttendee[]
   hangoutCars                  HangoutCar[]
+  hangoutCostsCollected        HangoutCost[]
+  hangoutCostShares            HangoutCostShare[]
   hangoutRides                 HangoutRider[]
 
   @@map("users")
@@ -260,6 +262,18 @@ enum AttendanceStatus {
   NOT_GOING
 }
 
+enum PaymentStatus {
+  UNPAID
+  SENT
+  CONFIRMED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  E_TRANSFER
+  CASH
+}
+
 enum HangoutStatus {
   COLLECTING
   SCHEDULED
@@ -288,6 +302,7 @@ model Hangout {
   stops        HangoutStop[]
   cars         HangoutCar[]
   riders       HangoutRider[]
+  costs        HangoutCost[]
 
   @@map("hangouts")
 }
@@ -485,6 +500,9 @@ model HangoutStop {
   hangoutId String
   hangout   Hangout @relation(fields: [hangoutId], references: [id], onDelete: Cascade)
 
+  costItemId String?
+  costItem   HangoutCost? @relation(fields: [costItemId], references: [id], onDelete: SetNull)
+
   @@index([hangoutId, position])
   @@map("hangout_stops")
 }
@@ -529,4 +547,43 @@ model HangoutRider {
   @@id([hangoutId, userId])
   @@index([carId])
   @@map("hangout_riders")
+}
+
+model HangoutCost {
+  id          String   @id @default(uuid())
+  position    Int
+  title       String
+  amountCents Int
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  hangoutId String
+  hangout   Hangout @relation(fields: [hangoutId], references: [id], onDelete: Cascade)
+
+  collectorId String
+  collector   User   @relation(fields: [collectorId], references: [id], onDelete: Cascade)
+
+  shares HangoutCostShare[]
+  stops  HangoutStop[]
+
+  @@index([hangoutId, position])
+  @@map("hangout_costs")
+}
+
+model HangoutCostShare {
+  amountCents Int
+  paidCents   Int            @default(0)
+  status      PaymentStatus  @default(UNPAID)
+  method      PaymentMethod?
+  updatedAt   DateTime       @updatedAt
+
+  costId String
+  cost   HangoutCost @relation(fields: [costId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([costId, userId])
+  @@map("hangout_cost_shares")
 }
