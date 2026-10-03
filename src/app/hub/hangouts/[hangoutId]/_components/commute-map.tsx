@@ -80,7 +80,7 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
       <div
         ref={container}
         className="relative z-0 h-72 w-full overflow-hidden rounded-2xl sm:h-96"
-        role="img"
+        role="group"
         aria-label="Map of the hangout's stops and carpool routes. The itinerary lists the same stops."
       />
       <p className="text-muted-foreground text-xs">© TomTom</p>
