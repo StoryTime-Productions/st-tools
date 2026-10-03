@@ -112,7 +112,9 @@ function groupItems(items: Item[], view: View, undatedLabel: string): ProjectGro
 }
 
 function isPast(item: Item) {
-  return item.kind === "project" ? item.finished : item.hangout.status === "CANCELLED";
+  return item.kind === "project"
+    ? item.finished
+    : item.hangout.phase === "CANCELLED" || item.hangout.phase === "DONE";
 }
 
 function Toggle<T extends string>({
@@ -247,9 +249,14 @@ function HangoutCard({ hangout }: { hangout: HangoutSummary }) {
           <p className="truncate font-medium">{hangout.title}</p>
           <p className="text-muted-foreground text-xs">Hangout</p>
         </div>
-        <Badge variant={hangout.status === "CANCELLED" ? "outline" : "secondary"}>
-          {HANGOUT_STATUS_LABEL[hangout.status]}
-        </Badge>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant={hangout.phase === "CANCELLED" ? "outline" : "secondary"}>
+            {HANGOUT_STATUS_LABEL[hangout.phase]}
+          </Badge>
+          {hangout.phase === "SETTLING_UP" ? (
+            <Badge variant="outline">{hangout.unpaid} unpaid</Badge>
+          ) : null}
+        </div>
       </div>
     </Link>
   );

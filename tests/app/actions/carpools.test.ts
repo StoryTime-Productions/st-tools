@@ -41,8 +41,18 @@ async function loadModule() {
   vi.doMock("@/lib/tomtom", () => ({ locateAddress }));
   const recomputeRoutes = vi.fn();
   vi.doMock("@/lib/routes", () => ({ recomputeRoutes }));
+  const hangoutEnded = vi.fn().mockResolvedValue(false);
+  vi.doMock("@/lib/hangouts", () => ({ hangoutEnded }));
   const actions = await import("@/app/actions/carpools");
-  return { ...actions, revalidatePath, getCurrentUser, prisma, locateAddress, recomputeRoutes };
+  return {
+    ...actions,
+    revalidatePath,
+    getCurrentUser,
+    prisma,
+    locateAddress,
+    recomputeRoutes,
+    hangoutEnded,
+  };
 }
 
 const ownedCar = (overrides = {}) => ({
@@ -58,6 +68,20 @@ const ownedCar = (overrides = {}) => ({
 describe("carpool actions", () => {
   beforeEach(() => {
     vi.resetModules();
+  });
+
+  it("freezes cars once the hangout has ended", async () => {
+    const mod = await loadModule();
+    mod.hangoutEnded.mockResolvedValue(true);
+    mod.prisma.hangoutCar.findUnique.mockResolvedValue(ownedCar());
+    const ended = { error: "This hangout has already ended" };
+
+    await expect(mod.offerCarAction(HANGOUT_ID, 3)).resolves.toEqual(ended);
+    await expect(mod.removeCarAction(CAR_ID)).resolves.toEqual(ended);
+    mod.getCurrentUser.mockResolvedValue(admin);
+    await expect(mod.recomputeRoutesAction(HANGOUT_ID)).resolves.toEqual(ended);
+    expect(mod.prisma.hangoutCar.create).not.toHaveBeenCalled();
+    expect(mod.recomputeRoutes).not.toHaveBeenCalled();
   });
 
   it("lets a Going member offer one car", async () => {

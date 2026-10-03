@@ -7,6 +7,7 @@ import type {
 } from "@prisma/client";
 import type { AvailabilityResponse } from "@/lib/availability";
 import { scheduleStops, spanDays } from "@/lib/itinerary";
+import { hangoutEnd, hangoutPhase, unpaidCount, type HangoutPhase } from "@/lib/lifecycle";
 import { prisma } from "@/lib/prisma";
 import type { CarSchedule } from "@/lib/routes";
 
@@ -16,6 +17,8 @@ export interface HangoutSummary {
   coverImageUrl: string | null;
   status: HangoutStatus;
   startSlot: string | null;
+  phase: HangoutPhase;
+  unpaid: number;
 }
 
 export interface HangoutDetail extends HangoutSummary {
@@ -112,6 +115,8 @@ export interface HangoutStopItem {
   costItemId: string | null;
 }
 
+const SHARE_MONEY = { status: true, amountCents: true, paidCents: true } as const;
+
 const STOP_SELECT = {
   id: true,
   type: true,
@@ -137,10 +142,39 @@ export interface HangoutIdeaItem {
 }
 
 export async function getHangoutSummaries(): Promise<HangoutSummary[]> {
-  return prisma.hangout.findMany({
-    select: { id: true, title: true, coverImageUrl: true, status: true, startSlot: true },
+  const hangouts = await prisma.hangout.findMany({
+    select: {
+      id: true,
+      title: true,
+      coverImageUrl: true,
+      status: true,
+      startSlot: true,
+      stops: { select: { durationMinutes: true, arriveBy: true }, orderBy: { position: "asc" } },
+      costs: { select: { shares: { select: SHARE_MONEY } } },
+    },
     orderBy: { createdAt: "desc" },
   });
+  return hangouts.map(({ stops, costs, ...hangout }) => {
+    const unpaid = unpaidCount(costs.flatMap((cost) => cost.shares));
+    return { ...hangout, unpaid, phase: hangoutPhase(hangout, stops, unpaid) };
+  });
+}
+
+/** True once a Scheduled hangout's end time has passed; edits and attendance freeze then (L3). */
+export async function hangoutEnded(hangoutId: string) {
+  const hangout = await prisma.hangout.findUnique({
+    where: { id: hangoutId },
+    select: {
+      status: true,
+      startSlot: true,
+      stops: { select: { durationMinutes: true, arriveBy: true }, orderBy: { position: "asc" } },
+    },
+  });
+  return Boolean(
+    hangout?.status === "SCHEDULED" &&
+    hangout.startSlot &&
+    new Date() >= hangoutEnd(hangout.startSlot, hangout.stops)
+  );
 }
 
 export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail | null> {
@@ -208,8 +242,11 @@ export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail
   });
   if (!hangout) return null;
   const { idea, attendees, cars, costs, ...detail } = hangout;
+  const unpaid = unpaidCount(costs.flatMap((cost) => cost.shares));
   return {
     ...detail,
+    unpaid,
+    phase: hangoutPhase(detail, detail.stops, unpaid),
     proposerName: idea?.proposerName ?? null,
     costs: costs.map(({ collector, shares, ...cost }) => ({
       ...cost,
