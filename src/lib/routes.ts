@@ -9,6 +9,8 @@ export interface Trip {
   start: string;
   end: string;
   stops: Record<string, string>;
+  /** Road geometry as [lat, lon]; absent on manual trips and on schedules stored before the map. */
+  path?: [number, number][];
 }
 
 export type CarSchedule = { there: Trip; back: Trip; manual?: true } | { error: string };
@@ -137,7 +139,12 @@ async function routeCar(
       waypoints.flatMap((w, index) => w.riders.map((userId) => [userId, arrivals[index]]))
     );
   return {
-    there: { start: there.depart, end: there.arrive, stops: byRider(there.waypoints) },
-    back: { start: back.depart, end: back.arrive, stops: byRider(back.waypoints) },
+    there: {
+      start: there.depart,
+      end: there.arrive,
+      stops: byRider(there.waypoints),
+      path: there.path,
+    },
+    back: { start: back.depart, end: back.arrive, stops: byRider(back.waypoints), path: back.path },
   };
 }

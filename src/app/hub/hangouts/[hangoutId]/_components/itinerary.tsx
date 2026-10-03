@@ -33,9 +33,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { addDays, dayLabel, timeLabel } from "@/lib/calendar";
 import type { HangoutStopItem } from "@/lib/hangouts";
-import { dayAndClock, scheduleStops, type StopTime } from "@/lib/itinerary";
+import { scheduleStops, timeText } from "@/lib/itinerary";
 import type { StopWeather } from "@/lib/weather";
 import { WeatherChip, WeatherCredit } from "@/app/hub/hangouts/[hangoutId]/_components/weather";
 
@@ -52,16 +51,6 @@ function duration(minutes: number) {
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
   return [hours ? `${hours} h` : "", rest || !hours ? `${rest} min` : ""].filter(Boolean).join(" ");
-}
-
-function timeText(time: StopTime, startDay: string | null) {
-  if ("offset" in time) {
-    return `+${Math.floor(time.offset / 60)}:${String(time.offset % 60).padStart(2, "0")}`;
-  }
-  const { day, clock } = dayAndClock(time.at);
-  if (!startDay) return `Day ${day}, ${timeLabel(clock)}`;
-  if (day === 1) return timeLabel(clock);
-  return `${dayLabel(addDays(startDay, day - 1), { weekday: "short" })} ${timeLabel(clock)}`;
 }
 
 function useRun() {

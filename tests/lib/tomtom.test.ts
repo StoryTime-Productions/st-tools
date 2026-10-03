@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { geocodeAddress, locateAddress, routeVia } from "@/lib/tomtom";
 
+const pt = (latitude: number, longitude: number) => ({ latitude, longitude });
+
 function reply(status: number, body: unknown) {
   return new Response(JSON.stringify(body), { status });
 }
@@ -118,9 +120,9 @@ describe("geocodeAddress", () => {
           {
             summary: { departureTime: "T18:44", arrivalTime: "T19:31" },
             legs: [
-              { summary: { arrivalTime: "T19:01" } },
-              { summary: { arrivalTime: "T19:11" } },
-              { summary: { arrivalTime: "T19:31" } },
+              { summary: { arrivalTime: "T19:01" }, points: [pt(1, 1), pt(1.5, 1.5)] },
+              { summary: { arrivalTime: "T19:11" }, points: [pt(1.5, 1.5), pt(2, 2)] },
+              { summary: { arrivalTime: "T19:31" }, points: [pt(2, 2), pt(4, 4)] },
             ],
           },
         ],
@@ -133,11 +135,42 @@ describe("geocodeAddress", () => {
 
     await expect(
       routeVia(A, [B, C], D, { arriveAt: new Date("2026-10-03T23:30:00Z") })
-    ).resolves.toEqual({ depart: "T18:44", arrive: "T19:31", waypoints: ["T19:11", "T19:01"] });
+    ).resolves.toEqual({
+      depart: "T18:44",
+      arrive: "T19:31",
+      waypoints: ["T19:11", "T19:01"],
+      path: [
+        [1, 1],
+        [1.5, 1.5],
+        [1.5, 1.5],
+        [2, 2],
+        [2, 2],
+        [4, 4],
+      ],
+    });
     expect(fetchMock).toHaveBeenCalledWith(
       "https://api.tomtom.com/routing/1/calculateRoute/1,1:2,2:3,3:4,4/json?arriveAt=2026-10-03T23:30:00.000Z&traffic=true&computeBestOrder=true&key=tt-key",
       { cache: "no-store" }
     );
+  });
+
+  it("thins long geometry to at most 400 points, keeping the first and last", async () => {
+    const points = Array.from({ length: 1000 }, (_, i) => pt(i, -i));
+    fetchMock.mockResolvedValue(
+      reply(200, {
+        routes: [
+          {
+            summary: { departureTime: "d", arrivalTime: "a" },
+            legs: [{ summary: { arrivalTime: "a" }, points }],
+          },
+        ],
+      })
+    );
+    const route = await routeVia(A, [], D, { departAt: new Date(0) });
+    if ("error" in route) throw new Error(route.error);
+    expect(route.path).toHaveLength(400);
+    expect(route.path[0]).toEqual([0, 0]);
+    expect(route.path[399]).toEqual([999, -999]);
   });
 
   it("departs at a time, keeps a single waypoint in place, and reports failures", async () => {
@@ -146,14 +179,25 @@ describe("geocodeAddress", () => {
         routes: [
           {
             summary: { departureTime: "T22:30", arrivalTime: "T23:07" },
-            legs: [{ summary: { arrivalTime: "T22:42" } }, { summary: { arrivalTime: "T23:07" } }],
+            legs: [
+              { summary: { arrivalTime: "T22:42" }, points: [pt(1, 1)] },
+              { summary: { arrivalTime: "T23:07" }, points: [pt(4, 4)] },
+            ],
           },
         ],
       })
     );
     await expect(
       routeVia(A, [B], D, { departAt: new Date("2026-10-04T02:30:00Z") })
-    ).resolves.toEqual({ depart: "T22:30", arrive: "T23:07", waypoints: ["T22:42"] });
+    ).resolves.toEqual({
+      depart: "T22:30",
+      arrive: "T23:07",
+      waypoints: ["T22:42"],
+      path: [
+        [1, 1],
+        [4, 4],
+      ],
+    });
     expect(fetchMock.mock.calls[0][0]).toContain(
       "departAt=2026-10-04T02:30:00.000Z&traffic=true&computeBestOrder=false"
     );

@@ -7,14 +7,33 @@ const BOB = { lat: 4, lon: 4 };
 const CAFE = { lat: 5, lon: 5 };
 const BAR = { lat: 6, lon: 6 };
 
+const THERE_PATH: [number, number][] = [
+  [2, 2],
+  [5, 5],
+];
+const BACK_PATH: [number, number][] = [
+  [6, 6],
+  [2, 2],
+];
+
 type RouteVia = typeof import("@/lib/tomtom").routeVia;
 
 async function loadModule() {
   const prisma = { hangout: { findUnique: vi.fn() }, hangoutCar: { update: vi.fn() } };
   const routeVia = vi.fn<RouteVia>(async (_origin, waypoints, _dest, time) =>
     "arriveAt" in time
-      ? { depart: "T18:44", arrive: "T19:30", waypoints: waypoints.map((_, i) => `T19:0${i}`) }
-      : { depart: "T22:30", arrive: "T23:07", waypoints: waypoints.map((_, i) => `T22:4${i}`) }
+      ? {
+          depart: "T18:44",
+          arrive: "T19:30",
+          waypoints: waypoints.map((_, i) => `T19:0${i}`),
+          path: THERE_PATH,
+        }
+      : {
+          depart: "T22:30",
+          arrive: "T23:07",
+          waypoints: waypoints.map((_, i) => `T22:4${i}`),
+          path: BACK_PATH,
+        }
   );
   vi.doMock("@/lib/prisma", () => ({ prisma }));
   vi.doMock("@/lib/tomtom", () => ({ routeVia }));
@@ -85,11 +104,13 @@ describe("recomputeRoutes", () => {
             start: "T18:44",
             end: "T19:30",
             stops: { bob: "T19:00", carol: "T19:01", dan: "T19:01" },
+            path: THERE_PATH,
           },
           back: {
             start: "T22:30",
             end: "T23:07",
             stops: { bob: "T22:40", carol: "T22:41", dan: "T22:41" },
+            path: BACK_PATH,
           },
         },
       },
@@ -135,7 +156,7 @@ describe("recomputeRoutes", () => {
 
     prisma.hangout.findUnique.mockResolvedValueOnce(hangout());
     routeVia
-      .mockResolvedValueOnce({ depart: "a", arrive: "b", waypoints: [] })
+      .mockResolvedValueOnce({ depart: "a", arrive: "b", waypoints: [], path: [] })
       .mockResolvedValueOnce({ error: "Routing failed" });
     await recomputeRoutes("h1");
     expect(prisma.hangoutCar.update).toHaveBeenLastCalledWith({
@@ -169,6 +190,7 @@ describe("recomputeRoutes", () => {
       depart: "d",
       arrive: "a",
       waypoints: ["w", "w", "w"],
+      path: [],
     }));
     prisma.hangout.findUnique.mockResolvedValueOnce(hangout({ cars: [car({ schedule: manual })] }));
     await recomputeRoutes("h1");

@@ -150,6 +150,13 @@ async function loadHub() {
       </p>
     ),
   }));
+  vi.doMock("@/app/hub/hangouts/[hangoutId]/_components/commute-map", () => ({
+    CommuteMap: ({ hasKey, data }: { hasKey: boolean; data: { markers: unknown[] } }) => (
+      <p data-testid="commute-map">
+        {hasKey ? "key" : "no key"} {data.markers.length}
+      </p>
+    ),
+  }));
   vi.doMock("@/app/hub/hangouts/[hangoutId]/_components/itinerary", () => ({
     Itinerary: ({ stops, canEdit }: { stops: unknown[]; canEdit: boolean }) => (
       <p data-testid="itinerary">
@@ -494,6 +501,7 @@ describe("hub pages", () => {
     const empty = render(await HangoutPage(params()));
     expect(screen.getByText("The admins haven't picked dates yet.")).toBeInTheDocument();
     expect(screen.queryByTestId("availability-grid")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("commute-map")).not.toBeInTheDocument();
     empty.unmount();
 
     hangouts.getHangoutDetail.mockResolvedValueOnce(setUp);
@@ -538,6 +546,8 @@ describe("hub pages", () => {
     expect(screen.getAllByTestId("ranked-slots")).toHaveLength(1);
     expect(screen.getByTestId("locked-in")).toHaveTextContent("2026-10-02T19:00 reopenable");
     expect(screen.getByTestId("carpools")).toHaveTextContent("0 not going");
+    expect(screen.getByTestId("commute-map")).toHaveTextContent("no key");
+    expect(screen.getByText("Commute map")).toBeInTheDocument();
 
     getCurrentUser.mockResolvedValue(member);
     hangouts.getHangoutDetail.mockResolvedValueOnce({
@@ -548,5 +558,15 @@ describe("hub pages", () => {
     });
     render(await HangoutPage(params()));
     expect(screen.getAllByTestId("carpools").at(-1)).toHaveTextContent("0 going");
+
+    vi.stubEnv("TOMTOM_API_KEY", "k");
+    hangouts.getHangoutDetail.mockResolvedValueOnce({
+      ...setUp,
+      status: "SCHEDULED",
+      startSlot: "2026-10-02T19:00",
+    });
+    render(await HangoutPage(params()));
+    expect(screen.getAllByTestId("commute-map").at(-1)).toHaveTextContent("key");
+    vi.unstubAllEnvs();
   });
 });

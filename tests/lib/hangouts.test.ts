@@ -53,11 +53,25 @@ describe("hangout data loaders", () => {
             seats: 3,
             startAddress: null,
             commonPoint: "Union Station",
-            driver: { id: "a", name: "Alice", email: "a@x.gg", homeAddress: "1 Main St" },
+            driver: {
+              id: "a",
+              name: "Alice",
+              email: "a@x.gg",
+              homeAddress: "1 Main St",
+              homeLat: 43.6,
+              homeLon: -79.4,
+            },
             riders: [
               {
                 atCommonPoint: true,
-                user: { id: "b", name: null, email: "b@x.gg", homeAddress: null },
+                user: {
+                  id: "b",
+                  name: null,
+                  email: "b@x.gg",
+                  homeAddress: null,
+                  homeLat: null,
+                  homeLon: null,
+                },
               },
             ],
           },
@@ -78,8 +92,23 @@ describe("hangout data loaders", () => {
           seats: 3,
           startAddress: null,
           commonPoint: "Union Station",
-          driver: { userId: "a", name: "Alice", homeAddress: "1 Main St" },
-          riders: [{ userId: "b", name: "b@x.gg", homeAddress: null, atCommonPoint: true }],
+          driver: {
+            userId: "a",
+            name: "Alice",
+            homeAddress: "1 Main St",
+            homeLat: 43.6,
+            homeLon: -79.4,
+          },
+          riders: [
+            {
+              userId: "b",
+              name: "b@x.gg",
+              homeAddress: null,
+              homeLat: null,
+              homeLon: null,
+              atCommonPoint: true,
+            },
+          ],
         },
       ],
     });
