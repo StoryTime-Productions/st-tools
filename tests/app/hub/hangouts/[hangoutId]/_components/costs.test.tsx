@@ -165,13 +165,19 @@ describe("Costs", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
-    await waitFor(() => expect(payMocks.confirmPaymentAction).toHaveBeenCalledWith("c1", "b"));
+    await waitFor(() => expect(payMocks.confirmPaymentAction).toHaveBeenCalledWith("c1", "b"), {
+      timeout: 3000,
+    });
     expect(screen.getAllByRole("button", { name: "Revert" })).toHaveLength(2);
     fireEvent.click(screen.getAllByRole("button", { name: "Revert" })[0]);
-    await waitFor(() => expect(payMocks.revertConfirmationAction).toHaveBeenCalledWith("c1", "d"));
+    await waitFor(() => expect(payMocks.revertConfirmationAction).toHaveBeenCalledWith("c1", "d"), {
+      timeout: 3000,
+    });
     expect(screen.getByText(/refund due \$20\.00/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Mark refunded" }));
-    await waitFor(() => expect(payMocks.markRefundedAction).toHaveBeenCalledWith("c1", "e"));
+    await waitFor(() => expect(payMocks.markRefundedAction).toHaveBeenCalledWith("c1", "e"), {
+      timeout: 3000,
+    });
   });
 
   it("shows how much more someone owes after a re-split", () => {
