@@ -81,7 +81,7 @@ export function planShares(
 
   for (const row of existing) {
     if (going.includes(row.userId)) continue;
-    const hasMoney = row.status === "SENT" || row.status === "CONFIRMED";
+    const hasMoney = row.status === "SENT" || row.status === "CONFIRMED" || row.paidCents > 0;
     if (!hasMoney) remove.push(row.userId);
     else if (row.amountCents !== 0)
       upsert.push({

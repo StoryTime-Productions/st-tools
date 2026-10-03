@@ -126,6 +126,12 @@ describe("planShares", () => {
     expect(plan.upsert).toContainEqual(row("s", 0, 1000, "SENT"));
   });
 
+  it("keeps a refund-due row for a leaver whose paid share grew back to Unpaid", () => {
+    const plan = planShares(item, ["c"], [row("g", 1500, 1000, "UNPAID")]);
+    expect(plan.remove).toEqual([]);
+    expect(plan.upsert).toContainEqual(row("g", 0, 1000, "UNPAID"));
+  });
+
   it("leaves an already-zeroed refund-due row alone and handles nobody Going", () => {
     const plan = planShares(item, [], [row("p", 0, 1000, "CONFIRMED")]);
     expect(plan).toEqual({ upsert: [], remove: [] });
