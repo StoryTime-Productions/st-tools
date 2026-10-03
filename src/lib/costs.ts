@@ -16,6 +16,11 @@ export function splitCost(total: number, n: number): Split {
   return { each, collector };
 }
 
+/** Per-person amount before shares exist, or null when nobody is counted yet. */
+export function estimateCents(total: number, people: number): number | null {
+  return people > 0 ? splitCost(total, people).each : null;
+}
+
 export interface ShareMoney {
   amountCents: number;
   paidCents: number;

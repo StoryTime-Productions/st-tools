@@ -1,4 +1,10 @@
-import type { AttendanceStatus, HangoutStatus, StopType } from "@prisma/client";
+import type {
+  AttendanceStatus,
+  HangoutStatus,
+  PaymentMethod,
+  PaymentStatus,
+  StopType,
+} from "@prisma/client";
 import type { AvailabilityResponse } from "@/lib/availability";
 import { scheduleStops, spanDays } from "@/lib/itinerary";
 import { prisma } from "@/lib/prisma";
@@ -24,6 +30,23 @@ export interface HangoutDetail extends HangoutSummary {
   attendees: { userId: string; name: string; status: AttendanceStatus }[];
   stops: HangoutStopItem[];
   cars: HangoutCarItem[];
+  costs: HangoutCostItem[];
+}
+
+export interface HangoutCostItem {
+  id: string;
+  title: string;
+  amountCents: number;
+  notes: string | null;
+  collector: { userId: string; name: string };
+  shares: {
+    userId: string;
+    name: string;
+    amountCents: number;
+    paidCents: number;
+    status: PaymentStatus;
+    method: PaymentMethod | null;
+  }[];
 }
 
 interface Person {
@@ -86,6 +109,7 @@ export interface HangoutStopItem {
   notes: string | null;
   bring: string | null;
   cashCents: number | null;
+  costItemId: string | null;
 }
 
 const STOP_SELECT = {
@@ -100,6 +124,7 @@ const STOP_SELECT = {
   notes: true,
   bring: true,
   cashCents: true,
+  costItemId: true,
 } as const;
 
 export interface HangoutIdeaItem {
@@ -159,13 +184,42 @@ export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail
         },
         orderBy: { createdAt: "asc" },
       },
+      costs: {
+        select: {
+          id: true,
+          title: true,
+          amountCents: true,
+          notes: true,
+          collector: { select: { id: true, name: true, email: true } },
+          shares: {
+            select: {
+              amountCents: true,
+              paidCents: true,
+              status: true,
+              method: true,
+              user: { select: { id: true, name: true, email: true } },
+            },
+            orderBy: { user: { name: "asc" } },
+          },
+        },
+        orderBy: { position: "asc" },
+      },
     },
   });
   if (!hangout) return null;
-  const { idea, attendees, cars, ...detail } = hangout;
+  const { idea, attendees, cars, costs, ...detail } = hangout;
   return {
     ...detail,
     proposerName: idea?.proposerName ?? null,
+    costs: costs.map(({ collector, shares, ...cost }) => ({
+      ...cost,
+      collector: { userId: collector.id, name: collector.name ?? collector.email },
+      shares: shares.map(({ user, ...share }) => ({
+        ...share,
+        userId: user.id,
+        name: user.name ?? user.email,
+      })),
+    })),
     cars: cars.map(({ driver, riders, schedule, ...car }) => ({
       ...car,
       schedule: schedule as CarSchedule | null,
@@ -178,6 +232,15 @@ export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail
       name: user.name ?? user.email,
     })),
   };
+}
+
+/** Everyone who can be named collector of a cost item. */
+export async function getMemberOptions(): Promise<{ id: string; name: string }[]> {
+  const users = await prisma.user.findMany({
+    select: { id: true, name: true, email: true },
+    orderBy: { name: "asc" },
+  });
+  return users.map((user) => ({ id: user.id, name: user.name ?? user.email }));
 }
 
 export async function getAvailabilityResponses(hangoutId: string): Promise<AvailabilityResponse[]> {

@@ -482,9 +482,22 @@ const stopSchema = z.object({
   notes: optionalText(2000),
   bring: optionalText(500),
   cashCents: z.number().int().min(0).max(1_000_000).nullable(),
+  costItemId: z.string().uuid().nullable().optional(),
 });
 
 export type StopValues = z.input<typeof stopSchema>;
+
+/** Stop data to save: a linked cost item must belong to the hangout and replaces the typed cash (C9). */
+async function stopCost(hangoutId: string, values: z.output<typeof stopSchema>) {
+  const { costItemId, ...rest } = values;
+  if (!costItemId) return { data: { ...rest, costItemId: null } };
+  const cost = await prisma.hangoutCost.findFirst({
+    where: { id: costItemId, hangoutId },
+    select: { id: true },
+  });
+  if (!cost) return { error: "Cost item not found" };
+  return { data: { ...rest, cashCents: null, costItemId } };
+}
 const EDITABLE = { not: HangoutStatus.CANCELLED };
 const STOP_NOT_FOUND = "Stop not found or hangout cancelled";
 
@@ -506,10 +519,12 @@ export async function addStopAction(
 
   const place = await locateAddress(parsed.data.address);
   if (place && "error" in place) return { error: place.error! };
+  const cost = await stopCost(hangoutId, parsed.data);
+  if (!cost.data) return { error: cost.error! };
 
   await prisma.hangoutStop.create({
     data: {
-      ...parsed.data,
+      ...cost.data,
       ...place,
       hangoutId,
       position: (hangout.stops[0]?.position ?? -1) + 1,
@@ -544,7 +559,10 @@ export async function updateStopAction(
   const place = await locateAddress(parsed.data.address, stop.address);
   if (place && "error" in place) return { error: place.error! };
 
-  await prisma.hangoutStop.update({ where: { id: stop.id }, data: { ...parsed.data, ...place } });
+  const cost = await stopCost(stop.hangoutId, parsed.data);
+  if (!cost.data) return { error: cost.error! };
+
+  await prisma.hangoutStop.update({ where: { id: stop.id }, data: { ...cost.data, ...place } });
 
   await recomputeRoutes(stop.hangoutId);
   revalidateHangout(stop.hangoutId);

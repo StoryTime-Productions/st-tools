@@ -30,6 +30,7 @@ function stop(overrides: Partial<HangoutStopItem>): HangoutStopItem {
     notes: null,
     bring: null,
     cashCents: null,
+    costItemId: null,
     ...overrides,
   };
 }
@@ -182,6 +183,7 @@ describe("Itinerary", () => {
       notes: "Booked",
       bring: "ID",
       cashCents: 1250,
+      costItemId: null,
     });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
@@ -215,7 +217,52 @@ describe("Itinerary", () => {
       notes: "",
       bring: "",
       cashCents: null,
+      costItemId: null,
     });
+  });
+
+  it("derives cash each from a linked cost item and lets admins link one", async () => {
+    const costs = [{ id: "c1", title: "Dinner bill", amountCents: 10_000 }];
+    const linked = stop({ id: "s4", title: "Dinner", cashCents: 999, costItemId: "c1" });
+    render(
+      <Itinerary
+        hangoutId="h1"
+        startSlot={null}
+        stops={[linked]}
+        canEdit
+        costs={costs}
+        headcount={3}
+      />
+    );
+    expect(screen.getByText(/about \$33\.34 cash each/)).toBeInTheDocument();
+    expect(screen.queryByText(/9\.99/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Dinner" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByLabelText("Cash each ($)")).toBeDisabled();
+    fireEvent.change(within(dialog).getAllByRole("combobox")[1], { target: { value: "none" } });
+    expect(within(dialog).getByLabelText("Cash each ($)")).toBeEnabled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save stop" }));
+    await waitFor(() =>
+      expect(actionMocks.updateStopAction).toHaveBeenLastCalledWith(
+        "s4",
+        expect.objectContaining({ costItemId: null })
+      )
+    );
+  });
+
+  it("shows no cash when nobody is counted yet for a linked item", () => {
+    const costs = [{ id: "c1", title: "Dinner bill", amountCents: 10_000 }];
+    render(
+      <Itinerary
+        hangoutId="h1"
+        startSlot={null}
+        stops={[stop({ costItemId: "c1" })]}
+        canEdit={false}
+        costs={costs}
+      />
+    );
+    expect(screen.queryByText(/cash each/)).not.toBeInTheDocument();
   });
   it("shows a forecast chip per stop with warnings and the Open-Meteo credit", () => {
     render(

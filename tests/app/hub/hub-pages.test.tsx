@@ -37,6 +37,7 @@ const HANGOUT = {
   attendees: [],
   stops: [] as { id: string }[],
   cars: [] as { id: string }[],
+  costs: [] as { id: string }[],
 };
 
 async function loadHub() {
@@ -65,6 +66,7 @@ async function loadHub() {
     getHangoutDetail: vi.fn().mockResolvedValue(HANGOUT),
     getOpenIdeas: vi.fn().mockResolvedValue([]),
     getAvailabilityResponses: vi.fn().mockResolvedValue([{ userId: "u1", name: "Ann", slots: [] }]),
+    getMemberOptions: vi.fn().mockResolvedValue([{ id: "u1", name: "Ann" }]),
     getCalendarHangouts: vi.fn().mockResolvedValue([{ id: "h1" }, { id: "h2" }]),
   };
   const tagFindMany = vi.fn().mockResolvedValue([{ name: "web" }]);
@@ -147,6 +149,26 @@ async function loadHub() {
     Carpools: ({ cars, viewer }: { cars: unknown[]; viewer: { going: boolean } }) => (
       <p data-testid="carpools">
         {cars.length} {viewer.going ? "going" : "not going"}
+      </p>
+    ),
+  }));
+  vi.doMock("@/app/hub/hangouts/[hangoutId]/_components/costs", () => ({
+    Costs: ({
+      items,
+      members,
+      headcount,
+      scheduled,
+      canEdit,
+    }: {
+      items: unknown[];
+      members: unknown[];
+      headcount: number;
+      scheduled: boolean;
+      canEdit: boolean;
+    }) => (
+      <p data-testid="costs">
+        {items.length} {members.length} {headcount} {scheduled ? "scheduled" : "estimate"}{" "}
+        {canEdit ? "editable" : "read-only"}
       </p>
     ),
   }));
@@ -435,6 +457,35 @@ describe("hub pages", () => {
 
     hangouts.getHangoutDetail.mockResolvedValueOnce(null);
     await expect(HangoutPage(params())).rejects.toThrow("NOT_FOUND");
+  });
+
+  it("shows the Costs card to admins, or to members once items exist", async () => {
+    const { HangoutPage, getCurrentUser, hangouts } = await loadHub();
+    const params = () => ({ params: Promise.resolve({ hangoutId: "h1" }) });
+
+    getCurrentUser.mockResolvedValue(member);
+    const empty = render(await HangoutPage(params()));
+    expect(screen.queryByTestId("costs")).not.toBeInTheDocument();
+    empty.unmount();
+
+    getCurrentUser.mockResolvedValue(admin);
+    const admins = render(await HangoutPage(params()));
+    expect(screen.getByTestId("costs")).toHaveTextContent("0 1 0 estimate editable");
+    admins.unmount();
+
+    getCurrentUser.mockResolvedValue(member);
+    hangouts.getHangoutDetail.mockResolvedValueOnce({
+      ...HANGOUT,
+      status: "SCHEDULED",
+      startSlot: "2026-10-03T19:30",
+      attendees: [
+        { userId: "u1", name: "Ann", status: "GOING" },
+        { userId: "u2", name: "Bo", status: "MAYBE" },
+      ],
+      costs: [{ id: "c1" }],
+    });
+    render(await HangoutPage(params()));
+    expect(screen.getByTestId("costs")).toHaveTextContent("1 0 1 scheduled read-only");
   });
 
   it("lists open ideas with admin actions and marks promoted hangouts", async () => {

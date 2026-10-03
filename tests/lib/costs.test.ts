@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planShares, shareBalance, splitCost } from "@/lib/costs";
+import { estimateCents, planShares, shareBalance, splitCost } from "@/lib/costs";
 
 describe("splitCost", () => {
   it("splits evenly with no remainder", () => {
@@ -129,5 +129,12 @@ describe("planShares", () => {
   it("leaves an already-zeroed refund-due row alone and handles nobody Going", () => {
     const plan = planShares(item, [], [row("p", 0, 1000, "CONFIRMED")]);
     expect(plan).toEqual({ upsert: [], remove: [] });
+  });
+});
+
+describe("estimateCents", () => {
+  it("is the per-person share, or null when nobody is counted", () => {
+    expect(estimateCents(1000, 3)).toBe(334);
+    expect(estimateCents(1000, 0)).toBeNull();
   });
 });
