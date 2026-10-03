@@ -32,3 +32,58 @@ export function shareBalance({ amountCents, paidCents, status }: ShareMoney): Ba
   if (diff < 0) return { kind: "owed", cents: -diff };
   return { kind: "settled", cents: 0 };
 }
+
+export interface ShareRow extends ShareMoney {
+  userId: string;
+  method: "E_TRANSFER" | "CASH" | null;
+}
+
+export interface SharePlan {
+  upsert: ShareRow[];
+  remove: string[];
+}
+
+/** Shares for one item after Going changed: who to write and whose row to drop. */
+export function planShares(
+  item: { amountCents: number; collectorId: string },
+  going: string[],
+  existing: ShareRow[]
+): SharePlan {
+  const split = going.length ? splitCost(item.amountCents, going.length) : null;
+  const byUser = new Map(existing.map((row) => [row.userId, row]));
+  const upsert: ShareRow[] = [];
+  const remove: string[] = [];
+
+  for (const userId of going) {
+    const amountCents = userId === item.collectorId ? split!.collector : split!.each;
+    const prior = byUser.get(userId);
+    if (userId === item.collectorId) {
+      upsert.push({
+        userId,
+        amountCents,
+        paidCents: amountCents,
+        status: "CONFIRMED",
+        method: null,
+      });
+    } else if (!prior || prior.status === "REFUNDED") {
+      upsert.push({ userId, amountCents, paidCents: 0, status: "UNPAID", method: null });
+    } else if (prior.status === "CONFIRMED" && amountCents > prior.paidCents) {
+      upsert.push({ ...prior, amountCents, status: "UNPAID", method: null });
+    } else {
+      upsert.push({ ...prior, amountCents });
+    }
+  }
+
+  for (const row of existing) {
+    if (going.includes(row.userId)) continue;
+    const hasMoney = row.status === "SENT" || row.status === "CONFIRMED";
+    if (!hasMoney) remove.push(row.userId);
+    else if (row.amountCents !== 0)
+      upsert.push({
+        ...row,
+        amountCents: 0,
+        paidCents: row.status === "SENT" ? row.amountCents : row.paidCents,
+      });
+  }
+  return { upsert, remove };
+}

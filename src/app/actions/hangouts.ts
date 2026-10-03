@@ -5,6 +5,7 @@ import { z } from "zod";
 import { AttendanceStatus, HangoutStatus, Role, StopType } from "@prisma/client";
 import { keepInWindow, rankRuns } from "@/lib/availability";
 import { torontoToUtc } from "@/lib/calendar";
+import { resplitCosts } from "@/lib/cost-shares";
 import { uploadCover } from "@/lib/cover-upload";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { prisma } from "@/lib/prisma";
@@ -390,6 +391,7 @@ export async function lockInHangoutAction(
     return true;
   });
   if (!locked) return { error: NOT_COLLECTING };
+  await resplitCosts(hangoutId);
 
   revalidateHangout(hangoutId);
   return { success: true };
@@ -409,6 +411,7 @@ export async function reopenAvailabilityAction(hangoutId: string): Promise<Hango
     if (result.count === 0) return false;
     await tx.hangoutAttendee.deleteMany({ where: { hangoutId: parsed.data } });
     await tx.hangoutCar.deleteMany({ where: { hangoutId: parsed.data } });
+    await tx.hangoutCostShare.deleteMany({ where: { cost: { hangoutId: parsed.data } } });
     return true;
   });
   if (!reopened) return { error: "Hangout not found or not scheduled" };
@@ -454,6 +457,7 @@ export async function setAttendanceAction(
   ]);
 
   if (status !== AttendanceStatus.GOING) await recomputeRoutes(hangoutId);
+  await resplitCosts(hangoutId);
   revalidateHangout(hangoutId);
   return { success: true };
 }

@@ -37,6 +37,7 @@ async function loadModule() {
       findFirst: vi.fn(),
     },
     hangoutCar: { deleteMany: vi.fn() },
+    hangoutCostShare: { deleteMany: vi.fn() },
     hangoutRider: { deleteMany: vi.fn() },
     hangoutAttendee: {
       deleteMany: vi.fn(),
@@ -64,6 +65,8 @@ async function loadModule() {
   vi.doMock("@/lib/tomtom", () => ({ locateAddress }));
   const recomputeRoutes = vi.fn();
   vi.doMock("@/lib/routes", () => ({ recomputeRoutes }));
+  const resplitCosts = vi.fn();
+  vi.doMock("@/lib/cost-shares", () => ({ resplitCosts }));
   const uploadCover = vi.fn();
   vi.doMock("next/cache", () => ({ revalidatePath }));
   vi.doMock("@/lib/get-current-user", () => ({ getCurrentUser }));
@@ -78,6 +81,7 @@ async function loadModule() {
     uploadCover,
     locateAddress,
     recomputeRoutes,
+    resplitCosts,
   };
 }
 
@@ -424,6 +428,7 @@ describe("hangout actions", () => {
         { hangoutId: HANGOUT_ID, userId: member.id, status: "MAYBE" },
       ],
     });
+    expect(mod.resplitCosts).toHaveBeenCalledWith(HANGOUT_ID);
     expect(mod.revalidatePath).toHaveBeenCalledWith(`/hub/hangouts/${HANGOUT_ID}`);
 
     await expect(
@@ -462,6 +467,9 @@ describe("hangout actions", () => {
     });
     expect(mod.prisma.hangoutCar.deleteMany).toHaveBeenCalledWith({
       where: { hangoutId: HANGOUT_ID },
+    });
+    expect(mod.prisma.hangoutCostShare.deleteMany).toHaveBeenCalledWith({
+      where: { cost: { hangoutId: HANGOUT_ID } },
     });
 
     mod.prisma.hangout.updateMany.mockResolvedValueOnce({ count: 0 });
@@ -520,6 +528,7 @@ describe("hangout actions", () => {
       create: { ...key, status: "NOT_GOING" },
       update: { status: "NOT_GOING" },
     });
+    expect(mod.resplitCosts).toHaveBeenCalledWith(HANGOUT_ID);
     expect(mod.revalidatePath).toHaveBeenCalledWith(`/hub/hangouts/${HANGOUT_ID}`);
     expect(mod.prisma.hangoutRider.deleteMany).toHaveBeenCalledWith({ where: key });
     expect(mod.prisma.hangoutCar.deleteMany).toHaveBeenCalledWith({
