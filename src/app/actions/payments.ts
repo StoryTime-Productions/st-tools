@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { z } from "zod";
 import { HangoutStatus, PaymentMethod, PaymentStatus } from "@prisma/client";
+import { sendDiscordDm } from "@/lib/discord";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { prisma } from "@/lib/prisma";
 
@@ -25,11 +27,49 @@ async function loadShare(costId: string, userId: string) {
       paidCents: true,
       status: true,
       cost: {
-        select: { hangoutId: true, collectorId: true, hangout: { select: { status: true } } },
+        select: {
+          title: true,
+          hangoutId: true,
+          collectorId: true,
+          collector: { select: { discordId: true } },
+          hangout: { select: { title: true, status: true } },
+        },
       },
     },
   });
   return share?.cost.hangout.status === HangoutStatus.SCHEDULED ? share : null;
+}
+
+const METHOD_LABEL: Record<PaymentMethod, string> = { E_TRANSFER: "e-Transfer", CASH: "cash" };
+
+/** DM the collector that a share is marked Sent; best effort, skipped when they aren't linked. */
+async function notifyCollector(
+  share: NonNullable<Awaited<ReturnType<typeof loadShare>>>,
+  payer: { name: string | null; email: string; avatarUrl: string | null },
+  method: PaymentMethod
+) {
+  const discordId = share.cost.collector.discordId;
+  if (!discordId) return;
+
+  const origin = (await headers()).get("origin") ?? process.env.NEXT_PUBLIC_SITE_URL ?? "";
+  const url = `${origin}/hub/hangouts/${share.cost.hangoutId}`;
+  const name = payer.name?.trim() || payer.email;
+  const owed = Math.max(share.amountCents - share.paidCents, 0);
+
+  await sendDiscordDm(discordId, {
+    embeds: [
+      {
+        author: { name, ...(payer.avatarUrl ? { icon_url: payer.avatarUrl } : {}) },
+        title: "Payment sent",
+        description: `${name} says they paid $${(owed / 100).toFixed(2)} by ${METHOD_LABEL[method]} for ${share.cost.title} (${share.cost.hangout.title}).`,
+        url,
+        color: 0x10b981,
+        footer: { text: "st-tools · confirm it on the hangout page once it arrives" },
+        timestamp: new Date().toISOString(),
+      },
+    ],
+    linkButton: { label: "Confirm payment", url },
+  });
 }
 
 /** Move a share to `data` only if it is still in `from`; the guard stops double clicks racing. */
@@ -62,13 +102,15 @@ export async function markSentAction(
   if (!share) return { error: NO_SHARE };
   if (share.amountCents <= share.paidCents) return { error: "Nothing to pay" };
 
-  return move(
+  const result = await move(
     costId,
     user.id,
     PaymentStatus.UNPAID,
     { status: PaymentStatus.SENT, method },
     share.cost.hangoutId
   );
+  if ("success" in result) await notifyCollector(share, user, method);
+  return result;
 }
 
 /** Take back "Sent" until the collector confirms (C12). Members who left Going can't, the collector settles them. */

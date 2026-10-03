@@ -4,20 +4,27 @@ const HANGOUT_ID = "22222222-2222-4222-8222-222222222222";
 const COST_ID = "88888888-8888-4888-8888-888888888888";
 const COLLECTOR = "33333333-3333-4333-8333-333333333333";
 const PAYER = "44444444-4444-4444-8444-444444444444";
-const payer = { id: PAYER, role: "MEMBER" };
+const payer = { id: PAYER, role: "MEMBER", name: "Bob", email: "bob@x.test", avatarUrl: null };
 const collector = { id: COLLECTOR, role: "MEMBER" };
 
 const share = (over: Record<string, unknown> = {}) => ({
   amountCents: 1000,
   paidCents: 0,
   status: "UNPAID",
-  cost: { hangoutId: HANGOUT_ID, collectorId: COLLECTOR, hangout: { status: "SCHEDULED" } },
+  cost: {
+    title: "Pizza",
+    hangoutId: HANGOUT_ID,
+    collectorId: COLLECTOR,
+    collector: { discordId: "999" },
+    hangout: { title: "Movie night", status: "SCHEDULED" },
+  },
   ...over,
 });
 
 async function loadModule() {
   const revalidatePath = vi.fn();
   const getCurrentUser = vi.fn().mockResolvedValue(payer);
+  const sendDiscordDm = vi.fn().mockResolvedValue(true);
   const prisma = {
     hangoutCostShare: {
       findUnique: vi.fn().mockResolvedValue(share()),
@@ -25,10 +32,14 @@ async function loadModule() {
     },
   };
   vi.doMock("next/cache", () => ({ revalidatePath }));
+  vi.doMock("next/headers", () => ({
+    headers: vi.fn(async () => new Headers({ origin: "https://st.test" })),
+  }));
+  vi.doMock("@/lib/discord", () => ({ sendDiscordDm }));
   vi.doMock("@/lib/get-current-user", () => ({ getCurrentUser }));
   vi.doMock("@/lib/prisma", () => ({ prisma }));
   const actions = await import("@/app/actions/payments");
-  return { ...actions, revalidatePath, getCurrentUser, prisma };
+  return { ...actions, revalidatePath, getCurrentUser, sendDiscordDm, prisma };
 }
 
 describe("payment actions", () => {
@@ -51,6 +62,48 @@ describe("payment actions", () => {
     });
   });
 
+  it("DMs the linked collector an embed with a link when a share is marked Sent", async () => {
+    const mod = await loadModule();
+    await mod.markSentAction(COST_ID, "E_TRANSFER");
+    const url = `https://st.test/hub/hangouts/${HANGOUT_ID}`;
+    expect(mod.sendDiscordDm).toHaveBeenCalledWith("999", {
+      embeds: [
+        expect.objectContaining({
+          title: "Payment sent",
+          description: "Bob says they paid $10.00 by e-Transfer for Pizza (Movie night).",
+          url,
+        }),
+      ],
+      linkButton: { label: "Confirm payment", url },
+    });
+    expect(mod.sendDiscordDm.mock.calls[0][1].embeds[0].description).not.toContain("**");
+  });
+
+  it("skips the DM when the collector is not linked, the share is stale, or the DM fails", async () => {
+    const mod = await loadModule();
+    mod.prisma.hangoutCostShare.findUnique.mockResolvedValue(
+      share({
+        cost: {
+          title: "Pizza",
+          hangoutId: HANGOUT_ID,
+          collectorId: COLLECTOR,
+          collector: { discordId: null },
+          hangout: { title: "Movie night", status: "SCHEDULED" },
+        },
+      })
+    );
+    await mod.markSentAction(COST_ID, "CASH");
+    expect(mod.sendDiscordDm).not.toHaveBeenCalled();
+
+    mod.prisma.hangoutCostShare.findUnique.mockResolvedValue(share());
+    mod.prisma.hangoutCostShare.updateMany.mockResolvedValueOnce({ count: 0 });
+    await mod.markSentAction(COST_ID, "CASH");
+    expect(mod.sendDiscordDm).not.toHaveBeenCalled();
+
+    mod.sendDiscordDm.mockResolvedValue(false);
+    await expect(mod.markSentAction(COST_ID, "CASH")).resolves.toEqual({ success: true });
+  });
+
   it("refuses Sent / undo when signed out, bad method, no share, nothing owed, or a leaver", async () => {
     const mod = await loadModule();
     mod.getCurrentUser.mockResolvedValue(null);
@@ -69,7 +122,13 @@ describe("payment actions", () => {
     });
     mod.prisma.hangoutCostShare.findUnique.mockResolvedValueOnce(
       share({
-        cost: { hangoutId: HANGOUT_ID, collectorId: COLLECTOR, hangout: { status: "COLLECTING" } },
+        cost: {
+          title: "Pizza",
+          hangoutId: HANGOUT_ID,
+          collectorId: COLLECTOR,
+          collector: { discordId: null },
+          hangout: { title: "Movie night", status: "COLLECTING" },
+        },
       })
     );
     await expect(mod.markSentAction(COST_ID, "CASH")).resolves.toEqual({
