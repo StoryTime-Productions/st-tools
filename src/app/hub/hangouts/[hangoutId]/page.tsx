@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AvailabilityGrid } from "@/app/hub/hangouts/[hangoutId]/_components/availability-grid";
 import { AvailabilitySetup } from "@/app/hub/hangouts/[hangoutId]/_components/availability-setup";
 import { Carpools } from "@/app/hub/hangouts/[hangoutId]/_components/carpools";
+import { CommuteMap } from "@/app/hub/hangouts/[hangoutId]/_components/commute-map";
 import { Itinerary } from "@/app/hub/hangouts/[hangoutId]/_components/itinerary";
 import { LockedIn, RankedSlots } from "@/app/hub/hangouts/[hangoutId]/_components/lock-in";
 import { CancelHangoutButton, HangoutDialog } from "@/app/hub/_components/hangout-dialog";
@@ -16,7 +17,8 @@ import { rankRuns } from "@/lib/availability";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { getAvailabilityResponses, getHangoutDetail } from "@/lib/hangouts";
 import { HANGOUT_STATUS_LABEL } from "@/lib/hub-format";
-import { scheduleStops } from "@/lib/itinerary";
+import { buildCommuteMap } from "@/lib/commute-map";
+import { scheduleStops, timeText } from "@/lib/itinerary";
 import { getStopWeather } from "@/lib/weather";
 
 export default async function HangoutPage({ params }: { params: Promise<{ hangoutId: string }> }) {
@@ -196,6 +198,28 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
               stops={hangout.stops}
               canEdit={canEdit}
               weather={weather}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {hangout.status === "SCHEDULED" ? (
+        <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
+          <CardHeader>
+            <CardTitle className="text-base">Commute map</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CommuteMap
+              hasKey={Boolean(process.env.TOMTOM_API_KEY)}
+              data={buildCommuteMap(
+                hangout.stops.map((stop, index) => ({
+                  title: stop.title,
+                  lat: stop.lat,
+                  lon: stop.lon,
+                  time: timeText(times[index], startSlot?.slice(0, 10) ?? null),
+                })),
+                hangout.cars
+              )}
             />
           </CardContent>
         </Card>
