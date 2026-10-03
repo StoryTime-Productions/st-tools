@@ -6,6 +6,7 @@ import { z } from "zod";
 import { Prisma, Role } from "@prisma/client";
 import { uploadCover } from "@/lib/cover-upload";
 import { sendDiscordDm } from "@/lib/discord";
+import { boardAccessMessage } from "@/lib/discord-messages";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { prisma } from "@/lib/prisma";
 
@@ -435,20 +436,16 @@ async function notifyAdminsOfAccessRequest(
 
   await Promise.all(
     admins.map((admin) =>
-      sendDiscordDm(admin.discordId!, {
-        embeds: [
-          {
-            author: { name, ...(requester.avatarUrl ? { icon_url: requester.avatarUrl } : {}) },
-            title: "Board access request",
-            description: `${name} wants to join ${boardTitle} in ${project.title}.`,
-            url,
-            color: 0xf59e0b,
-            footer: { text: "st-tools · approve or decline on the project page" },
-            timestamp: new Date().toISOString(),
-          },
-        ],
-        linkButton: { label: "Review request", url },
-      })
+      sendDiscordDm(
+        admin.discordId!,
+        boardAccessMessage({
+          board: boardTitle,
+          requester: name,
+          requesterAvatarUrl: requester.avatarUrl,
+          project: project.title,
+          url,
+        })
+      )
     )
   );
 }

@@ -4,10 +4,13 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { AttendanceStatus, HangoutStatus, Role, StopType } from "@prisma/client";
 import { keepInWindow, rankRuns } from "@/lib/availability";
+import { applyAttendance, ENDED } from "@/lib/attendance";
 import { torontoToUtc } from "@/lib/calendar";
 import { resplitCosts } from "@/lib/cost-shares";
 import { uploadCover } from "@/lib/cover-upload";
 import { getCurrentUser } from "@/lib/get-current-user";
+import { announceHangout, renameHangoutThread } from "@/lib/hangout-discord";
+import { announceCancel, announceLockIn, queueUpdate } from "@/lib/hangout-updates";
 import { hangoutEnded } from "@/lib/hangouts";
 import { prisma } from "@/lib/prisma";
 import { recomputeRoutes } from "@/lib/routes";
@@ -62,6 +65,7 @@ export async function createHangoutAction(
     },
     select: { id: true },
   });
+  await announceHangout(hangout.id);
 
   revalidateHangout(hangout.id);
   return { success: true, hangoutId: hangout.id };
@@ -128,6 +132,7 @@ export async function cancelHangoutAction(hangoutId: string): Promise<HangoutAct
     data: { status: HangoutStatus.CANCELLED },
   });
   if (result.count === 0) return { error: NOT_FOUND };
+  await announceCancel(parsed.data);
 
   revalidateHangout(parsed.data);
   return { success: true };
@@ -211,6 +216,8 @@ export async function promoteIdeaAction(ideaId: string): Promise<CreateHangoutRe
       if (linked.count === 0) throw new IdeaTaken();
       return hangout.id;
     });
+
+    await announceHangout(hangoutId);
 
     revalidateHangout(hangoutId);
     revalidatePath("/hub/ideas");
@@ -393,6 +400,8 @@ export async function lockInHangoutAction(
   });
   if (!locked) return { error: NOT_COLLECTING };
   await resplitCosts(hangoutId);
+  await renameHangoutThread(hangoutId);
+  await announceLockIn(hangoutId);
 
   revalidateHangout(hangoutId);
   return { success: true };
@@ -438,30 +447,8 @@ export async function setAttendanceAction(
   if (!parsed.success) return { error: "Invalid attendance" };
   const { hangoutId, status } = parsed.data;
 
-  const hangout = await prisma.hangout.findUnique({
-    where: { id: hangoutId },
-    select: { status: true },
-  });
-  if (hangout?.status !== HangoutStatus.SCHEDULED) return { error: "Hangout is not scheduled" };
-  if (await hangoutEnded(hangoutId)) return { error: ENDED };
-
-  const key = { hangoutId, userId: currentUser.id };
-  await prisma.$transaction([
-    prisma.hangoutAttendee.upsert({
-      where: { hangoutId_userId: key },
-      create: { ...key, status },
-      update: { status },
-    }),
-    ...(status === AttendanceStatus.GOING
-      ? []
-      : [
-          prisma.hangoutRider.deleteMany({ where: key }),
-          prisma.hangoutCar.deleteMany({ where: { hangoutId, driverId: currentUser.id } }),
-        ]),
-  ]);
-
-  if (status !== AttendanceStatus.GOING) await recomputeRoutes(hangoutId);
-  await resplitCosts(hangoutId);
+  const error = await applyAttendance(hangoutId, currentUser.id, status);
+  if (error) return { error };
   revalidateHangout(hangoutId);
   return { success: true };
 }
@@ -502,7 +489,6 @@ async function stopCost(hangoutId: string, values: z.output<typeof stopSchema>) 
   if (!cost) return { error: "Cost item not found" };
   return { data: { ...rest, cashCents: null, costItemId } };
 }
-const ENDED = "This hangout has already ended";
 const EDITABLE = { not: HangoutStatus.CANCELLED };
 const STOP_NOT_FOUND = "Stop not found or hangout cancelled";
 
@@ -536,6 +522,7 @@ export async function addStopAction(
       position: (hangout.stops[0]?.position ?? -1) + 1,
     },
   });
+  await queueUpdate(hangoutId, "Itinerary", "—", `Added ${parsed.data.title}`);
 
   await recomputeRoutes(hangoutId);
   revalidateHangout(hangoutId);
@@ -546,7 +533,7 @@ async function findEditableStop(stopId: string) {
   if (!z.string().uuid().safeParse(stopId).success) return null;
   return prisma.hangoutStop.findFirst({
     where: { id: stopId, hangout: { status: EDITABLE } },
-    select: { id: true, hangoutId: true, position: true, address: true },
+    select: { id: true, hangoutId: true, position: true, address: true, title: true },
   });
 }
 
@@ -570,6 +557,12 @@ export async function updateStopAction(
   if (!cost.data) return { error: cost.error! };
 
   await prisma.hangoutStop.update({ where: { id: stop.id }, data: { ...cost.data, ...place } });
+  await queueUpdate(
+    stop.hangoutId,
+    "Itinerary",
+    stop.title,
+    parsed.data.title === stop.title ? "details changed" : parsed.data.title
+  );
 
   await recomputeRoutes(stop.hangoutId);
   revalidateHangout(stop.hangoutId);
@@ -584,6 +577,7 @@ export async function deleteStopAction(stopId: string): Promise<HangoutActionRes
   if (await hangoutEnded(stop.hangoutId)) return { error: ENDED };
 
   await prisma.hangoutStop.delete({ where: { id: stop.id } });
+  await queueUpdate(stop.hangoutId, "Itinerary", stop.title, "removed");
 
   await recomputeRoutes(stop.hangoutId);
   revalidateHangout(stop.hangoutId);
@@ -614,6 +608,12 @@ export async function moveStopAction(
     prisma.hangoutStop.update({ where: { id: stop.id }, data: { position: neighbour.position } }),
     prisma.hangoutStop.update({ where: { id: neighbour.id }, data: { position: stop.position } }),
   ]);
+  await queueUpdate(
+    stop.hangoutId,
+    "Itinerary",
+    stop.title,
+    direction < 0 ? "moved up" : "moved down"
+  );
 
   await recomputeRoutes(stop.hangoutId);
   revalidateHangout(stop.hangoutId);

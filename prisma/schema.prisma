@@ -286,6 +286,8 @@ model Hangout {
   description          String?
   coverImageUrl        String?
   discordThreadUrl     String?
+  discordThreadId      String?
+  discordMessageId     String?
   status               HangoutStatus @default(COLLECTING)
   availabilityDates    String[]      @default([])
   windowStartHour      Int           @default(9)
@@ -296,13 +298,15 @@ model Hangout {
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
 
-  idea         HangoutIdea?
-  availability HangoutAvailability[]
-  attendees    HangoutAttendee[]
-  stops        HangoutStop[]
-  cars         HangoutCar[]
-  riders       HangoutRider[]
-  costs        HangoutCost[]
+  idea           HangoutIdea?
+  availability   HangoutAvailability[]
+  attendees      HangoutAttendee[]
+  stops          HangoutStop[]
+  cars           HangoutCar[]
+  riders         HangoutRider[]
+  costs          HangoutCost[]
+  notifications  HangoutNotification[]
+  pendingUpdates HangoutPendingUpdate[]
 
   @@map("hangouts")
 }
@@ -572,11 +576,13 @@ model HangoutCost {
 }
 
 model HangoutCostShare {
-  amountCents Int
-  paidCents   Int            @default(0)
-  status      PaymentStatus  @default(UNPAID)
-  method      PaymentMethod?
-  updatedAt   DateTime       @updatedAt
+  amountCents    Int
+  paidCents      Int            @default(0)
+  status         PaymentStatus  @default(UNPAID)
+  method         PaymentMethod?
+  remindersSent  Int            @default(0)
+  lastReminderAt DateTime?
+  updatedAt      DateTime       @updatedAt
 
   costId String
   cost   HangoutCost @relation(fields: [costId], references: [id], onDelete: Cascade)
@@ -586,4 +592,31 @@ model HangoutCostShare {
 
   @@id([costId, userId])
   @@map("hangout_cost_shares")
+}
+
+model HangoutNotification {
+  id        String   @id @default(uuid())
+  kind      String
+  key       String
+  createdAt DateTime @default(now())
+
+  hangoutId String
+  hangout   Hangout @relation(fields: [hangoutId], references: [id], onDelete: Cascade)
+
+  @@unique([hangoutId, kind, key])
+  @@map("hangout_notifications")
+}
+
+model HangoutPendingUpdate {
+  id        String   @id @default(uuid())
+  area      String
+  before    String
+  after     String
+  createdAt DateTime @default(now())
+
+  hangoutId String
+  hangout   Hangout @relation(fields: [hangoutId], references: [id], onDelete: Cascade)
+
+  @@index([hangoutId, createdAt])
+  @@map("hangout_pending_updates")
 }

@@ -11,6 +11,11 @@ async function loadModule() {
   const revalidatePath = vi.fn();
   const getCurrentUser = vi.fn().mockResolvedValue(admin);
   const resplitCosts = vi.fn();
+  const queueUpdate = vi.fn();
+  vi.doMock("@/lib/hangout-updates", async (importActual) => ({
+    ...(await importActual<typeof import("@/lib/hangout-updates")>()),
+    queueUpdate,
+  }));
   const prisma = {
     user: { findUnique: vi.fn().mockResolvedValue({ id: COLLECTOR }) },
     hangout: {
@@ -20,9 +25,12 @@ async function loadModule() {
       create: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
-      findUnique: vi
-        .fn()
-        .mockResolvedValue({ hangoutId: HANGOUT_ID, hangout: { status: "SCHEDULED" } }),
+      findUnique: vi.fn().mockResolvedValue({
+        hangoutId: HANGOUT_ID,
+        title: "Old",
+        amountCents: 4000,
+        hangout: { status: "SCHEDULED" },
+      }),
     },
   };
   vi.doMock("next/cache", () => ({ revalidatePath }));
@@ -30,7 +38,7 @@ async function loadModule() {
   vi.doMock("@/lib/prisma", () => ({ prisma }));
   vi.doMock("@/lib/cost-shares", () => ({ resplitCosts }));
   const actions = await import("@/app/actions/costs");
-  return { ...actions, revalidatePath, getCurrentUser, resplitCosts, prisma };
+  return { ...actions, revalidatePath, getCurrentUser, resplitCosts, prisma, queueUpdate };
 }
 
 describe("cost actions", () => {
@@ -43,6 +51,7 @@ describe("cost actions", () => {
       data: { ...values, notes: null, hangoutId: HANGOUT_ID, position: 2 },
     });
     expect(mod.resplitCosts).toHaveBeenCalledWith(HANGOUT_ID);
+    expect(mod.queueUpdate).toHaveBeenCalledWith(HANGOUT_ID, "Costs", "—", "Tickets $60.00");
     expect(mod.revalidatePath).toHaveBeenCalledWith(`/hub/hangouts/${HANGOUT_ID}`);
   });
 
@@ -85,6 +94,13 @@ describe("cost actions", () => {
     await expect(mod.deleteCostAction(COST_ID)).resolves.toEqual({ success: true });
     expect(mod.prisma.hangoutCost.delete).toHaveBeenCalledWith({ where: { id: COST_ID } });
     expect(mod.resplitCosts).toHaveBeenCalledTimes(2);
+    expect(mod.queueUpdate).toHaveBeenCalledWith(
+      HANGOUT_ID,
+      "Costs",
+      "Old $40.00",
+      "Tickets $60.00"
+    );
+    expect(mod.queueUpdate).toHaveBeenCalledWith(HANGOUT_ID, "Costs", "Old", "removed");
   });
 
   it("guards update and delete", async () => {
@@ -109,5 +125,6 @@ describe("cost actions", () => {
     mod.getCurrentUser.mockResolvedValue(member);
     await expect(mod.deleteCostAction(COST_ID)).resolves.toHaveProperty("error");
     expect(mod.prisma.hangoutCost.delete).not.toHaveBeenCalled();
+    expect(mod.queueUpdate).toHaveBeenCalledTimes(0);
   });
 });

@@ -29,9 +29,12 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Public routes — no auth required. Tiles answer 401 themselves instead of redirecting an <img>.
+  // Public routes — no auth required. Tiles and bot endpoints answer 401 themselves instead of redirecting.
   const isPublicRoute =
-    pathname === "/" || pathname.startsWith("/auth") || pathname.startsWith("/api/map-tiles");
+    pathname === "/" ||
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/api/map-tiles") ||
+    pathname.startsWith("/api/bot");
 
   // Redirect unauthenticated users away from protected routes
   if (!user && !isPublicRoute) {

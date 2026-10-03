@@ -608,9 +608,14 @@ describe("hub actions", () => {
           title: "Board access request",
           description: "alice@x wants to join Art in St-tools.",
           url,
+          fields: [
+            { name: "Board", value: "Art", inline: true },
+            { name: "Requested by", value: "alice@x", inline: true },
+            { name: "Project", value: "St-tools", inline: true },
+          ],
         }),
       ],
-      linkButton: { label: "Review request", url },
+      components: [{ type: 1, components: [{ type: 2, style: 5, label: "Review request", url }] }],
     });
 
     hub.sendDiscordDm.mockClear();

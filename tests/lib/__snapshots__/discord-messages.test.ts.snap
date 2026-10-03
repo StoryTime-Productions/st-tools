@@ -1,0 +1,499 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`builders > announcement matches its snapshot 1`] = `
+{
+  "components": [
+    {
+      "components": [
+        {
+          "label": "Open hangout",
+          "style": 5,
+          "type": 2,
+          "url": "https://tools.test/hub/hangouts/h1",
+        },
+        {
+          "label": "Fill in availability",
+          "style": 5,
+          "type": 2,
+          "url": "https://tools.test/hub/hangouts/h1#availability",
+        },
+      ],
+      "type": 1,
+    },
+    {
+      "components": [
+        {
+          "custom_id": "hangout:h1:going",
+          "label": "Going",
+          "style": 2,
+          "type": 2,
+        },
+        {
+          "custom_id": "hangout:h1:maybe",
+          "label": "Maybe",
+          "style": 2,
+          "type": 2,
+        },
+        {
+          "custom_id": "hangout:h1:not_going",
+          "label": "Not going",
+          "style": 2,
+          "type": 2,
+        },
+      ],
+      "type": 1,
+    },
+  ],
+  "embeds": [
+    {
+      "color": 3900150,
+      "description": "Pizza and a film.",
+      "fields": [
+        {
+          "inline": true,
+          "name": "Proposed by",
+          "value": "Alice",
+        },
+        {
+          "name": "Availability deadline",
+          "value": "<t:1791156600:F> (<t:1791156600:R>)
+Sun, Oct 4, 7:30 p.m. EDT",
+        },
+        {
+          "inline": true,
+          "name": "Dates",
+          "value": "3 dates, 2026-10-04 to 2026-10-06",
+        },
+        {
+          "inline": true,
+          "name": "Going",
+          "value": "2",
+        },
+        {
+          "inline": true,
+          "name": "Maybe",
+          "value": "1",
+        },
+      ],
+      "footer": {
+        "text": "StoryTime Hub · Movie night",
+      },
+      "image": {
+        "url": "https://tools.test/cover.png",
+      },
+      "title": "Movie night",
+      "url": "https://tools.test/hub/hangouts/h1",
+    },
+  ],
+}
+`;
+
+exports[`builders > attendanceReply matches its snapshot 1`] = `
+{
+  "components": [
+    {
+      "components": [
+        {
+          "label": "Fill in availability",
+          "style": 5,
+          "type": 2,
+          "url": "https://tools.test/hub/hangouts/h1",
+        },
+      ],
+      "type": 1,
+    },
+  ],
+  "embeds": [
+    {
+      "color": 3900150,
+      "description": "Attendance opens once the time is locked in.",
+      "footer": {
+        "text": "StoryTime Hub · Movie night",
+      },
+      "title": "Not open yet",
+    },
+  ],
+}
+`;
+
+exports[`builders > boardAccess matches its snapshot 1`] = `
+{
+  "components": [
+    {
+      "components": [
+        {
+          "label": "Review request",
+          "style": 5,
+          "type": 2,
+          "url": "https://tools.test/hub/hangouts/h1",
+        },
+      ],
+      "type": 1,
+    },
+  ],
+  "embeds": [
+    {
+      "author": {
+        "name": "Eve",
+      },
+      "color": 3900150,
+      "description": "Eve wants to join Roadmap in Sailcore.",
+      "fields": [
+        {
+          "inline": true,
+          "name": "Board",
+          "value": "Roadmap",
+        },
+        {
+          "inline": true,
+          "name": "Requested by",
+          "value": "Eve",
+        },
+        {
+          "inline": true,
+          "name": "Project",
+          "value": "Sailcore",
+        },
+      ],
+      "footer": {
+        "text": "StoryTime Hub",
+      },
+      "title": "Board access request",
+      "url": "https://tools.test/hub/hangouts/h1",
+    },
+  ],
+}
+`;
+
+exports[`builders > cancel matches its snapshot 1`] = `
+{
+  "components": [],
+  "embeds": [
+    {
+      "color": 7041664,
+      "description": "Movie night has been cancelled.",
+      "footer": {
+        "text": "StoryTime Hub · Movie night",
+      },
+      "title": "Cancelled",
+    },
+  ],
+}
+`;
+
+exports[`builders > change matches its snapshot 1`] = `
+{
+  "components": [
+    {
+      "components": [
+        {
+          "label": "View changes",
+          "style": 5,
+          "type": 2,
+          "url": "https://tools.test/hub/hangouts/h1#itinerary",
+        },
+      ],
+      "type": 1,
+    },
+  ],
+  "embeds": [
+    {
+      "color": 3900150,
+      "fields": [
+        {
+          "name": "Itinerary",
+          "value": "Stop 2: 7:00 PM -> 7:30 PM",
+        },
+      ],
+      "footer": {
+        "text": "StoryTime Hub · Movie night",
+      },
+      "title": "Hangout updated",
+    },
+  ],
+}
+`;
+
+exports[`builders > connect matches its snapshot 1`] = `
+{
+  "components": [
+    {
+      "components": [
+        {
+          "label": "Open profile",
+          "style": 5,
+          "type": 2,
+          "url": "https://tools.test/hub/hangouts/h1",
+        },
+      ],
+      "type": 1,
+    },
+  ],
+  "embeds": [
+    {
+      "color": 3900150,
+      "description": "Link your Discord account on your profile so the hub knows who you are.",
+      "footer": {
+        "text": "StoryTime Hub",
+      },
+      "title": "Connect Discord first",
+    },
+  ],
+}
+`;
+
+exports[`builders > ideaPost matches its snapshot 1`] = `
+{
+  "components": [
+    {
+      "components": [
+        {
+          "label": "Open ideas",
+          "style": 5,
+          "type": 2,
+          "url": "https://tools.test/hub/hangouts/h1",
+        },
+      ],
+      "type": 1,
+    },
+  ],
+  "embeds": [
+    {
+      "color": 3900150,
+      "fields": [
+        {
+          "inline": true,
+          "name": "Proposed by",
+          "value": "Dana",
+        },
+      ],
+      "footer": {
+        "text": "StoryTime Hub",
+      },
+      "title": "Bowling",
+    },
+  ],
+}
+`;
+
+exports[`builders > ideaReply matches its snapshot 1`] = `
+{
+  "components": [
+    {
+      "components": [
+        {
+          "label": "Open ideas",
+          "style": 5,
+          "type": 2,
+          "url": "https://tools.test/hub/hangouts/h1",
+        },
+      ],
+      "type": 1,
+    },
+  ],
+  "embeds": [
+    {
+      "color": 3900150,
+      "description": "Strikes only",
+      "fields": [
+        {
+          "name": "Status",
+          "value": "Added to the idea list",
+        },
+      ],
+      "footer": {
+        "text": "StoryTime Hub",
+      },
+      "title": "Bowling",
+    },
+  ],
+}
+`;
+
+exports[`builders > lockIn matches its snapshot 1`] = `
+{
+  "components": [
+    {
+      "components": [
+        {
+          "label": "View changes",
+          "style": 5,
+          "type": 2,
+          "url": "https://tools.test/hub/hangouts/h1",
+        },
+      ],
+      "type": 1,
+    },
+  ],
+  "embeds": [
+    {
+      "color": 2278750,
+      "fields": [
+        {
+          "name": "When",
+          "value": "<t:1791156600:F> (<t:1791156600:R>)
+Sun, Oct 4, 7:30 p.m. EDT",
+        },
+        {
+          "inline": true,
+          "name": "Going",
+          "value": "3",
+        },
+        {
+          "inline": true,
+          "name": "Maybe",
+          "value": "1",
+        },
+      ],
+      "footer": {
+        "text": "StoryTime Hub · Movie night",
+      },
+      "image": {
+        "url": "https://tools.test/cover.png",
+      },
+      "timestamp": "2026-10-04T23:30:00.000Z",
+      "title": "Locked in",
+    },
+  ],
+}
+`;
+
+exports[`builders > nudge matches its snapshot 1`] = `
+{
+  "components": [
+    {
+      "components": [
+        {
+          "label": "Fill in availability",
+          "style": 5,
+          "type": 2,
+          "url": "https://tools.test/hub/hangouts/h1",
+        },
+      ],
+      "type": 1,
+    },
+  ],
+  "embeds": [
+    {
+      "color": 16096779,
+      "description": "Availability closes at the deadline below.",
+      "fields": [
+        {
+          "name": "Still waiting on",
+          "value": "Bob, Carol",
+        },
+      ],
+      "footer": {
+        "text": "StoryTime Hub · Movie night",
+      },
+      "timestamp": "2026-10-04T23:30:00.000Z",
+      "title": "Availability needed",
+    },
+  ],
+}
+`;
+
+exports[`builders > reminder matches its snapshot 1`] = `
+{
+  "components": [
+    {
+      "components": [
+        {
+          "label": "View my share",
+          "style": 5,
+          "type": 2,
+          "url": "https://tools.test/hub/hangouts/h1",
+        },
+      ],
+      "type": 1,
+    },
+  ],
+  "embeds": [
+    {
+      "color": 16096779,
+      "description": "You have a share still to settle.",
+      "fields": [
+        {
+          "inline": true,
+          "name": "Item",
+          "value": "Pizza",
+        },
+        {
+          "inline": true,
+          "name": "Amount",
+          "value": "$13.34",
+        },
+        {
+          "inline": true,
+          "name": "Pay to",
+          "value": "Alice",
+        },
+        {
+          "inline": true,
+          "name": "Status",
+          "value": "Unpaid",
+        },
+      ],
+      "footer": {
+        "text": "StoryTime Hub · Movie night",
+      },
+      "title": "Payment reminder",
+    },
+  ],
+}
+`;
+
+exports[`builders > sent matches its snapshot 1`] = `
+{
+  "components": [
+    {
+      "components": [
+        {
+          "label": "Review payment",
+          "style": 5,
+          "type": 2,
+          "url": "https://tools.test/hub/hangouts/h1",
+        },
+      ],
+      "type": 1,
+    },
+  ],
+  "embeds": [
+    {
+      "author": {
+        "icon_url": "https://tools.test/bob.png",
+        "name": "Bob",
+      },
+      "color": 16096779,
+      "description": "Confirm it on the hangout page once it arrives.",
+      "fields": [
+        {
+          "inline": true,
+          "name": "From",
+          "value": "Bob",
+        },
+        {
+          "inline": true,
+          "name": "Item",
+          "value": "Pizza",
+        },
+        {
+          "inline": true,
+          "name": "Amount",
+          "value": "$10.00",
+        },
+        {
+          "inline": true,
+          "name": "Method",
+          "value": "e-Transfer",
+        },
+      ],
+      "footer": {
+        "text": "StoryTime Hub · Movie night",
+      },
+      "title": "Payment sent",
+      "url": "https://tools.test/hub/hangouts/h1",
+    },
+  ],
+}
+`;
