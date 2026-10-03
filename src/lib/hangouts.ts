@@ -30,27 +30,48 @@ interface Person {
   userId: string;
   name: string;
   homeAddress: string | null;
+  homeLat: number | null;
+  homeLon: number | null;
 }
 
 export interface HangoutCarItem {
   id: string;
   seats: number;
   startAddress: string | null;
+  startLat: number | null;
+  startLon: number | null;
   commonPoint: string | null;
+  commonLat: number | null;
+  commonLon: number | null;
   schedule: CarSchedule | null;
   driver: Person;
   riders: (Person & { atCommonPoint: boolean })[];
 }
 
-const PERSON_SELECT = { id: true, name: true, email: true, homeAddress: true } as const;
+const PERSON_SELECT = {
+  id: true,
+  name: true,
+  email: true,
+  homeAddress: true,
+  homeLat: true,
+  homeLon: true,
+} as const;
 
 function person(user: {
   id: string;
   name: string | null;
   email: string;
   homeAddress: string | null;
+  homeLat: number | null;
+  homeLon: number | null;
 }) {
-  return { userId: user.id, name: user.name ?? user.email, homeAddress: user.homeAddress };
+  return {
+    userId: user.id,
+    name: user.name ?? user.email,
+    homeAddress: user.homeAddress,
+    homeLat: user.homeLat,
+    homeLon: user.homeLon,
+  };
 }
 
 export interface HangoutStopItem {
@@ -124,7 +145,11 @@ export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail
           id: true,
           seats: true,
           startAddress: true,
+          startLat: true,
+          startLon: true,
           commonPoint: true,
+          commonLat: true,
+          commonLon: true,
           schedule: true,
           driver: { select: PERSON_SELECT },
           riders: {

@@ -148,4 +148,20 @@ describe("proxy", () => {
     expect(responseCookiesSet).toHaveBeenCalledWith("sb", "token", { path: "/" });
     expect(result).toEqual({ cookies: { set: responseCookiesSet } });
   });
+
+  it("lets anonymous tile requests through so the route can answer 401", async () => {
+    const { proxy, getSupabaseConfig, createServerClient, next, redirect } =
+      await loadProxyModule();
+    const response = { cookies: { set: vi.fn() } };
+    next.mockReturnValue(response);
+    getSupabaseConfig.mockReturnValue({ url: "https://example.supabase.co", anonKey: "anon" });
+    createServerClient.mockReturnValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
+    });
+
+    const result = await proxy(createRequest("/api/map-tiles/10/1/2") as never);
+
+    expect(redirect).not.toHaveBeenCalled();
+    expect(result).toBe(response);
+  });
 });

@@ -52,6 +52,18 @@ export interface Route {
   arrive: string;
   /** Arrival at each waypoint, in the order the waypoints were given. */
   waypoints: string[];
+  /** Road geometry as [lat, lon], thinned to at most MAX_PATH_POINTS. */
+  path: [number, number][];
+}
+
+const MAX_PATH_POINTS = 400;
+
+function thin<T>(items: T[], max: number): T[] {
+  if (items.length <= max) return items;
+  return Array.from(
+    { length: max },
+    (_, i) => items[Math.round((i * (items.length - 1)) / (max - 1))]
+  );
 }
 
 /** One car trip with the best waypoint order, live traffic, and either an arrival or departure time. */
@@ -76,7 +88,10 @@ export async function routeVia(
     const { routes, optimizedWaypoints } = (await response.json()) as {
       routes: {
         summary: { departureTime: string; arrivalTime: string };
-        legs: { summary: { arrivalTime: string } }[];
+        legs: {
+          summary: { arrivalTime: string };
+          points: { latitude: number; longitude: number }[];
+        }[];
       }[];
       optimizedWaypoints?: { providedIndex: number; optimizedIndex: number }[];
     };
@@ -87,6 +102,12 @@ export async function routeVia(
       depart: route.summary.departureTime,
       arrive: route.summary.arrivalTime,
       waypoints: waypoints.map((_, index) => route.legs[legOf(index)].summary.arrivalTime),
+      path: thin(
+        route.legs.flatMap((leg) =>
+          leg.points.map((p): [number, number] => [p.latitude, p.longitude])
+        ),
+        MAX_PATH_POINTS
+      ),
     };
   } catch {
     return { error: "Routing failed" };

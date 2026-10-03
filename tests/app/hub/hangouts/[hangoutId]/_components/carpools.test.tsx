@@ -22,15 +22,34 @@ vi.mock("@/app/actions/hangouts", () => ({ setWeatherBufferAction: bufferMock })
 vi.mock("sonner", () => ({ toast: toastMocks }));
 vi.mock("next/navigation", () => ({ useRouter: () => routerMocks }));
 
-const alice = { userId: "a", name: "Alice", homeAddress: "1 Main St" };
+const alice = {
+  userId: "a",
+  name: "Alice",
+  homeAddress: "1 Main St",
+  homeLat: null,
+  homeLon: null,
+};
 const CAR: HangoutCarItem = {
   id: "car1",
   seats: 2,
   startAddress: null,
+  startLat: null,
+  startLon: null,
   commonPoint: "Union Station",
+  commonLat: null,
+  commonLon: null,
   schedule: null,
   driver: alice,
-  riders: [{ userId: "b", name: "Bob", homeAddress: "9 Elm St", atCommonPoint: false }],
+  riders: [
+    {
+      userId: "b",
+      name: "Bob",
+      homeAddress: "9 Elm St",
+      homeLat: null,
+      homeLon: null,
+      atCommonPoint: false,
+    },
+  ],
 };
 const viewer = (id: string, overrides = {}) => ({ id, isAdmin: false, going: true, ...overrides });
 
@@ -69,7 +88,16 @@ describe("Carpools", () => {
         {
           ...CAR,
           startAddress: "5 Start Rd",
-          riders: [{ userId: "c", name: "Cara", homeAddress: null, atCommonPoint: false }],
+          riders: [
+            {
+              userId: "c",
+              name: "Cara",
+              homeAddress: null,
+              homeLat: null,
+              homeLon: null,
+              atCommonPoint: false,
+            },
+          ],
         },
       ],
       viewer("c")

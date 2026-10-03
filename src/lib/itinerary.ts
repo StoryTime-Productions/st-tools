@@ -1,4 +1,4 @@
-import { addDays } from "@/lib/calendar";
+import { addDays, dayLabel, timeLabel } from "@/lib/calendar";
 
 export interface TimedStop {
   durationMinutes: number;
@@ -43,6 +43,16 @@ export function dayAndClock(minutes: number) {
     day: Math.floor(minutes / 1440) + 1,
     clock: `${String(Math.floor(inDay / 60)).padStart(2, "0")}:${String(inDay % 60).padStart(2, "0")}`,
   };
+}
+
+export function timeText(time: StopTime, startDay: string | null) {
+  if ("offset" in time) {
+    return `+${Math.floor(time.offset / 60)}:${String(time.offset % 60).padStart(2, "0")}`;
+  }
+  const { day, clock } = dayAndClock(time.at);
+  if (!startDay) return `Day ${day}, ${timeLabel(clock)}`;
+  if (day === 1) return timeLabel(clock);
+  return `${dayLabel(addDays(startDay, day - 1), { weekday: "short" })} ${timeLabel(clock)}`;
 }
 
 /** Every EST day key from the locked day through the end (an end at midnight stays on the day before). */
