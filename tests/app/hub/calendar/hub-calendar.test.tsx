@@ -77,6 +77,26 @@ describe("HubCalendar", () => {
     expect(popover).toHaveTextContent("Finished");
   });
 
+  it("caps a busy month day at three chips and opens that day from +N more", () => {
+    const busy = ["A", "B", "C", "D", "E"].map((letter, index) =>
+      card({ id: `busy-${index}`, title: `Task ${letter}`, dueDate: "2026-09-29" })
+    );
+    render(<HubCalendar cards={busy} hangouts={[]} today="2026-09-27" />);
+
+    const day = screen.getByLabelText("September 29");
+    expect(
+      within(day)
+        .getAllByRole("button")
+        .map((b) => b.textContent)
+    ).toEqual(["Task A", "Task B", "Task C", "+2 more"]);
+
+    fireEvent.click(within(day).getByRole("button", { name: "+2 more" }));
+    expect(heading()).toBe("Tuesday, September 29, 2026");
+    for (const letter of ["A", "B", "C", "D", "E"]) {
+      expect(screen.getByText(`Task ${letter}`)).toBeInTheDocument();
+    }
+  });
+
   it("switches views, steps through dates and filters by project", () => {
     render(<HubCalendar cards={CARDS} hangouts={[]} today="2026-09-27" />);
 

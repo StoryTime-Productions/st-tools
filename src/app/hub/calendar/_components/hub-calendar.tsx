@@ -45,6 +45,10 @@ const PALETTE = [
 
 const HANGOUT_COLOUR = "bg-fuchsia-100 text-fuchsia-950 dark:bg-fuchsia-950 dark:text-fuchsia-100";
 
+const MONTH_CHIPS = 3;
+// Month and week fill the screen below the toolbar instead of stopping after the last row.
+const FILL = "md:min-h-[calc(100dvh-19rem)]";
+
 const ALL = "all";
 const HANGOUTS = "hangouts";
 
@@ -93,6 +97,11 @@ export function HubCalendar({
     ) : (
       <HangoutItem key={entry.hangout.id} hangout={entry.hangout} />
     );
+
+  const openDay = (day: string) => {
+    setAnchor(day);
+    setView("day");
+  };
 
   return (
     <div className="space-y-4">
@@ -166,51 +175,93 @@ export function HubCalendar({
         </ul>
       ) : null}
 
-      {view === "month" ? (
-        <div className="border-border/70 grid grid-cols-7 overflow-hidden rounded-2xl border text-xs">
-          {days.slice(0, 7).map((day) => (
-            <div key={day} className="text-muted-foreground bg-muted/40 px-2 py-1 font-medium">
-              {dayLabel(day, { weekday: "short" })}
-            </div>
-          ))}
-          {days.map((day) => (
+      <div>
+        <div className="min-w-0">
+          {view === "month" ? (
             <div
-              key={day}
-              aria-label={dayLabel(day, { month: "long", day: "numeric" })}
               className={cn(
-                "border-border/70 min-h-20 min-w-0 space-y-1 border-t p-1",
-                !day.startsWith(month) && "bg-muted/30"
+                "border-border/70 flex flex-col overflow-hidden rounded-2xl border text-xs",
+                FILL
               )}
             >
-              <DayNumber day={day} today={today} muted={!day.startsWith(month)} />
-              {(byDay.get(day) ?? []).map(item)}
+              <div className="grid grid-cols-7">
+                {days.slice(0, 7).map((day) => (
+                  <div
+                    key={day}
+                    className="text-muted-foreground bg-muted/40 px-2 py-1 font-medium"
+                  >
+                    {dayLabel(day, { weekday: "short" })}
+                  </div>
+                ))}
+              </div>
+              <div className="grid flex-1 auto-rows-fr grid-cols-7">
+                {days.map((day) => {
+                  const entries = byDay.get(day) ?? [];
+                  const hidden = entries.length - MONTH_CHIPS;
+                  return (
+                    <div
+                      key={day}
+                      aria-label={dayLabel(day, { month: "long", day: "numeric" })}
+                      className={cn(
+                        "border-border/70 min-h-20 min-w-0 space-y-1 border-t border-l p-1 first:border-l-0 [&:nth-child(7n+1)]:border-l-0",
+                        !day.startsWith(month) && "bg-muted/30"
+                      )}
+                    >
+                      <DayNumber day={day} today={today} muted={!day.startsWith(month)} />
+                      {entries.slice(0, MONTH_CHIPS).map(item)}
+                      {hidden > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => openDay(day)}
+                          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring w-full rounded-md px-1.5 py-0.5 text-left text-xs focus-visible:ring-2 focus-visible:outline-none"
+                        >
+                          +{hidden} more
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          ))}
-        </div>
-      ) : view === "agenda" ? (
-        <AgendaList days={days.filter((day) => byDay.has(day))} byDay={byDay} item={item} />
-      ) : (
-        <div className={cn("grid gap-3", view === "week" && "md:grid-cols-7")}>
-          {days.map((day) => (
-            <section
-              key={day}
-              aria-label={dayLabel(day, { weekday: "long", month: "long", day: "numeric" })}
-              className="border-border/70 min-w-0 space-y-1 rounded-2xl border p-2"
+          ) : view === "agenda" ? (
+            <AgendaList days={days.filter((day) => byDay.has(day))} byDay={byDay} item={item} />
+          ) : (
+            <div
+              className={cn(
+                "space-y-2",
+                view === "week" && cn("md:grid md:auto-rows-fr md:gap-2 md:space-y-0", FILL)
+              )}
             >
-              <p
-                className={cn(
-                  "text-xs font-medium",
-                  day === today ? "text-primary" : "text-muted-foreground"
-                )}
-              >
-                {dayLabel(day, { weekday: "short", month: "short", day: "numeric" })}
-              </p>
-              {(byDay.get(day) ?? []).map(item)}
-              {byDay.has(day) ? null : <p className="text-muted-foreground text-xs">Nothing due</p>}
-            </section>
-          ))}
+              {days.map((day) => (
+                <section
+                  key={day}
+                  aria-label={dayLabel(day, { weekday: "long", month: "long", day: "numeric" })}
+                  className={cn(
+                    "border-border/70 min-w-0 gap-2 rounded-2xl border p-3 md:flex md:items-start md:gap-4",
+                    day === today && "bg-muted/30"
+                  )}
+                >
+                  <p
+                    className={cn(
+                      "text-xs font-medium md:w-28 md:shrink-0 md:pt-0.5",
+                      day === today ? "text-primary" : "text-muted-foreground"
+                    )}
+                  >
+                    {dayLabel(day, { weekday: "short", month: "short", day: "numeric" })}
+                  </p>
+                  {byDay.has(day) ? (
+                    <div className="grid min-w-0 flex-1 gap-1 md:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))]">
+                      {byDay.get(day)!.map(item)}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground text-xs">Nothing due</p>
+                  )}
+                </section>
+              ))}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -261,7 +312,7 @@ function CalendarItem({ card, colour }: { card: CalendarCard; colour: string }) 
         <button
           type="button"
           className={cn(
-            "focus-visible:ring-ring block w-full truncate rounded-md px-1.5 py-0.5 text-left text-xs focus-visible:ring-2 focus-visible:outline-none",
+            "focus-visible:ring-ring block w-full truncate rounded-md px-1.5 py-0.5 text-left text-xs focus-visible:ring-2 focus-visible:outline-none md:break-words md:whitespace-normal",
             colour,
             card.finished && "line-through opacity-75"
           )}
@@ -296,7 +347,7 @@ function HangoutItem({ hangout }: { hangout: CalendarHangout }) {
         <button
           type="button"
           className={cn(
-            "focus-visible:ring-ring block w-full truncate rounded-md px-1.5 py-0.5 text-left text-xs focus-visible:ring-2 focus-visible:outline-none",
+            "focus-visible:ring-ring block w-full truncate rounded-md px-1.5 py-0.5 text-left text-xs focus-visible:ring-2 focus-visible:outline-none md:break-words md:whitespace-normal",
             time
               ? HANGOUT_COLOUR
               : "text-muted-foreground border border-dashed border-fuchsia-400 dark:border-fuchsia-700"
