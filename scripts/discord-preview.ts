@@ -1,7 +1,8 @@
 // Posts one of every hub Discord message to a test channel so the layout can be eyeballed once.
-// Usage: pnpm discord:preview <channelId> [label...]   (needs DISCORD_BOT_TOKEN; NEXT_PUBLIC_SITE_URL optional)
+// Usage: pnpm discord:preview <channelId> [label...]
+//        pnpm discord:preview --dm <discordUserId>   (sends the DM-only messages as real DMs)   (needs DISCORD_BOT_TOKEN; NEXT_PUBLIC_SITE_URL optional)
 import type { DiscordMessage } from "../src/lib/discord";
-import { postToChannel } from "../src/lib/discord";
+import { postToChannel, sendDiscordDm } from "../src/lib/discord";
 import {
   announcementMessage,
   attendanceReplyMessage,
@@ -17,9 +18,14 @@ import {
   paymentSentMessage,
 } from "../src/lib/discord-messages";
 
-const channelId = process.argv[2] ?? process.env.DISCORD_HANGOUTS_CHANNEL_ID;
-if (!channelId || !process.env.DISCORD_BOT_TOKEN) {
-  console.error("Usage: pnpm discord:preview <channelId> (DISCORD_BOT_TOKEN must be set)");
+const args = process.argv.slice(2);
+const dmAt = args.indexOf("--dm");
+const dmUser = dmAt >= 0 ? args[dmAt + 1] : undefined;
+const channelId = dmUser ? undefined : (args[0] ?? process.env.DISCORD_HANGOUTS_CHANNEL_ID);
+if (!(channelId || dmUser) || !process.env.DISCORD_BOT_TOKEN) {
+  console.error(
+    "Usage: pnpm discord:preview <channelId> | --dm <discordUserId> (DISCORD_BOT_TOKEN must be set)"
+  );
   process.exit(1);
 }
 
@@ -107,12 +113,17 @@ const samples: [string, DiscordMessage][] = [
   ],
 ];
 
+// Messages the app sends as DMs (admin requests, collector and payer notices).
+const DM_LABELS = ["board access", "payment sent", "payment reminder"];
+
 async function main() {
-  const only = process.argv.slice(3);
+  const only = dmUser ? DM_LABELS : args.slice(1);
   for (const [label, message] of samples) {
     if (only.length && !only.includes(label)) continue;
-    const id = await postToChannel(channelId as string, message);
-    console.log(`${id ? "posted " : "FAILED "} ${label}`);
+    const ok = dmUser
+      ? await sendDiscordDm(dmUser, message)
+      : (await postToChannel(channelId as string, message)) !== null;
+    console.log(`${ok ? "posted " : "FAILED "} ${label}${dmUser ? " (DM)" : ""}`);
     await new Promise((resolve) => setTimeout(resolve, 1500));
   }
 }
