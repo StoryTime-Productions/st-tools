@@ -33,8 +33,19 @@ const MESSAGES: Record<string, DiscordMessage> = {
     deadline: DATE,
     dates: ["2026-10-04", "2026-10-05", "2026-10-06"],
     coverUrl: "https://tools.test/cover.png",
+    scheduled: true,
     going: 2,
     maybe: 1,
+  }),
+  announcementCollecting: announcementMessage({
+    hangoutId: "h1",
+    title: "Movie night",
+    description: "Pizza and a film. Bring snacks.",
+    url: URL,
+    availabilityUrl: `${URL}#availability`,
+    proposedBy: "Alice",
+    deadline: DATE,
+    dates: ["2026-10-04", "2026-10-05", "2026-10-06"],
   }),
   nudge: nudgeMessage({
     hangoutTitle: "Movie night",
@@ -233,7 +244,7 @@ describe("builders", () => {
     const embed = message.embeds[0];
     expect(embed.description).toBeUndefined();
     expect(embed.image).toBeUndefined();
-    expect(embed.fields?.map((f) => f.name)).toEqual(["Going", "Maybe"]);
+    expect(embed.fields).toEqual([]);
   });
 
   it("describes a single date plainly and keeps only the first sentence", () => {
@@ -334,7 +345,22 @@ describe("limits and markup (G2, G8, G9)", () => {
     }
   });
 
-  it("gives the announcement three state buttons that carry the hangout id", () => {
+  it("shows attendance only once locked in", () => {
+    const collecting = MESSAGES.announcementCollecting;
+    expect(collecting.components).toHaveLength(1);
+    expect(collecting.embeds[0].fields?.map((f) => f.name)).not.toContain("Going");
+    expect(collecting.components?.[0].components.map((b) => ("label" in b ? b.label : ""))).toEqual(
+      ["Open hangout", "Fill in availability"]
+    );
+
+    const locked = MESSAGES.announcement;
+    expect(locked.embeds[0].fields?.map((f) => f.name)).toEqual(
+      expect.arrayContaining(["Going", "Maybe"])
+    );
+    expect(locked.components?.[0].components).toHaveLength(1);
+  });
+
+  it("gives the locked-in announcement three state buttons that carry the hangout id", () => {
     const ids = MESSAGES.announcement.components?.[1].components.map((b) =>
       "custom_id" in b ? b.custom_id : ""
     );

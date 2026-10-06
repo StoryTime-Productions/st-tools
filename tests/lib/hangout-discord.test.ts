@@ -208,7 +208,12 @@ describe("refreshAnnouncement", () => {
 
   it("edits the opener in place with the live counts", async () => {
     const mod = await load();
-    mod.prisma.hangout.findUnique.mockResolvedValue({ ...HANGOUT, discordMessageId: "m-1" });
+    mod.prisma.hangout.findUnique.mockResolvedValue({
+      ...HANGOUT,
+      status: "SCHEDULED",
+      startSlot: "2026-10-03T19:30",
+      discordMessageId: "m-1",
+    });
 
     await expect(mod.refreshAnnouncement(ID)).resolves.toBe(true);
 
@@ -218,6 +223,24 @@ describe("refreshAnnouncement", () => {
       ["Going", "Maybe"].includes(f.name)
     );
     expect(counts.map((f: { value: string }) => f.value)).toEqual(["2", "1"]);
+  });
+
+  it("drops the counts and attendance buttons while collecting or cancelled", async () => {
+    const mod = await load();
+    for (const status of ["COLLECTING", "CANCELLED"]) {
+      mod.prisma.hangout.findUnique.mockResolvedValue({
+        ...HANGOUT,
+        status,
+        startSlot: status === "CANCELLED" ? "2026-10-03T19:30" : null,
+        discordMessageId: "m-1",
+      });
+      await mod.refreshAnnouncement(ID);
+    }
+
+    for (const [, , edited] of mod.editMessage.mock.calls) {
+      expect(edited.embeds[0].fields.map((f: { name: string }) => f.name)).not.toContain("Going");
+      expect(edited.components).toHaveLength(1);
+    }
   });
 
   it("does nothing without a channel or an announced message, and never throws", async () => {

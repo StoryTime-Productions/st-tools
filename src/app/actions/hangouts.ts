@@ -9,7 +9,7 @@ import { torontoToUtc } from "@/lib/calendar";
 import { resplitCosts } from "@/lib/cost-shares";
 import { uploadCover } from "@/lib/cover-upload";
 import { getCurrentUser } from "@/lib/get-current-user";
-import { announceHangout, renameHangoutThread } from "@/lib/hangout-discord";
+import { announceHangout, refreshAnnouncement, renameHangoutThread } from "@/lib/hangout-discord";
 import { announceCancel, announceLockIn, queueUpdate } from "@/lib/hangout-updates";
 import { hangoutEnded } from "@/lib/hangouts";
 import { prisma } from "@/lib/prisma";
@@ -133,6 +133,7 @@ export async function cancelHangoutAction(hangoutId: string): Promise<HangoutAct
   });
   if (result.count === 0) return { error: NOT_FOUND };
   await announceCancel(parsed.data);
+  await refreshAnnouncement(parsed.data);
 
   revalidateHangout(parsed.data);
   return { success: true };
@@ -401,6 +402,7 @@ export async function lockInHangoutAction(
   if (!locked) return { error: NOT_COLLECTING };
   await resplitCosts(hangoutId);
   await renameHangoutThread(hangoutId);
+  await refreshAnnouncement(hangoutId);
   await announceLockIn(hangoutId);
 
   revalidateHangout(hangoutId);
@@ -427,6 +429,7 @@ export async function reopenAvailabilityAction(hangoutId: string): Promise<Hango
     return true;
   });
   if (!reopened) return { error: "Hangout not found or not scheduled" };
+  await refreshAnnouncement(parsed.data);
 
   revalidateHangout(parsed.data);
   return { success: true };

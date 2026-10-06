@@ -29,6 +29,7 @@ async function hangoutUrl(hangoutId: string) {
 
 const ANNOUNCE_SELECT = {
   title: true,
+  status: true,
   description: true,
   coverImageUrl: true,
   discordThreadUrl: true,
@@ -42,10 +43,12 @@ const ANNOUNCE_SELECT = {
 
 type AnnounceRow = {
   title: string;
+  status: string;
   description: string | null;
   coverImageUrl: string | null;
   availabilityDates: string[];
   availabilityDeadline: Date | null;
+  startSlot: string | null;
   idea: { proposerName: string } | null;
 };
 
@@ -55,6 +58,7 @@ function announcementFor(
   url: string,
   counts: { going: number; maybe: number } = { going: 0, maybe: 0 }
 ) {
+  const scheduled = hangout.status === "SCHEDULED" && Boolean(hangout.startSlot);
   return announcementMessage({
     hangoutId,
     title: hangout.title,
@@ -65,7 +69,8 @@ function announcementFor(
     deadline: hangout.availabilityDeadline,
     dates: hangout.availabilityDates,
     coverUrl: hangout.coverImageUrl,
-    ...counts,
+    scheduled,
+    ...(scheduled ? counts : {}),
   });
 }
 

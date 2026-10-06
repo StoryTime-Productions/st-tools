@@ -77,7 +77,12 @@ async function loadModule() {
   const queueUpdate = vi.fn();
   vi.doMock("@/lib/hangout-updates", () => ({ announceCancel, announceLockIn, queueUpdate }));
   const renameHangoutThread = vi.fn();
-  vi.doMock("@/lib/hangout-discord", () => ({ announceHangout, renameHangoutThread }));
+  const refreshAnnouncement = vi.fn();
+  vi.doMock("@/lib/hangout-discord", () => ({
+    announceHangout,
+    renameHangoutThread,
+    refreshAnnouncement,
+  }));
   vi.doMock("next/cache", () => ({ revalidatePath }));
   vi.doMock("@/lib/get-current-user", () => ({ getCurrentUser }));
   vi.doMock("@/lib/prisma", () => ({ prisma }));
@@ -95,6 +100,7 @@ async function loadModule() {
     hangoutEnded,
     announceHangout,
     renameHangoutThread,
+    refreshAnnouncement,
     announceCancel,
     announceLockIn,
     queueUpdate,
@@ -181,6 +187,7 @@ describe("hangout actions", () => {
       data: { status: "CANCELLED" },
     });
     expect(mod.announceCancel).toHaveBeenCalledWith(HANGOUT_ID);
+    expect(mod.refreshAnnouncement).toHaveBeenCalledWith(HANGOUT_ID);
     mod.announceCancel.mockClear();
     await expect(mod.cancelHangoutAction("bad")).resolves.toHaveProperty("error");
 
@@ -452,6 +459,7 @@ describe("hangout actions", () => {
     expect(mod.resplitCosts).toHaveBeenCalledWith(HANGOUT_ID);
     expect(mod.renameHangoutThread).toHaveBeenCalledWith(HANGOUT_ID);
     expect(mod.announceLockIn).toHaveBeenCalledWith(HANGOUT_ID);
+    expect(mod.refreshAnnouncement).toHaveBeenCalledWith(HANGOUT_ID);
     expect(mod.revalidatePath).toHaveBeenCalledWith(`/hub/hangouts/${HANGOUT_ID}`);
 
     await expect(
@@ -494,11 +502,14 @@ describe("hangout actions", () => {
     expect(mod.prisma.hangoutCostShare.deleteMany).toHaveBeenCalledWith({
       where: { cost: { hangoutId: HANGOUT_ID } },
     });
+    expect(mod.refreshAnnouncement).toHaveBeenCalledWith(HANGOUT_ID);
+    mod.refreshAnnouncement.mockClear();
 
     mod.prisma.hangout.updateMany.mockResolvedValueOnce({ count: 0 });
     await expect(mod.reopenAvailabilityAction(HANGOUT_ID)).resolves.toEqual({
       error: "Hangout not found or not scheduled",
     });
+    expect(mod.refreshAnnouncement).not.toHaveBeenCalled();
     await expect(mod.reopenAvailabilityAction("nope")).resolves.toHaveProperty("error");
 
     mod.getCurrentUser.mockResolvedValue(member);

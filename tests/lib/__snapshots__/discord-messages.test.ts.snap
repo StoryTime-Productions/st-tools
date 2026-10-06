@@ -11,12 +11,6 @@ exports[`builders > announcement matches its snapshot 1`] = `
           "type": 2,
           "url": "https://tools.test/hub/hangouts/h1",
         },
-        {
-          "label": "Fill in availability",
-          "style": 5,
-          "type": 2,
-          "url": "https://tools.test/hub/hangouts/h1#availability",
-        },
       ],
       "type": 1,
     },
@@ -80,6 +74,58 @@ Sun, Oct 4, 7:30 p.m. EDT",
       },
       "image": {
         "url": "https://tools.test/cover.png",
+      },
+      "title": "Movie night",
+      "url": "https://tools.test/hub/hangouts/h1",
+    },
+  ],
+}
+`;
+
+exports[`builders > announcementCollecting matches its snapshot 1`] = `
+{
+  "components": [
+    {
+      "components": [
+        {
+          "label": "Open hangout",
+          "style": 5,
+          "type": 2,
+          "url": "https://tools.test/hub/hangouts/h1",
+        },
+        {
+          "label": "Fill in availability",
+          "style": 5,
+          "type": 2,
+          "url": "https://tools.test/hub/hangouts/h1#availability",
+        },
+      ],
+      "type": 1,
+    },
+  ],
+  "embeds": [
+    {
+      "color": 3900150,
+      "description": "Pizza and a film.",
+      "fields": [
+        {
+          "inline": true,
+          "name": "Proposed by",
+          "value": "Alice",
+        },
+        {
+          "name": "Availability deadline",
+          "value": "<t:1791156600:F> (<t:1791156600:R>)
+Sun, Oct 4, 7:30 p.m. EDT",
+        },
+        {
+          "inline": true,
+          "name": "Dates",
+          "value": "3 dates, 2026-10-04 to 2026-10-06",
+        },
+      ],
+      "footer": {
+        "text": "StoryTime Hub · Movie night",
       },
       "title": "Movie night",
       "url": "https://tools.test/hub/hangouts/h1",
