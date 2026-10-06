@@ -9,6 +9,7 @@ const navigationState = vi.hoisted(() => ({
 const actionMocks = vi.hoisted(() => ({
   signInAction: vi.fn(),
   signInWithGoogleAction: vi.fn(),
+  signInWithDiscordAction: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({

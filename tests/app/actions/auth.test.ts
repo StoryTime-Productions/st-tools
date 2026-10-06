@@ -316,6 +316,36 @@ describe("auth actions", () => {
     expect(redirect).toHaveBeenCalledWith("https://accounts.google.com/o/oauth2/auth");
   });
 
+  it("starts discord oauth and redirects to provider url", async () => {
+    const { signInWithDiscordAction, createClient, redirect } = await loadAuthModule();
+    const supabase = buildSupabaseClient();
+    createClient.mockResolvedValue(supabase);
+
+    supabase.auth.signInWithOAuth.mockResolvedValue({
+      data: { url: "https://discord.com/oauth2/authorize" },
+      error: null,
+    });
+
+    await signInWithDiscordAction();
+    expect(supabase.auth.signInWithOAuth).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "discord" })
+    );
+    expect(redirect).toHaveBeenCalledWith("https://discord.com/oauth2/authorize");
+  });
+
+  it("returns the provider error when discord oauth fails", async () => {
+    const { signInWithDiscordAction, createClient } = await loadAuthModule();
+    const supabase = buildSupabaseClient();
+    createClient.mockResolvedValue(supabase);
+
+    supabase.auth.signInWithOAuth.mockResolvedValue({
+      data: { url: null },
+      error: { message: "Discord disabled" },
+    });
+
+    expect(await signInWithDiscordAction()).toEqual({ error: "Discord disabled" });
+  });
+
   it("signs out and redirects to sign-in", async () => {
     const { signOutAction, createClient, redirect } = await loadAuthModule();
     const supabase = buildSupabaseClient();

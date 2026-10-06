@@ -5,6 +5,7 @@ import SignUpPage from "@/app/auth/sign-up/page";
 const actionMocks = vi.hoisted(() => ({
   signUpAction: vi.fn(),
   signInWithGoogleAction: vi.fn(),
+  signInWithDiscordAction: vi.fn(),
 }));
 
 vi.mock("@/app/actions/auth", () => actionMocks);
