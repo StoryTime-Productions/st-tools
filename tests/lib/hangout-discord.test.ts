@@ -13,7 +13,7 @@ const HANGOUT = {
   idea: { proposerName: "Alice" },
 };
 
-async function load() {
+async function load(requestHeaders: Record<string, string> = { origin: "https://tools.test" }) {
   const prisma = {
     hangout: { findUnique: vi.fn().mockResolvedValue(HANGOUT), update: vi.fn() },
     hangoutAttendee: { count: vi.fn().mockResolvedValueOnce(2).mockResolvedValueOnce(1) },
@@ -24,11 +24,54 @@ async function load() {
   vi.doMock("@/lib/prisma", () => ({ prisma }));
   vi.doMock("@/lib/discord", () => ({ startThread, renameThread, editMessage }));
   vi.doMock("next/headers", () => ({
-    headers: async () => new Headers({ origin: "https://tools.test" }),
+    headers: async () => new Headers(requestHeaders),
   }));
   const mod = await import("@/lib/hangout-discord");
   return { ...mod, prisma, startThread, renameThread, editMessage };
 }
+
+describe("siteUrl", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.unstubAllEnvs();
+  });
+
+  it("prefers the request origin", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://configured.test");
+    const { siteUrl } = await load({ origin: "https://tools.test" });
+    expect(await siteUrl()).toBe("https://tools.test");
+  });
+
+  it("uses the configured address without a trailing slash", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://configured.test/");
+    const { siteUrl } = await load({});
+    expect(await siteUrl()).toBe("https://configured.test");
+  });
+
+  it("falls back to the request host when the configured address is empty", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "");
+    const { siteUrl } = await load({ host: "st-tools.vercel.app" });
+    expect(await siteUrl()).toBe("https://st-tools.vercel.app");
+  });
+
+  it("uses forwarded headers and http for localhost", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "");
+    expect(
+      await (await load({ "x-forwarded-host": "a.test", "x-forwarded-proto": "https" })).siteUrl()
+    ).toBe("https://a.test");
+    vi.resetModules();
+    expect(await (await load({ host: "localhost:3000" })).siteUrl()).toBe("http://localhost:3000");
+  });
+
+  it("falls back to VERCEL_URL, then localhost", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "");
+    vi.stubEnv("VERCEL_URL", "preview.vercel.app");
+    expect(await (await load({})).siteUrl()).toBe("https://preview.vercel.app");
+    vi.resetModules();
+    vi.stubEnv("VERCEL_URL", "");
+    expect(await (await load({})).siteUrl()).toBe("http://localhost:3000");
+  });
+});
 
 describe("threadName", () => {
   it("adds the day once scheduled and respects the 100 character cap", async () => {
