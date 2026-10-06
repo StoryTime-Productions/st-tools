@@ -5,6 +5,7 @@ import SignUpPage from "@/app/auth/sign-up/page";
 const actionMocks = vi.hoisted(() => ({
   signUpAction: vi.fn(),
   signInWithGoogleAction: vi.fn(),
+  signInWithDiscordAction: vi.fn(),
 }));
 
 vi.mock("@/app/actions/auth", () => actionMocks);
@@ -57,6 +58,16 @@ describe("SignUpPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /^sign up$/i }));
 
     expect(await screen.findByText("Check your email")).toBeInTheDocument();
+  });
+
+  it("starts discord sign-in from the discord button", async () => {
+    render(<SignUpPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /continue with discord/i }));
+
+    await waitFor(() => {
+      expect(actionMocks.signInWithDiscordAction).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("validates password confirmation before submit", async () => {

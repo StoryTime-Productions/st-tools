@@ -116,12 +116,12 @@ export async function signUpAction(
   redirect("/dashboard");
 }
 
-export async function signInWithGoogleAction(): Promise<AuthActionResult> {
+async function signInWithProvider(provider: "google" | "discord"): Promise<AuthActionResult> {
   const supabase = await createClient();
   const origin = await resolveSiteOrigin();
 
   const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
+    provider,
     options: {
       redirectTo: `${origin}/auth/callback`,
     },
@@ -130,6 +130,14 @@ export async function signInWithGoogleAction(): Promise<AuthActionResult> {
   if (error) return { error: error.message };
 
   redirect(data.url!);
+}
+
+export async function signInWithGoogleAction(): Promise<AuthActionResult> {
+  return signInWithProvider("google");
+}
+
+export async function signInWithDiscordAction(): Promise<AuthActionResult> {
+  return signInWithProvider("discord");
 }
 
 export async function signInAction(
