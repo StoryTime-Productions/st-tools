@@ -5,8 +5,22 @@ import { prisma } from "@/lib/prisma";
 
 const THREAD_NAME_MAX = 100;
 
+/** Absolute site address: Discord rejects relative link buttons, so never return "". */
 export async function siteUrl() {
-  return (await headers()).get("origin") ?? process.env.NEXT_PUBLIC_SITE_URL ?? "";
+  const headerStore = await headers();
+  const origin = headerStore.get("origin");
+  if (origin) return origin;
+
+  const configured = process.env.NEXT_PUBLIC_SITE_URL;
+  if (configured) return configured.replace(/\/+$/, "");
+
+  const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host");
+  if (host) {
+    const local = host.startsWith("localhost") || host.startsWith("127.0.0.1");
+    return `${headerStore.get("x-forwarded-proto") ?? (local ? "http" : "https")}://${host}`;
+  }
+
+  return process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000";
 }
 
 async function hangoutUrl(hangoutId: string) {
