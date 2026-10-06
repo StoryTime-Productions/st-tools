@@ -73,7 +73,7 @@ export function AvailabilitySetup({
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 lg:grid lg:grid-cols-[minmax(0,1fr)_16rem] lg:items-start lg:gap-10 lg:space-y-0">
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">
           <p className="text-sm font-medium whitespace-nowrap">
@@ -101,7 +101,7 @@ export function AvailabilitySetup({
             </Button>
           </div>
         </div>
-        <div className="grid max-w-sm grid-cols-7 gap-1 text-center text-xs">
+        <div className="grid grid-cols-7 gap-1 text-center text-xs">
           {days.slice(0, 7).map((day) => (
             <span key={day} className="text-muted-foreground py-1" aria-hidden="true">
               {dayLabel(day, { weekday: "narrow" })}
@@ -119,7 +119,7 @@ export function AvailabilitySetup({
                 disabled={day < today && !picked}
                 onClick={() => toggle(day)}
                 className={cn(
-                  "focus-visible:ring-ring aspect-square rounded-lg text-sm focus-visible:ring-2 focus-visible:outline-none disabled:opacity-40",
+                  "focus-visible:ring-ring h-11 rounded-lg text-sm focus-visible:ring-2 focus-visible:outline-none disabled:opacity-40",
                   picked ? "bg-primary text-primary-foreground" : "hover:bg-muted",
                   day === today && !picked && "border-primary border"
                 )}
@@ -131,34 +131,36 @@ export function AvailabilitySetup({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-end gap-4">
-        <HourSelect
-          label="No earlier than"
-          value={startHour}
-          hours={HOURS.slice(0, 24)}
-          onChange={setStartHour}
-        />
-        <HourSelect
-          label="No later than"
-          value={endHour}
-          hours={HOURS.slice(1)}
-          onChange={setEndHour}
-        />
-        <div className="space-y-2">
-          <Label htmlFor="availability-deadline">Deadline (optional, EST)</Label>
-          <Input
-            id="availability-deadline"
-            type="datetime-local"
-            value={deadline}
-            onChange={(event) => setDeadline(event.target.value)}
-            className="w-56"
+      <div className="space-y-5">
+        <div className="flex flex-wrap items-end gap-4 lg:flex-col lg:items-stretch">
+          <HourSelect
+            label="No earlier than"
+            value={startHour}
+            hours={HOURS.slice(0, 24)}
+            onChange={setStartHour}
           />
+          <HourSelect
+            label="No later than"
+            value={endHour}
+            hours={HOURS.slice(1)}
+            onChange={setEndHour}
+          />
+          <div className="space-y-2">
+            <Label htmlFor="availability-deadline">Deadline (optional, EST)</Label>
+            <Input
+              id="availability-deadline"
+              type="datetime-local"
+              value={deadline}
+              onChange={(event) => setDeadline(event.target.value)}
+              className="w-56 lg:w-full"
+            />
+          </div>
         </div>
-      </div>
 
-      <Button type="button" onClick={handleSave} disabled={isPending || dates.length === 0}>
-        {isPending ? "Saving..." : "Save availability setup"}
-      </Button>
+        <Button type="button" onClick={handleSave} disabled={isPending || dates.length === 0}>
+          {isPending ? "Saving..." : "Save availability setup"}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -178,7 +180,7 @@ function HourSelect({
     <div className="space-y-2">
       <p className="text-sm font-medium">{label}</p>
       <Select value={String(value)} onValueChange={(next) => onChange(Number(next))}>
-        <SelectTrigger className="w-32" aria-label={label}>
+        <SelectTrigger className="w-32 lg:w-full" aria-label={label}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

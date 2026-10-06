@@ -236,7 +236,7 @@ export function AvailabilityGrid({
         })}
       </section>
 
-      <aside className="space-y-3 text-sm" aria-live="polite">
+      <aside className="space-y-3 text-sm" aria-label="Who is free" aria-live="polite">
         {focus ? (
           <>
             <p className="font-medium">
