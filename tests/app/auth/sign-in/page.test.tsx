@@ -66,6 +66,16 @@ describe("SignInPage", () => {
     expect(screen.getByText("Invalid login credentials")).toBeInTheDocument();
   });
 
+  it("starts discord sign-in from the discord button", async () => {
+    render(<SignInPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /continue with discord/i }));
+
+    await waitFor(() => {
+      expect(actionMocks.signInWithDiscordAction).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("validates form fields before submitting", async () => {
     render(<SignInPage />);
 
