@@ -88,6 +88,8 @@ export interface AnnouncementInput {
   deadline?: Date | null;
   dates?: string[];
   coverUrl?: string | null;
+  /** Locked in: shows the Going / Maybe counts and the attendance buttons (not before). */
+  scheduled?: boolean;
   going?: number;
   maybe?: number;
 }
@@ -97,9 +99,16 @@ export function announcementMessage(input: AnnouncementInput) {
     ...(input.proposedBy ? [field("Proposed by", name(input.proposedBy), true)] : []),
     ...(input.deadline ? [field("Availability deadline", discordTime(input.deadline))] : []),
     ...(input.dates?.length ? [field("Dates", dateSummary(input.dates), true)] : []),
-    field("Going", String(input.going ?? 0), true),
-    field("Maybe", String(input.maybe ?? 0), true),
+    ...(input.scheduled
+      ? [
+          field("Going", String(input.going ?? 0), true),
+          field("Maybe", String(input.maybe ?? 0), true),
+        ]
+      : []),
   ];
+  const links = input.scheduled
+    ? row(link("Open hangout", input.url))
+    : row(link("Open hangout", input.url), link("Fill in availability", input.availabilityUrl));
   return embedMessage(
     {
       title: title(input.title),
@@ -110,12 +119,16 @@ export function announcementMessage(input: AnnouncementInput) {
       ...(input.coverUrl ? { image: { url: input.coverUrl } } : {}),
       footer: footer(input.title),
     },
-    row(link("Open hangout", input.url), link("Fill in availability", input.availabilityUrl)),
-    row(
-      choice(input.hangoutId, "going", "Going"),
-      choice(input.hangoutId, "maybe", "Maybe"),
-      choice(input.hangoutId, "not_going", "Not going")
-    )
+    links,
+    ...(input.scheduled
+      ? [
+          row(
+            choice(input.hangoutId, "going", "Going"),
+            choice(input.hangoutId, "maybe", "Maybe"),
+            choice(input.hangoutId, "not_going", "Not going")
+          ),
+        ]
+      : [])
   );
 }
 
