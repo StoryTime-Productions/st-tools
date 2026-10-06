@@ -320,15 +320,24 @@ export function WorkspaceShell({
                 <TooltipTrigger asChild>
                   <Link
                     href="/dashboard"
-                    className="w-fit rounded-2xl bg-zinc-900 px-3 py-2 dark:bg-transparent dark:px-2"
+                    aria-label="StoryTime Productions"
+                    className="block w-full rounded-2xl"
                   >
                     <Image
-                      src="/storytime-logo.png"
-                      alt="StoryTime Productions"
+                      src="/storytime-logo-light.png"
+                      alt=""
                       width={431}
                       height={177}
                       priority
-                      className="h-14 w-auto"
+                      className="mx-auto h-auto w-full dark:hidden"
+                    />
+                    <Image
+                      src="/storytime-logo.png"
+                      alt=""
+                      width={431}
+                      height={177}
+                      priority
+                      className="mx-auto hidden h-auto w-full dark:block"
                     />
                   </Link>
                 </TooltipTrigger>
