@@ -141,10 +141,6 @@ describe("geocodeAddress", () => {
       waypoints: ["T19:11", "T19:01"],
       path: [
         [1, 1],
-        [1.5, 1.5],
-        [1.5, 1.5],
-        [2, 2],
-        [2, 2],
         [4, 4],
       ],
     });
@@ -154,8 +150,15 @@ describe("geocodeAddress", () => {
     );
   });
 
-  it("thins long geometry to at most 400 points, keeping the first and last", async () => {
-    const points = Array.from({ length: 1000 }, (_, i) => pt(i, -i));
+  it("drops points on straight road but keeps turns, such as a loop around a one-way block", async () => {
+    // Straight run, a detour around a block, then straight again.
+    const straight = Array.from({ length: 500 }, (_, i) => pt(43 + i * 0.0001, -79));
+    const loop = [pt(43.05, -79.0005), pt(43.0501, -79.0005), pt(43.0501, -79)];
+    const points = [
+      ...straight,
+      ...loop,
+      ...Array.from({ length: 500 }, (_, i) => pt(43.0501 + i * 0.0001, -79)),
+    ];
     fetchMock.mockResolvedValue(
       reply(200, {
         routes: [
@@ -168,9 +171,10 @@ describe("geocodeAddress", () => {
     );
     const route = await routeVia(A, [], D, { departAt: new Date(0) });
     if ("error" in route) throw new Error(route.error);
-    expect(route.path).toHaveLength(400);
-    expect(route.path[0]).toEqual([0, 0]);
-    expect(route.path[399]).toEqual([999, -999]);
+    expect(route.path.length).toBeLessThan(20);
+    expect(route.path[0]).toEqual([43, -79]);
+    expect(route.path).toContainEqual([43.05, -79.0005]);
+    expect(route.path).toContainEqual([43.0501, -79.0005]);
   });
 
   it("departs at a time, keeps a single waypoint in place, and reports failures", async () => {

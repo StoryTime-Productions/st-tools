@@ -52,11 +52,41 @@ export interface Route {
   arrive: string;
   /** Arrival at each waypoint, in the order the waypoints were given. */
   waypoints: string[];
-  /** Road geometry as [lat, lon], thinned to at most MAX_PATH_POINTS. */
+  /** Road geometry as [lat, lon], simplified without losing turns, capped at MAX_PATH_POINTS. */
   path: [number, number][];
 }
 
-const MAX_PATH_POINTS = 400;
+const MAX_PATH_POINTS = 4000;
+// ~2 m: drops points on straight road but keeps every turn, so detours around one-way blocks survive.
+const PATH_TOLERANCE = 0.00002;
+
+function offLine(p: [number, number], a: [number, number], b: [number, number]) {
+  const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+  const length = dx * dx + dy * dy;
+  const t =
+    length === 0 ? 0 : Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / length));
+  return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
+}
+
+/** Douglas-Peucker; thinning by index would cut the small loops a route makes around one-way blocks. */
+function simplify(path: [number, number][], tolerance: number): [number, number][] {
+  if (path.length < 3) return path;
+  const keep = new Set([0, path.length - 1]);
+  const pending: [number, number][] = [[0, path.length - 1]];
+  while (pending.length > 0) {
+    const [from, to] = pending.pop()!;
+    let far = -1;
+    let farDistance = tolerance;
+    for (let i = from + 1; i < to; i++) {
+      const distance = offLine(path[i], path[from], path[to]);
+      if (distance > farDistance) [far, farDistance] = [i, distance];
+    }
+    if (far < 0) continue;
+    keep.add(far);
+    pending.push([from, far], [far, to]);
+  }
+  return path.filter((_, i) => keep.has(i));
+}
 
 function thin<T>(items: T[], max: number): T[] {
   if (items.length <= max) return items;
@@ -103,8 +133,11 @@ export async function routeVia(
       arrive: route.summary.arrivalTime,
       waypoints: waypoints.map((_, index) => route.legs[legOf(index)].summary.arrivalTime),
       path: thin(
-        route.legs.flatMap((leg) =>
-          leg.points.map((p): [number, number] => [p.latitude, p.longitude])
+        simplify(
+          route.legs.flatMap((leg) =>
+            leg.points.map((p): [number, number] => [p.latitude, p.longitude])
+          ),
+          PATH_TOLERANCE
         ),
         MAX_PATH_POINTS
       ),
