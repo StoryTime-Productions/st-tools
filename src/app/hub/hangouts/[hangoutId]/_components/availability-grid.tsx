@@ -147,8 +147,10 @@ export function AvailabilityGrid({
     );
   }
 
+  const green = "[--avail:var(--color-green-600)] dark:[--avail:var(--color-green-400)]";
   const cellClass = (row: number) =>
     cn(
+      green,
       "focus-visible:ring-ring h-4 border-l border-t focus-visible:ring-2 focus-visible:outline-none",
       row % 4 === 0 ? "border-t-border" : "border-t-border/30"
     );
@@ -191,7 +193,7 @@ export function AvailabilityGrid({
                 className={cn(
                   cellClass(cell[1]),
                   "touch-none",
-                  selected ? "bg-primary" : "bg-muted/40",
+                  selected ? "bg-[var(--avail)]" : "bg-muted/40",
                   editable && "cursor-pointer"
                 )}
               />
@@ -227,7 +229,7 @@ export function AvailabilityGrid({
               style={
                 free > 0
                   ? {
-                      backgroundColor: `color-mix(in oklab, var(--primary) ${Math.round((free / people.length) * 100)}%, transparent)`,
+                      backgroundColor: `color-mix(in oklab, var(--avail) ${Math.round(25 + (free / people.length) * 75)}%, transparent)`,
                     }
                   : undefined
               }

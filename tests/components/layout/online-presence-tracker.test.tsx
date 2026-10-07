@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, waitFor } from "@testing-library/react";
 import { OnlinePresenceTracker } from "@/components/layout/online-presence-tracker";
-import { WORKSPACE_ONLINE_CHANNEL } from "@/lib/online-presence";
+import { WORKSPACE_ONLINE_CHANNEL, WORKSPACE_POKE_EVENT } from "@/lib/online-presence";
+
+const toastMock = vi.hoisted(() => vi.fn());
+vi.mock("sonner", () => ({ toast: toastMock }));
 
 const channelMocks = vi.hoisted(() => ({
+  on: vi.fn(),
   track: vi.fn(),
   untrack: vi.fn(),
   subscribe: vi.fn(),
@@ -22,6 +26,7 @@ describe("OnlinePresenceTracker", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
+    channelMocks.on.mockReturnValue(channelMocks);
     channelMocks.subscribe.mockImplementation((callback?: (status: string) => void) => {
       callback?.("SUBSCRIBED");
       return channelMocks;
@@ -102,5 +107,36 @@ describe("OnlinePresenceTracker", () => {
     await waitFor(() => {
       expect(channelMocks.track).not.toHaveBeenCalled();
     });
+  });
+
+  it("shows a toast for pokes addressed to the user on any page", () => {
+    render(
+      <OnlinePresenceTracker
+        user={{
+          id: "44444444-4444-4444-8444-444444444444",
+          name: null,
+          email: "a@example.com",
+          avatarUrl: null,
+        }}
+      />
+    );
+
+    const [, filter, handler] = channelMocks.on.mock.calls[0];
+    expect(filter).toEqual({ event: WORKSPACE_POKE_EVENT });
+    const poke = (toUserId: string) => ({
+      payload: {
+        pokeId: "p",
+        fromUserId: "x",
+        fromName: "Teammate",
+        fromAvatarUrl: null,
+        toUserId,
+        createdAt: new Date().toISOString(),
+      },
+    });
+
+    handler(poke("someone-else"));
+    expect(toastMock).not.toHaveBeenCalled();
+    handler(poke("44444444-4444-4444-8444-444444444444"));
+    expect(toastMock).toHaveBeenCalledWith("Teammate poked you.");
   });
 });

@@ -2,7 +2,13 @@
 
 import { useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { WORKSPACE_ONLINE_CHANNEL, type WorkspacePresencePayload } from "@/lib/online-presence";
+import { toast } from "sonner";
+import {
+  WORKSPACE_ONLINE_CHANNEL,
+  WORKSPACE_POKE_EVENT,
+  isWorkspacePokePayload,
+  type WorkspacePresencePayload,
+} from "@/lib/online-presence";
 
 interface OnlinePresenceTrackerProps {
   user: WorkspacePresencePayload;
@@ -17,6 +23,12 @@ export function OnlinePresenceTracker({ user }: OnlinePresenceTrackerProps) {
           key: user.id,
         },
       },
+    });
+
+    channel.on("broadcast", { event: WORKSPACE_POKE_EVENT }, ({ payload }) => {
+      if (isWorkspacePokePayload(payload) && payload.toUserId === user.id) {
+        toast(`${payload.fromName} poked you.`);
+      }
     });
 
     channel.subscribe(async (status) => {

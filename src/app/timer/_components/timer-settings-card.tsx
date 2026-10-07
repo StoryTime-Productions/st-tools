@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -37,9 +37,77 @@ const DURATION_FIELDS: { field: DurationField; label: string; id: string }[] = [
   { field: "longBreakMinutes", label: "Long break", id: "timer-long-break-minutes" },
 ];
 
+const BEHAVIOR_TOGGLES: {
+  key: "autoStartBreaks" | "autoStartFocus" | "soundEnabled";
+  label: string;
+  hint: string;
+}[] = [
+  {
+    key: "autoStartBreaks",
+    label: "Auto-start breaks",
+    hint: "Begin the break as soon as focus ends",
+  },
+  {
+    key: "autoStartFocus",
+    label: "Auto-start focus",
+    hint: "Jump back into focus after a break",
+  },
+  { key: "soundEnabled", label: "Sound cues", hint: "Play a chime when the phase changes" },
+];
+
+const COLOR_FIELDS: { id: string; label: string; key: "focusColor" | "breakColor" }[] = [
+  { id: "timer-focus-color", label: "Focus color", key: "focusColor" },
+  { id: "timer-break-color", label: "Break color", key: "breakColor" },
+];
+
 function isValid(field: DurationField, value: number) {
   const { min, max } = DURATION_LIMITS[field];
   return Number.isInteger(value) && value >= min && value <= max;
+}
+
+function Toggle({
+  id,
+  label,
+  hint,
+  checked,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  hint: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-3">
+      <div className="min-w-0">
+        <Label htmlFor={id} className="text-sm font-medium">
+          {label}
+        </Label>
+        <p id={`${id}-hint`} className="text-muted-foreground text-xs">
+          {hint}
+        </p>
+      </div>
+      <span className="relative inline-flex shrink-0">
+        <input
+          id={id}
+          type="checkbox"
+          checked={checked}
+          aria-describedby={`${id}-hint`}
+          onChange={(event) => onChange(event.target.checked)}
+          className="peer absolute inset-0 z-10 m-0 cursor-pointer opacity-0"
+        />
+        <span
+          aria-hidden="true"
+          className="bg-muted-foreground/30 peer-checked:bg-primary peer-focus-visible:ring-ring h-6 w-11 rounded-full transition-colors peer-focus-visible:ring-2"
+        />
+        <span
+          aria-hidden="true"
+          className="bg-background pointer-events-none absolute top-0.5 left-0.5 size-5 rounded-full shadow transition-transform peer-checked:translate-x-5"
+        />
+      </span>
+    </div>
+  );
 }
 
 export function TimerSettingsCard({
@@ -67,7 +135,10 @@ export function TimerSettingsCard({
           onClick={() => setIsOpen((value) => !value)}
           className="focus-visible:ring-ring flex w-full items-center justify-between gap-2 rounded-md text-left focus-visible:ring-2 focus-visible:outline-none"
         >
-          <CardTitle className="text-base">Timer settings</CardTitle>
+          <span className="flex items-center gap-2">
+            <Settings2 aria-hidden="true" className="text-muted-foreground size-4" />
+            <CardTitle className="text-base">Timer settings</CardTitle>
+          </span>
           <span className="text-muted-foreground flex items-center gap-1 text-sm">
             {isOpen ? "Collapse" : "Expand"}
             <ChevronDown
@@ -79,18 +150,16 @@ export function TimerSettingsCard({
       </CardHeader>
 
       {isOpen ? (
-        <CardContent id="timer-settings-panel" className="space-y-6">
-          <fieldset className="space-y-3">
-            <legend className="mb-2 text-xs font-medium tracking-[0.2em] uppercase">
-              Durations
-            </legend>
-            <div className="grid gap-4 sm:grid-cols-3">
+        <CardContent id="timer-settings-panel" className="space-y-8">
+          <fieldset className="space-y-4">
+            <legend className="mb-3 text-sm font-semibold">Durations</legend>
+            <div className="grid gap-3 sm:grid-cols-3">
               {DURATION_FIELDS.map(({ field, label, id }) => {
                 const { min, max } = DURATION_LIMITS[field];
                 const showError = touched[field] === true && !isValid(field, draft[field]);
 
                 return (
-                  <div key={field} className="space-y-1.5">
+                  <div key={field} className="bg-muted/30 space-y-2 rounded-2xl border p-3">
                     <Label htmlFor={id}>{label}</Label>
                     <div className="relative">
                       <Input
@@ -102,7 +171,7 @@ export function TimerSettingsCard({
                         value={draft[field]}
                         aria-invalid={showError}
                         aria-describedby={`${id}-hint`}
-                        className="pr-12"
+                        className="h-11 pr-12 text-lg font-semibold tabular-nums"
                         onChange={(event) => {
                           onDraftChange(field, Number.parseInt(event.target.value, 10) || 0);
                         }}
@@ -135,74 +204,60 @@ export function TimerSettingsCard({
             </div>
           </fieldset>
 
-          <fieldset className="space-y-3">
-            <legend className="text-xs font-medium tracking-[0.2em] uppercase">Behavior</legend>
-            <p className="text-muted-foreground text-xs">Applies immediately</p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="flex items-center gap-3 rounded-xl border px-3 py-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={prefs.autoStartBreaks}
-                  onChange={(event) => onPrefsChange({ autoStartBreaks: event.target.checked })}
-                  className="size-4"
+          <fieldset>
+            <legend className="text-sm font-semibold">Behavior</legend>
+            <p className="text-muted-foreground mb-1 text-xs">Applies immediately</p>
+            <div className="divide-border/60 divide-y">
+              {BEHAVIOR_TOGGLES.map(({ key, label, hint }) => (
+                <Toggle
+                  key={key}
+                  id={`timer-${key}`}
+                  label={label}
+                  hint={hint}
+                  checked={prefs[key]}
+                  onChange={(checked) => onPrefsChange({ [key]: checked })}
                 />
-                Auto-start breaks
-              </label>
-              <label className="flex items-center gap-3 rounded-xl border px-3 py-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={prefs.autoStartFocus}
-                  onChange={(event) => onPrefsChange({ autoStartFocus: event.target.checked })}
-                  className="size-4"
-                />
-                Auto-start focus
-              </label>
-              <label className="flex items-center gap-3 rounded-xl border px-3 py-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={prefs.soundEnabled}
-                  onChange={(event) => onPrefsChange({ soundEnabled: event.target.checked })}
-                  className="size-4"
-                />
-                Sound cues
-              </label>
+              ))}
             </div>
           </fieldset>
 
           <fieldset className="space-y-3">
-            <legend className="text-xs font-medium tracking-[0.2em] uppercase">Appearance</legend>
+            <legend className="text-sm font-semibold">Appearance</legend>
             <p className="text-muted-foreground text-xs">Applies immediately</p>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="timer-focus-color">Focus color</Label>
-                <Input
-                  id="timer-focus-color"
-                  type="color"
-                  value={prefs.focusColor}
-                  onChange={(event) => onPrefsChange({ focusColor: event.target.value })}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="timer-break-color">Break color</Label>
-                <Input
-                  id="timer-break-color"
-                  type="color"
-                  value={prefs.breakColor}
-                  onChange={(event) => onPrefsChange({ breakColor: event.target.value })}
-                />
-              </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {COLOR_FIELDS.map(({ id, label, key }) => (
+                <div
+                  key={id}
+                  className="bg-muted/30 flex items-center gap-3 rounded-2xl border p-3"
+                >
+                  <Input
+                    id={id}
+                    type="color"
+                    value={prefs[key]}
+                    onChange={(event) => onPrefsChange({ [key]: event.target.value })}
+                    className="size-10 shrink-0 cursor-pointer rounded-full border-0 p-0 [&::-moz-color-swatch]:rounded-full [&::-moz-color-swatch]:border-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0"
+                  />
+                  <div className="min-w-0">
+                    <Label htmlFor={id}>{label}</Label>
+                    <p className="text-muted-foreground text-xs uppercase">{prefs[key]}</p>
+                  </div>
+                </div>
+              ))}
             </div>
-            <label className="flex items-center gap-3 rounded-xl border px-3 py-2 text-sm">
-              <input
-                type="checkbox"
-                checked={prefs.interpolatePhaseColors}
-                onChange={(event) =>
-                  onPrefsChange({ interpolatePhaseColors: event.target.checked })
-                }
-                className="size-4"
-              />
-              Blend colors as time runs down
-            </label>
+            <div
+              aria-hidden="true"
+              className="h-2 rounded-full"
+              style={{
+                backgroundImage: `linear-gradient(to right, ${prefs.focusColor}, ${prefs.breakColor})`,
+              }}
+            />
+            <Toggle
+              id="timer-interpolate"
+              label="Blend colors as time runs down"
+              hint="Fade from the focus color toward the break color"
+              checked={prefs.interpolatePhaseColors}
+              onChange={(checked) => onPrefsChange({ interpolatePhaseColors: checked })}
+            />
           </fieldset>
         </CardContent>
       ) : null}

@@ -10,6 +10,7 @@ import { Costs } from "@/app/hub/hangouts/[hangoutId]/_components/costs";
 import { CommuteMap } from "@/app/hub/hangouts/[hangoutId]/_components/commute-map";
 import { Itinerary } from "@/app/hub/hangouts/[hangoutId]/_components/itinerary";
 import { LockedIn, RankedSlots } from "@/app/hub/hangouts/[hangoutId]/_components/lock-in";
+import { LiveRefresh } from "@/app/hub/hangouts/[hangoutId]/_components/live-refresh";
 import { CancelHangoutButton, HangoutDialog } from "@/app/hub/_components/hangout-dialog";
 import { ProjectCover } from "@/app/hub/_components/project-cover";
 import { ProjectCoverEditor } from "@/app/hub/projects/[projectId]/_components/project-cover-editor";
@@ -66,6 +67,7 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
 
   return (
     <div className="space-y-6">
+      <LiveRefresh hangoutId={hangout.id} />
       <Link
         href="/hub"
         className="text-muted-foreground hover:text-foreground inline-flex items-center gap-2 text-sm"
@@ -131,7 +133,7 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
           <CardHeader>
             <CardTitle className="text-base">Availability</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-8">
+          <CardContent className="space-y-5">
             {hangout.status === "SCHEDULED" && hangout.startSlot ? (
               <fieldset disabled={ended} className="min-w-0">
                 <LockedIn

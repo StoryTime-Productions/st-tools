@@ -16,3 +16,20 @@ export interface WorkspacePokeBroadcastPayload {
   toUserId: string;
   createdAt: string;
 }
+
+export function isWorkspacePokePayload(payload: unknown): payload is WorkspacePokeBroadcastPayload {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return false;
+  }
+
+  const candidate = payload as Record<string, unknown>;
+
+  return (
+    typeof candidate.pokeId === "string" &&
+    typeof candidate.fromUserId === "string" &&
+    typeof candidate.fromName === "string" &&
+    typeof candidate.toUserId === "string" &&
+    typeof candidate.createdAt === "string" &&
+    (typeof candidate.fromAvatarUrl === "string" || candidate.fromAvatarUrl === null)
+  );
+}

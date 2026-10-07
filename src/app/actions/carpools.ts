@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateHangoutPage } from "@/lib/hangout-live";
 import { z } from "zod";
 import { AttendanceStatus, HangoutStatus, Role, type Prisma } from "@prisma/client";
 import { torontoToUtc } from "@/lib/calendar";
@@ -27,7 +27,7 @@ const seatsSchema = z.number().int().min(1, "At least 1 seat").max(12, "12 seats
 
 async function reroute(hangoutId: string) {
   await recomputeRoutes(hangoutId);
-  revalidatePath(`/hub/hangouts/${hangoutId}`);
+  revalidateHangoutPage(hangoutId);
 }
 
 /** The caller, if they are Going to this scheduled hangout. */
@@ -163,7 +163,7 @@ export async function removeCarAction(carId: string): Promise<CarpoolActionResul
     `${personName(owned.car.driver)}'s car`,
     "removed"
   );
-  revalidatePath(`/hub/hangouts/${owned.car.hangoutId}`);
+  revalidateHangoutPage(owned.car.hangoutId);
   return { success: true };
 }
 
@@ -296,6 +296,6 @@ export async function setCarTimesAction(
     where: { id: car.id },
     data: { schedule: schedule as unknown as Prisma.InputJsonValue },
   });
-  revalidatePath(`/hub/hangouts/${car.hangoutId}`);
+  revalidateHangoutPage(car.hangoutId);
   return { success: true };
 }

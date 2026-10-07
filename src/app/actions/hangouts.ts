@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateHangoutPage } from "@/lib/hangout-live";
 import { z } from "zod";
 import { AttendanceStatus, HangoutStatus, Role, StopType } from "@prisma/client";
 import { keepInWindow, rankRuns } from "@/lib/availability";
@@ -46,7 +47,7 @@ async function requireAdmin() {
 
 function revalidateHangout(hangoutId: string) {
   revalidatePath("/hub");
-  revalidatePath(`/hub/hangouts/${hangoutId}`);
+  revalidateHangoutPage(hangoutId);
 }
 
 export async function createHangoutAction(
@@ -344,7 +345,7 @@ export async function saveAvailabilityAction(
       update: { slots },
     });
 
-  revalidatePath(`/hub/hangouts/${hangoutId}`);
+  revalidateHangoutPage(hangoutId);
   return { success: true };
 }
 
