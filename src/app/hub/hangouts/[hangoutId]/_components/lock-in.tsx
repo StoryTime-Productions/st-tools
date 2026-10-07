@@ -115,15 +115,19 @@ export function LockedIn({
   }
 
   return (
-    <div className="space-y-2 text-sm">
-      <p className="font-medium">
-        {dayLabel(day, DAY)}, {timeLabel(time)} EST
-      </p>
-      {STATUSES.map(([status, label]) => (
-        <p key={status}>
-          <span className="text-muted-foreground">{label}:</span> {names(status)}
+    <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3 text-sm">
+      <div className="space-y-1">
+        <p className="font-medium">
+          {dayLabel(day, DAY)}, {timeLabel(time)} EST
         </p>
-      ))}
+        <p className="flex flex-wrap gap-x-4 gap-y-1">
+          {STATUSES.map(([status, label]) => (
+            <span key={status}>
+              <span className="text-muted-foreground">{label}:</span> {names(status)}
+            </span>
+          ))}
+        </p>
+      </div>
       <div className="flex flex-wrap gap-2" role="group" aria-label="Your attendance">
         {STATUSES.map(([status, label]) => (
           <Button
@@ -139,12 +143,12 @@ export function LockedIn({
             {label}
           </Button>
         ))}
+        {canReopen ? (
+          <Button size="sm" variant="outline" disabled={isPending} onClick={reopen}>
+            Reopen availability
+          </Button>
+        ) : null}
       </div>
-      {canReopen ? (
-        <Button size="sm" variant="outline" disabled={isPending} onClick={reopen}>
-          Reopen availability
-        </Button>
-      ) : null}
     </div>
   );
 }

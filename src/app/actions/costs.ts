@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateHangoutPage } from "@/lib/hangout-live";
 import { z } from "zod";
 import { HangoutStatus, Role } from "@prisma/client";
 import { resplitCosts } from "@/lib/cost-shares";
@@ -38,7 +38,7 @@ async function isAdmin() {
 
 async function settle(hangoutId: string): Promise<CostActionResult> {
   await resplitCosts(hangoutId);
-  revalidatePath(`/hub/hangouts/${hangoutId}`);
+  revalidateHangoutPage(hangoutId);
   return { success: true };
 }
 

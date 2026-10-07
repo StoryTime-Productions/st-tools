@@ -125,6 +125,9 @@ async function loadHub() {
     ),
   }));
 
+  vi.doMock("@/app/hub/hangouts/[hangoutId]/_components/live-refresh", () => ({
+    LiveRefresh: () => null,
+  }));
   vi.doMock("@/app/hub/hangouts/[hangoutId]/_components/availability-setup", () => ({
     AvailabilitySetup: ({ initial }: { initial: { dates: string[]; deadline: string | null } }) => (
       <p data-testid="availability-setup">

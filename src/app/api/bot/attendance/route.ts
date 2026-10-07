@@ -1,4 +1,5 @@
 import { revalidatePath } from "next/cache";
+import { revalidateHangoutPage } from "@/lib/hangout-live";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { AttendanceStatus } from "@prisma/client";
@@ -71,7 +72,7 @@ export async function POST(request: Request) {
   }
 
   revalidatePath("/hub");
-  revalidatePath(`/hub/hangouts/${hangoutId}`);
+  revalidateHangoutPage(hangoutId);
   await refreshAnnouncement(hangoutId);
   return NextResponse.json({
     ok: true,

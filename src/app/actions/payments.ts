@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateHangoutPage } from "@/lib/hangout-live";
 import { headers } from "next/headers";
 import { z } from "zod";
 import { HangoutStatus, PaymentMethod, PaymentStatus } from "@prisma/client";
@@ -82,7 +82,7 @@ async function move(
     data,
   });
   if (result.count === 0) return { error: STALE };
-  revalidatePath(`/hub/hangouts/${hangoutId}`);
+  revalidateHangoutPage(hangoutId);
   return { success: true };
 }
 
