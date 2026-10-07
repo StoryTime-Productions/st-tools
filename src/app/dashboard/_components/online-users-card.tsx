@@ -11,8 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   WORKSPACE_ONLINE_CHANNEL,
   WORKSPACE_POKE_EVENT,
+  isWorkspacePokePayload,
   type WorkspacePresencePayload,
-  type WorkspacePokeBroadcastPayload,
 } from "@/lib/online-presence";
 import { createClient } from "@/lib/supabase/client";
 
@@ -95,23 +95,6 @@ function extractOnlineUsers(state: Record<string, PresenceMeta[]>): OnlinePresen
     users,
     userCount: users.length,
   };
-}
-
-function isWorkspacePokePayload(payload: unknown): payload is WorkspacePokeBroadcastPayload {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-    return false;
-  }
-
-  const candidate = payload as Record<string, unknown>;
-
-  return (
-    typeof candidate.pokeId === "string" &&
-    typeof candidate.fromUserId === "string" &&
-    typeof candidate.fromName === "string" &&
-    typeof candidate.toUserId === "string" &&
-    typeof candidate.createdAt === "string" &&
-    (typeof candidate.fromAvatarUrl === "string" || candidate.fromAvatarUrl === null)
-  );
 }
 
 export function OnlineUsersCard({ currentUser }: OnlineUsersCardProps) {
