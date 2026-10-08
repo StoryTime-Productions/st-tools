@@ -1,17 +1,15 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2, X } from "lucide-react";
+import type { RideDirection } from "@prisma/client";
 import { toast } from "sonner";
 import {
-  joinCarAction,
-  leaveCarAction,
   offerCarAction,
   recomputeRoutesAction,
   removeCarAction,
-  removeRiderAction,
+  unassignPassengerAction,
   updateCarAction,
   type CarpoolActionResult,
 } from "@/app/actions/carpools";
@@ -84,7 +82,6 @@ export function Carpools({
   const [address, setAddress] = useState("");
   const needsAddress = viewer.homeAddress !== undefined && !viewer.homeAddress;
   const driving = cars.some((car) => car.driver.userId === viewer.id);
-  const riding = cars.find((car) => car.riders.some((rider) => rider.userId === viewer.id));
 
   return (
     <div className="space-y-4 text-sm">
@@ -98,25 +95,15 @@ export function Carpools({
       <ul className="space-y-3">
         {cars.map((car) => {
           const canManage = car.driver.userId === viewer.id || viewer.isAdmin;
-          const mine = car.riders.find((rider) => rider.userId === viewer.id);
-          const full = car.riders.length >= car.seats;
+          const seatsUsed = Math.max(car.pickups.length, car.dropoffs.length);
           const schedule =
             car.schedule && !("error" in car.schedule) && !car.schedule.manual
               ? car.schedule
               : null;
-          const join = (atCommonPoint: boolean, label: string) => (
-            <Button
-              size="sm"
-              variant={mine && mine.atCommonPoint === atCommonPoint ? "default" : "outline"}
-              aria-pressed={mine ? mine.atCommonPoint === atCommonPoint : undefined}
-              disabled={isPending}
-              onClick={() =>
-                run(() => joinCarAction(car.id, atCommonPoint), mine ? "Pick-up updated" : "Joined")
-              }
-            >
-              {label}
-            </Button>
-          );
+          const lists: { direction: RideDirection; title: string; people: typeof car.pickups }[] = [
+            { direction: "PICKUP", title: "Pick up", people: car.pickups },
+            { direction: "DROPOFF", title: "Drop off", people: car.dropoffs },
+          ];
           return (
             <li
               key={car.id}
@@ -129,7 +116,7 @@ export function Carpools({
                     {car.driver.name}&apos;s car
                     <span className="text-muted-foreground">
                       {" "}
-                      · {car.riders.length}/{car.seats} seats
+                      · {seatsUsed}/{car.seats} seats
                     </span>
                   </p>
                   <p>
@@ -139,11 +126,6 @@ export function Carpools({
                         ? `${car.driver.homeAddress} (home)`
                         : "no address yet")}
                   </p>
-                  {car.commonPoint ? (
-                    <p>
-                      <span className="text-muted-foreground">Common point:</span> {car.commonPoint}
-                    </p>
-                  ) : null}
                   {schedule ? (
                     <p>
                       <span className="text-muted-foreground">Drive:</span>
@@ -191,81 +173,49 @@ export function Carpools({
                   </div>
                 ) : null}
               </div>
-              {car.riders.length > 0 ? (
-                <ul aria-label="Riders" className="space-y-1">
-                  {car.riders.map((rider) => (
-                    <li key={rider.userId} className="flex items-center justify-between gap-2">
-                      <span>
-                        {rider.name}
-                        <span className="text-muted-foreground"> · </span>
-                        {rider.atCommonPoint ? (
-                          "common point"
-                        ) : rider.homeAddress ? (
-                          rider.homeAddress
-                        ) : (
-                          <span className="text-muted-foreground">
-                            no home address
-                            {rider.userId === viewer.id ? (
-                              <>
-                                {" "}
-                                ·{" "}
-                                <Link href="/settings/profile" className="underline">
-                                  add one in your profile
-                                </Link>
-                              </>
+              {lists.map(({ direction, title, people }) =>
+                people.length > 0 ? (
+                  <ul key={direction} aria-label={title} className="space-y-1">
+                    {people.map((rider) => {
+                      const at =
+                        schedule?.[direction === "PICKUP" ? "there" : "back"]?.stops[rider.userId];
+                      return (
+                        <li key={rider.userId} className="flex items-center justify-between gap-2">
+                          <span>
+                            <span className="text-muted-foreground">{title}: </span>
+                            {rider.name}
+                            <span className="text-muted-foreground"> · </span>
+                            {rider.pointKind === "COMMON"
+                              ? (rider.commonLabel ?? "common point")
+                              : rider.pointKind === "RIDER_HOME"
+                                ? "another rider's home"
+                                : (rider.homeAddress ?? "no home address")}
+                            {at ? (
+                              <span className="text-muted-foreground"> · {clock(at)}</span>
                             ) : null}
                           </span>
-                        )}
-                        {schedule ? (
-                          <span className="text-muted-foreground">
-                            {" "}
-                            · pick-up{" "}
-                            {schedule.there?.stops[rider.userId]
-                              ? clock(schedule.there.stops[rider.userId])
-                              : "—"}{" "}
-                            · drop-off{" "}
-                            {schedule.back?.stops[rider.userId]
-                              ? clock(schedule.back.stops[rider.userId])
-                              : "—"}
-                          </span>
-                        ) : null}
-                      </span>
-                      {canManage ? (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          aria-label={`Remove ${rider.name}`}
-                          disabled={isPending}
-                          onClick={() =>
-                            run(() => removeRiderAction(car.id, rider.userId), "Rider removed")
-                          }
-                        >
-                          <X />
-                        </Button>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              {viewer.going && !driving && (mine || !full) ? (
-                <div className="flex flex-wrap gap-2">
-                  {join(false, mine ? "Pick me up at home" : "Join")}
-                  {car.commonPoint
-                    ? join(true, mine ? "Pick me up at the common point" : "Join at common point")
-                    : null}
-                  {mine ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={isPending}
-                      onClick={() => run(() => leaveCarAction(hangoutId), "Left the car")}
-                    >
-                      Leave car
-                    </Button>
-                  ) : null}
-                </div>
-              ) : null}
-              {full && !mine ? <p className="text-muted-foreground text-xs">Full</p> : null}
+                          {canManage ? (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              aria-label={`Remove ${rider.name} from ${title.toLowerCase()}`}
+                              disabled={isPending}
+                              onClick={() =>
+                                run(
+                                  () => unassignPassengerAction(car.id, rider.userId, direction),
+                                  "Removed"
+                                )
+                              }
+                            >
+                              <X />
+                            </Button>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null
+              )}
             </li>
           );
         })}
@@ -283,7 +233,7 @@ export function Carpools({
       {weather.checked ? <WeatherCredit /> : null}
       {!viewer.going ? (
         <p className="text-muted-foreground">Mark yourself Going to drive or ride.</p>
-      ) : !driving && !riding ? (
+      ) : !driving ? (
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-2">
             <Label htmlFor="offer-seats">Seats for riders</Label>
@@ -331,7 +281,6 @@ function CarDialog({ car }: { car: HangoutCarItem }) {
   const initial = () => ({
     seats: String(car.seats),
     startAddress: car.startAddress ?? "",
-    commonPoint: car.commonPoint ?? "",
   });
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(initial);
@@ -347,7 +296,6 @@ function CarDialog({ car }: { car: HangoutCarItem }) {
         updateCarAction(car.id, {
           seats: Number(form.seats),
           startAddress: form.startAddress,
-          commonPoint: form.commonPoint,
         }),
       "Car updated",
       () => setOpen(false)
@@ -371,8 +319,7 @@ function CarDialog({ car }: { car: HangoutCarItem }) {
         <DialogHeader>
           <DialogTitle>Edit car</DialogTitle>
           <DialogDescription>
-            An empty start address means the driver&apos;s home. Clearing the common point moves its
-            riders to home pick-up.
+            An empty start address means the driver&apos;s home.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -393,14 +340,6 @@ function CarDialog({ car }: { car: HangoutCarItem }) {
               id={`car-${car.id}-start`}
               value={form.startAddress}
               onChange={set("startAddress")}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor={`car-${car.id}-common`}>Common point (optional)</Label>
-            <Input
-              id={`car-${car.id}-common`}
-              value={form.commonPoint}
-              onChange={set("commonPoint")}
             />
           </div>
           <DialogFooter showCloseButton>

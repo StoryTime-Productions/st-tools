@@ -1,16 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { Carpools } from "@/app/hub/hangouts/[hangoutId]/_components/carpools";
-import type { HangoutCarItem } from "@/lib/hangouts";
+import type { CarPassenger, HangoutCarItem } from "@/lib/hangouts";
 
 const actionMocks = vi.hoisted(() => ({
   offerCarAction: vi.fn(),
   recomputeRoutesAction: vi.fn(),
   updateCarAction: vi.fn(),
   removeCarAction: vi.fn(),
-  joinCarAction: vi.fn(),
-  leaveCarAction: vi.fn(),
-  removeRiderAction: vi.fn(),
+  unassignPassengerAction: vi.fn(),
 }));
 const toastMocks = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 const routerMocks = vi.hoisted(() => ({ refresh: vi.fn() }));
@@ -26,6 +24,18 @@ const alice = {
   homeLat: null,
   homeLon: null,
 };
+const BOB: CarPassenger = {
+  userId: "b",
+  name: "Bob",
+  homeAddress: "9 Elm St",
+  homeLat: null,
+  homeLon: null,
+  pointKind: "HOME",
+  viaUserId: null,
+  commonLabel: null,
+  commonLat: null,
+  commonLon: null,
+};
 const CAR: HangoutCarItem = {
   id: "car1",
   seats: 2,
@@ -37,18 +47,9 @@ const CAR: HangoutCarItem = {
   commonLon: null,
   schedule: null,
   driver: alice,
-  riders: [
-    {
-      userId: "b",
-      name: "Bob",
-      homeAddress: "9 Elm St",
-      homeLat: null,
-      homeLon: null,
-      atCommonPoint: false,
-    },
-  ],
-  pickups: [],
-  dropoffs: [],
+  riders: [],
+  pickups: [BOB],
+  dropoffs: [BOB],
 };
 const viewer = (id: string, overrides = {}) => ({ id, isAdmin: false, going: true, ...overrides });
 
@@ -63,85 +64,56 @@ describe("Carpools", () => {
     for (const action of Object.values(actionMocks)) action.mockResolvedValue({ success: true });
   });
 
-  it("shows cars, start points and pick-ups, and lets a Going member join", async () => {
+  it("shows cars, start points and both lists, with no way to join (R1, AC4)", () => {
     renderCarpools([CAR]);
 
     const car = screen.getByRole("listitem", { name: "Alice's car" });
     expect(car).toHaveTextContent("Alice's car · 1/2 seats");
     expect(car).toHaveTextContent("Starts from: 1 Main St (home)");
-    expect(car).toHaveTextContent("Common point: Union Station");
-    expect(within(car).getByRole("list", { name: "Riders" })).toHaveTextContent("Bob · 9 Elm St");
+    expect(within(car).getByRole("list", { name: "Pick up" })).toHaveTextContent(
+      "Pick up: Bob · 9 Elm St"
+    );
+    expect(within(car).getByRole("list", { name: "Drop off" })).toHaveTextContent(
+      "Drop off: Bob · 9 Elm St"
+    );
+    expect(within(car).queryByRole("button", { name: /join|leave/i })).not.toBeInTheDocument();
+    expect(within(car).queryByRole("button", { name: /^Remove Bob/ })).not.toBeInTheDocument();
     expect(within(car).queryByRole("button", { name: "Edit Alice's car" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Offer my car" })).toBeInTheDocument();
-
-    fireEvent.click(within(car).getByRole("button", { name: "Join at common point" }));
-    await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Joined"));
-    expect(actionMocks.joinCarAction).toHaveBeenCalledWith("car1", true);
-    expect(routerMocks.refresh).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Offer my car" })).toBeInTheDocument();
   });
 
-  it("lets a rider switch pick-up or leave, and nudges riders without an address", async () => {
-    renderCarpools(
-      [
-        {
-          ...CAR,
-          startAddress: "5 Start Rd",
-          riders: [
-            {
-              userId: "c",
-              name: "Cara",
-              homeAddress: null,
-              homeLat: null,
-              homeLon: null,
-              atCommonPoint: false,
-            },
-          ],
-        },
-      ],
-      viewer("c")
-    );
+  it("names each point: a typed common point, another rider's home, or no address", () => {
+    const common: CarPassenger = {
+      ...BOB,
+      userId: "d",
+      name: "Dan",
+      pointKind: "COMMON",
+      commonLabel: "Union Station",
+    };
+    const unlabeled: CarPassenger = { ...common, userId: "e", name: "Eve", commonLabel: null };
+    const via: CarPassenger = { ...BOB, userId: "f", name: "Finn", pointKind: "RIDER_HOME" };
+    const noHome: CarPassenger = { ...BOB, userId: "g", name: "Gus", homeAddress: null };
+    renderCarpools([{ ...CAR, seats: 4, pickups: [common, unlabeled, via, noHome], dropoffs: [] }]);
 
-    expect(screen.getByText(/Starts from:/).parentElement).toHaveTextContent(
-      "Starts from: 5 Start Rd"
-    );
-    expect(screen.getByRole("link", { name: "add one in your profile" })).toHaveAttribute(
-      "href",
-      "/settings/profile"
-    );
-    expect(screen.getByRole("button", { name: "Pick me up at home" })).toHaveAttribute(
-      "aria-pressed",
-      "true"
-    );
-    expect(screen.queryByRole("button", { name: "Offer my car" })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Pick me up at the common point" }));
-    await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Pick-up updated"));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Leave car" })).toBeEnabled());
-
-    actionMocks.leaveCarAction.mockResolvedValueOnce({ error: "Hangout not found" });
-    fireEvent.click(screen.getByRole("button", { name: "Leave car" }));
-    await waitFor(() => expect(toastMocks.error).toHaveBeenCalledWith("Hangout not found"));
-    expect(actionMocks.leaveCarAction).toHaveBeenCalledWith("h1");
+    const pickups = screen.getByRole("list", { name: "Pick up" });
+    expect(within(pickups).getByText(/Dan/).parentElement).toHaveTextContent("Dan · Union Station");
+    expect(pickups).toHaveTextContent("Eve · common point");
+    expect(pickups).toHaveTextContent("Finn · another rider's home");
+    expect(pickups).toHaveTextContent("Gus · no home address");
+    expect(screen.queryByRole("list", { name: "Drop off" })).not.toBeInTheDocument();
+    expect(screen.getByRole("listitem", { name: "Alice's car" })).toHaveTextContent("4/4 seats");
   });
 
-  it("marks full cars, hides joining from drivers and people not going", () => {
-    const full = { ...CAR, seats: 1 };
-    const { rerender } = renderCarpools([full]);
-    expect(screen.getByText("Full")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Join" })).not.toBeInTheDocument();
-
-    rerender(
-      <Carpools
-        hangoutId="h1"
-        cars={[{ ...CAR, driver: { ...alice, homeAddress: null }, commonPoint: null }]}
-        viewer={viewer("c", { going: false })}
-      />
-    );
+  it("hides the offer from people not going and shows an empty state", () => {
+    const { rerender } = renderCarpools([
+      { ...CAR, driver: { ...alice, homeAddress: null }, pickups: [], dropoffs: [] },
+    ]);
     expect(screen.getByText(/Starts from:/).parentElement).toHaveTextContent(
       "Starts from: no address yet"
     );
+
+    rerender(<Carpools hangoutId="h1" cars={[CAR]} viewer={viewer("c", { going: false })} />);
     expect(screen.getByText("Mark yourself Going to drive or ride.")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Join" })).not.toBeInTheDocument();
 
     rerender(<Carpools hangoutId="h1" cars={[]} viewer={viewer("c")} />);
     expect(screen.getByText("No cars yet.")).toBeInTheDocument();
@@ -188,15 +160,14 @@ describe("Carpools", () => {
     );
   });
 
-  it("lets the driver edit the car, remove riders and remove the car", async () => {
+  it("lets the driver edit the car, take riders off each list and remove the car", async () => {
     renderCarpools([CAR], viewer("a"));
 
-    expect(screen.queryByRole("button", { name: "Join" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Offer my car" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Edit Alice's car" }));
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByLabelText("Common point (optional)")).toHaveValue("Union Station");
+    expect(within(dialog).queryByLabelText(/common point/i)).not.toBeInTheDocument();
     fireEvent.change(within(dialog).getByLabelText("Seats for riders"), { target: { value: "3" } });
     fireEvent.change(within(dialog).getByLabelText("Start address (optional)"), {
       target: { value: "5 Start Rd" },
@@ -206,12 +177,20 @@ describe("Carpools", () => {
     expect(actionMocks.updateCarAction).toHaveBeenCalledWith("car1", {
       seats: 3,
       startAddress: "5 Start Rd",
-      commonPoint: "Union Station",
     });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: "Remove Bob" }));
-    await waitFor(() => expect(actionMocks.removeRiderAction).toHaveBeenCalledWith("car1", "b"));
+    fireEvent.click(screen.getByRole("button", { name: "Remove Bob from pick up" }));
+    await waitFor(() =>
+      expect(actionMocks.unassignPassengerAction).toHaveBeenCalledWith("car1", "b", "PICKUP")
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Remove Bob from drop off" })).toBeEnabled()
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Remove Bob from drop off" }));
+    await waitFor(() =>
+      expect(actionMocks.unassignPassengerAction).toHaveBeenCalledWith("car1", "b", "DROPOFF")
+    );
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Remove Alice's car" })).toBeEnabled()
     );
@@ -227,7 +206,7 @@ describe("Carpools", () => {
   it("gives admins the driver controls", () => {
     renderCarpools([CAR], viewer("z", { isAdmin: true }));
     expect(screen.getByRole("button", { name: "Edit Alice's car" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Remove Bob" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove Bob from pick up" })).toBeInTheDocument();
   });
 
   it("shows routed times on the car and each rider, or why there are none", () => {
@@ -250,8 +229,11 @@ describe("Carpools", () => {
     expect(screen.getByText(/Drive:/).parentElement).toHaveTextContent(
       "Drive: leaves 6:44 PM, arrives 7:31 PM · back 10:30 PM – 11:07 PM"
     );
-    expect(screen.getByRole("list", { name: "Riders" })).toHaveTextContent(
-      "Bob · 9 Elm St · pick-up 7:01 PM · drop-off 10:42 PM"
+    expect(screen.getByRole("list", { name: "Pick up" })).toHaveTextContent(
+      "Pick up: Bob · 9 Elm St · 7:01 PM"
+    );
+    expect(screen.getByRole("list", { name: "Drop off" })).toHaveTextContent(
+      "Drop off: Bob · 9 Elm St · 10:42 PM"
     );
 
     rerender(

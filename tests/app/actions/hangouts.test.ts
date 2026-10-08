@@ -40,7 +40,8 @@ async function loadModule() {
     hangoutCar: { deleteMany: vi.fn() },
     hangoutCostShare: { deleteMany: vi.fn() },
     hangoutCost: { findFirst: vi.fn() },
-    hangoutRider: { deleteMany: vi.fn() },
+    hangoutPassenger: { deleteMany: vi.fn() },
+    hangoutTransit: { deleteMany: vi.fn() },
     hangoutAttendee: {
       deleteMany: vi.fn(),
       createMany: vi.fn(),
@@ -567,17 +568,20 @@ describe("hangout actions", () => {
     });
     expect(mod.resplitCosts).toHaveBeenCalledWith(HANGOUT_ID);
     expect(mod.revalidatePath).toHaveBeenCalledWith(`/hub/hangouts/${HANGOUT_ID}`);
-    expect(mod.prisma.hangoutRider.deleteMany).toHaveBeenCalledWith({ where: key });
+    expect(mod.prisma.hangoutPassenger.deleteMany).toHaveBeenCalledWith({
+      where: { hangoutId: HANGOUT_ID, OR: [{ userId: member.id }, { viaUserId: member.id }] },
+    });
+    expect(mod.prisma.hangoutTransit.deleteMany).toHaveBeenCalledWith({ where: key });
     expect(mod.prisma.hangoutCar.deleteMany).toHaveBeenCalledWith({
       where: { hangoutId: HANGOUT_ID, driverId: member.id },
     });
 
     expect(mod.recomputeRoutes).toHaveBeenCalledWith(HANGOUT_ID);
 
-    mod.prisma.hangoutRider.deleteMany.mockClear();
+    mod.prisma.hangoutPassenger.deleteMany.mockClear();
     mod.recomputeRoutes.mockClear();
     await mod.setAttendanceAction({ hangoutId: HANGOUT_ID, status: "GOING" });
-    expect(mod.prisma.hangoutRider.deleteMany).not.toHaveBeenCalled();
+    expect(mod.prisma.hangoutPassenger.deleteMany).not.toHaveBeenCalled();
     expect(mod.recomputeRoutes).not.toHaveBeenCalled();
 
     mod.prisma.hangout.findUnique.mockResolvedValue({ status: "COLLECTING" });
