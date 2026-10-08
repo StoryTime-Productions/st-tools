@@ -47,6 +47,8 @@ const CAR: HangoutCarItem = {
       atCommonPoint: false,
     },
   ],
+  pickups: [],
+  dropoffs: [],
 };
 const viewer = (id: string, overrides = {}) => ({ id, isAdmin: false, going: true, ...overrides });
 
