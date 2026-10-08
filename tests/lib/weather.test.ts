@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getStopWeather, hourWarnings, summarizeHours, type HourForecast } from "@/lib/weather";
+import {
+  getStopWeather,
+  hourWarnings,
+  summarizeHours,
+  weatherDelay,
+  type HourForecast,
+  type StopWeather,
+} from "@/lib/weather";
 
 const calm: HourForecast = {
   temperature: 12.4,
@@ -21,6 +28,33 @@ describe("hourWarnings", () => {
     expect(hourWarnings({ ...calm, gusts: 60.2 })).toEqual(["Gusts 60 km/h"]);
     expect(hourWarnings({ ...calm, code: 95 })).toEqual(["Thunderstorm"]);
     expect(hourWarnings({ ...calm, code: 66 })).toEqual(["Freezing rain"]);
+  });
+});
+
+describe("weatherDelay", () => {
+  const ok = (code: number, warnings: string[] = []): StopWeather => ({
+    status: "ok",
+    temperature: 1,
+    chance: 0,
+    code,
+    warnings,
+  });
+
+  it("charges a percentage of the drive per condition (T4)", () => {
+    expect(weatherDelay(ok(1))).toBeNull();
+    expect(weatherDelay(ok(61))).toEqual({ percent: 10, reason: "rain" });
+    expect(weatherDelay(ok(45))).toEqual({ percent: 10, reason: "fog" });
+    expect(weatherDelay(ok(95))).toEqual({ percent: 15, reason: "thunderstorm" });
+    expect(weatherDelay(ok(73))).toEqual({ percent: 20, reason: "snow" });
+    expect(weatherDelay(ok(1, ["Snow"]))).toEqual({ percent: 20, reason: "snow" });
+    expect(weatherDelay(ok(66))).toEqual({ percent: 20, reason: "freezing rain" });
+    expect(weatherDelay(ok(1, ["Thunderstorm"]))).toEqual({ percent: 15, reason: "thunderstorm" });
+  });
+
+  it("adds nothing without a usable forecast", () => {
+    expect(weatherDelay(undefined)).toBeNull();
+    expect(weatherDelay({ status: "unavailable" })).toBeNull();
+    expect(weatherDelay({ status: "far" })).toBeNull();
   });
 });
 

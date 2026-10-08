@@ -518,36 +518,6 @@ describe("hangout actions", () => {
     });
   });
 
-  it("lets an admin set the weather buffer between 0 and 120 minutes", async () => {
-    const mod = await loadModule();
-
-    await expect(mod.setWeatherBufferAction(HANGOUT_ID, 30)).resolves.toEqual({ success: true });
-    expect(mod.prisma.hangout.updateMany).toHaveBeenCalledWith({
-      where: { id: HANGOUT_ID, status: { not: "CANCELLED" } },
-      data: { weatherBufferMinutes: 30 },
-    });
-
-    await expect(mod.setWeatherBufferAction(HANGOUT_ID, 121)).resolves.toEqual({
-      error: "Maximum is 120",
-    });
-    await expect(mod.setWeatherBufferAction(HANGOUT_ID, -1)).resolves.toEqual({
-      error: "Minimum is 0",
-    });
-    await expect(mod.setWeatherBufferAction(HANGOUT_ID, 1.5)).resolves.toEqual({
-      error: "Use whole minutes",
-    });
-
-    mod.prisma.hangout.updateMany.mockResolvedValueOnce({ count: 0 });
-    await expect(mod.setWeatherBufferAction(HANGOUT_ID, 10)).resolves.toEqual({
-      error: "Hangout not found",
-    });
-
-    mod.getCurrentUser.mockResolvedValue(member);
-    await expect(mod.setWeatherBufferAction(HANGOUT_ID, 10)).resolves.toEqual({
-      error: "Forbidden: Admin access required",
-    });
-  });
-
   it("freezes attendance, reopening and itinerary edits once the hangout has ended", async () => {
     const mod = await loadModule();
     mod.hangoutEnded.mockResolvedValue(true);

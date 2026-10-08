@@ -94,34 +94,6 @@ export async function updateHangoutAction(
   return { success: true };
 }
 
-export async function setWeatherBufferAction(
-  hangoutId: string,
-  minutes: number
-): Promise<HangoutActionResult> {
-  if (!(await requireAdmin())) return { error: FORBIDDEN };
-
-  const parsed = z
-    .object({
-      hangoutId: z.string().uuid(),
-      minutes: z
-        .number()
-        .int("Use whole minutes")
-        .min(0, "Minimum is 0")
-        .max(120, "Maximum is 120"),
-    })
-    .safeParse({ hangoutId, minutes });
-  if (!parsed.success) return { error: parsed.error.issues[0].message };
-
-  const result = await prisma.hangout.updateMany({
-    where: { id: parsed.data.hangoutId, status: { not: HangoutStatus.CANCELLED } },
-    data: { weatherBufferMinutes: parsed.data.minutes },
-  });
-  if (result.count === 0) return { error: NOT_FOUND };
-
-  revalidateHangout(parsed.data.hangoutId);
-  return { success: true };
-}
-
 export async function cancelHangoutAction(hangoutId: string): Promise<HangoutActionResult> {
   if (!(await requireAdmin())) return { error: FORBIDDEN };
 

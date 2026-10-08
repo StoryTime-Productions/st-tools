@@ -29,6 +29,24 @@ export function hourWarnings(hour: HourForecast) {
   return warnings;
 }
 
+const SNOW = [71, 73, 75, 77, 85, 86];
+const RAIN = [51, 53, 55, 61, 63, 65, 80, 81, 82];
+const FOG = [45, 48];
+
+/** Extra drive time for a forecast, as a percentage of the drive (T4); null when the weather costs nothing. */
+export function weatherDelay(weather: StopWeather | undefined) {
+  if (weather?.status !== "ok") return null;
+  const { code, warnings } = weather;
+  if (warnings.includes("Snow") || SNOW.includes(code)) return { percent: 20, reason: "snow" };
+  if (warnings.includes("Freezing rain") || FREEZING_RAIN.includes(code))
+    return { percent: 20, reason: "freezing rain" };
+  if (warnings.includes("Thunderstorm") || THUNDERSTORM.includes(code))
+    return { percent: 15, reason: "thunderstorm" };
+  if (RAIN.includes(code)) return { percent: 10, reason: "rain" };
+  if (FOG.includes(code)) return { percent: 10, reason: "fog" };
+  return null;
+}
+
 /** Summarise the hours a stop spans: first hour's conditions, worst chance, every distinct warning. */
 export function summarizeHours(hours: HourForecast[]): StopWeather {
   if (hours.length === 0) return { status: "none" };
