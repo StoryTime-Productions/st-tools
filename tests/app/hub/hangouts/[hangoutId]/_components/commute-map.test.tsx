@@ -23,7 +23,13 @@ const leaflet = vi.hoisted(() => {
     tileLayer: vi.fn<(url: string, options?: unknown) => ReturnType<typeof layer>>(layer),
     polyline:
       vi.fn<(line: unknown, options?: { dashArray?: string }) => ReturnType<typeof layer>>(layer),
-    marker: vi.fn(layer),
+    marker:
+      vi.fn<
+        (
+          position: unknown,
+          options?: { interactive?: boolean; keyboard?: boolean }
+        ) => ReturnType<typeof layer>
+      >(layer),
     divIcon: vi.fn((options: unknown) => options),
     instance: map,
   };
@@ -115,6 +121,12 @@ describe("CommuteMap", () => {
     expect(leaflet.tileLayer.mock.calls[0][0]).toBe("/api/map-tiles/{z}/{x}/{y}");
     // A marker, a home pin, and four direction arrows on the routed car only.
     expect(leaflet.marker).toHaveBeenCalledTimes(6);
+    // Arrows are decoration: Leaflet gives keyboard markers role=button, which axe flags unnamed.
+    const arrows = leaflet.marker.mock.calls.filter(
+      ([, options]) => options?.interactive === false
+    );
+    expect(arrows).toHaveLength(4);
+    expect(arrows.every(([, options]) => options?.keyboard === false)).toBe(true);
     expect(leaflet.polyline.mock.calls.map(([, options]) => options?.dashArray)).toEqual([
       undefined,
       "8 8",

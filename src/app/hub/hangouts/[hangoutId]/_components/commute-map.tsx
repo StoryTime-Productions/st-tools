@@ -19,6 +19,7 @@ const PHASES: { id: Phase; label: string }[] = [
 const arrow = (position: [number, number], bearing: number, L: typeof import("leaflet")) =>
   L.marker(position, {
     interactive: false,
+    keyboard: false,
     icon: L.divIcon({
       className: "",
       html: `<svg width="20" height="20" viewBox="0 0 20 20" style="transform:rotate(${bearing}deg)"><polygon points="10,1 18,18 10,13 2,18" fill="#111" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>`,
