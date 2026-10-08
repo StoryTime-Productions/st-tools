@@ -51,6 +51,7 @@ const DATA: MapData = {
           [5, 5],
         ],
       ],
+      trips: ["there"],
     },
     {
       id: "c2",
@@ -64,6 +65,7 @@ const DATA: MapData = {
           [5, 5],
         ],
       ],
+      trips: [],
     },
   ],
 };
@@ -84,7 +86,8 @@ describe("CommuteMap", () => {
     render(<CommuteMap data={DATA} hasKey />);
     await waitFor(() => expect(leaflet.instance.fitBounds).toHaveBeenCalled());
     expect(leaflet.tileLayer.mock.calls[0][0]).toBe("/api/map-tiles/{z}/{x}/{y}");
-    expect(leaflet.marker).toHaveBeenCalledTimes(2);
+    // A marker, a home pin, and four direction arrows on the routed car only.
+    expect(leaflet.marker).toHaveBeenCalledTimes(6);
     expect(leaflet.polyline.mock.calls.map(([, options]) => options?.dashArray)).toEqual([
       undefined,
       "8 8",
@@ -96,6 +99,7 @@ describe("CommuteMap", () => {
     render(<CommuteMap data={DATA} hasKey />);
     expect(screen.getByText("Alice's car")).toBeTruthy();
     expect(screen.getByText("Cara's car")).toBeTruthy();
+    expect(screen.getByText(/way there/i)).toBeTruthy();
     expect(screen.getByText("© TomTom")).toBeTruthy();
     expect(screen.getByText("Not on map: Mystery")).toBeTruthy();
   });

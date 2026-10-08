@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildCommuteMap, CAR_COLORS, type MapCar, type MapStop } from "@/lib/commute-map";
+import {
+  arrowsAlong,
+  buildCommuteMap,
+  CAR_COLORS,
+  type MapCar,
+  type MapStop,
+} from "@/lib/commute-map";
 
 const stop = (title: string, lat: number | null, lon: number | null): MapStop => ({
   title,
@@ -61,6 +67,7 @@ describe("buildCommuteMap", () => {
     ).cars;
     expect(mapCar).toMatchObject({ color: CAR_COLORS[0], driver: "Alice", dashed: false });
     expect(mapCar.lines).toHaveLength(2);
+    expect(mapCar.trips).toEqual(["there", "back"]);
   });
 
   it("draws manual, failed, unrouted and pre-geometry cars dashed through their points", () => {
@@ -88,6 +95,7 @@ describe("buildCommuteMap", () => {
       const [mapCar] = buildCommuteMap(stops, [{ ...base, schedule }]).cars;
       expect(mapCar.dashed).toBe(true);
       expect(mapCar.lines).toEqual(expected);
+      expect(mapCar.trips).toEqual([]);
     }
   });
 
@@ -125,5 +133,42 @@ describe("buildCommuteMap", () => {
         [5, 5],
       ],
     ]);
+  });
+});
+
+describe("arrowsAlong", () => {
+  it("spaces arrows evenly and points them the way the path runs", () => {
+    const east = arrowsAlong(
+      [
+        [0, 0],
+        [0, 5],
+      ],
+      4
+    );
+    expect(east.map((arrow) => arrow.position[1])).toEqual([1, 2, 3, 4]);
+    expect(east.every((arrow) => Math.round(arrow.bearing) === 90)).toBe(true);
+
+    const south = arrowsAlong(
+      [
+        [5, 0],
+        [0, 0],
+      ],
+      1
+    );
+    expect(Math.round(south[0].bearing)).toBe(180);
+  });
+
+  it("follows a bend and gives nothing for an empty path", () => {
+    const [arrow] = arrowsAlong(
+      [
+        [0, 0],
+        [0, 2],
+        [2, 2],
+      ],
+      1
+    );
+    expect(arrow.position[0]).toBeCloseTo(0);
+    expect(arrow.position[1]).toBeCloseTo(2);
+    expect(arrowsAlong([[1, 1]])).toEqual([]);
   });
 });
