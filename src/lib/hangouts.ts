@@ -9,7 +9,7 @@ import type { AvailabilityResponse } from "@/lib/availability";
 import { scheduleStops, spanDays } from "@/lib/itinerary";
 import { hangoutEnd, hangoutPhase, unpaidCount, type HangoutPhase } from "@/lib/lifecycle";
 import { prisma } from "@/lib/prisma";
-import type { CarSchedule } from "@/lib/routes";
+import type { CarSchedule, StopRoute } from "@/lib/routes";
 
 export interface HangoutSummary {
   id: string;
@@ -33,6 +33,7 @@ export interface HangoutDetail extends HangoutSummary {
   stops: HangoutStopItem[];
   cars: HangoutCarItem[];
   costs: HangoutCostItem[];
+  stopRoute: StopRoute | null;
 }
 
 export interface HangoutCostItem {
@@ -187,6 +188,7 @@ export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail
       coverImageUrl: true,
       status: true,
       startSlot: true,
+      stopRoute: true,
       description: true,
       discordThreadUrl: true,
       availabilityDates: true,
@@ -245,11 +247,12 @@ export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail
     },
   });
   if (!hangout) return null;
-  const { idea, attendees, cars, costs, ...detail } = hangout;
+  const { idea, attendees, cars, costs, stopRoute, ...detail } = hangout;
   const unpaid = unpaidCount(costs.flatMap((cost) => cost.shares));
   return {
     ...detail,
     unpaid,
+    stopRoute: stopRoute as StopRoute | null,
     phase: hangoutPhase(detail, detail.stops, unpaid),
     proposerName: idea?.proposerName ?? null,
     costs: costs.map(({ collector, participants, shares, ...cost }) => ({

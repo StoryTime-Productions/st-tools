@@ -240,7 +240,8 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
                   lon: stop.lon,
                   time: timeText(times[index], startSlot?.slice(0, 10) ?? null),
                 })),
-                hangout.cars
+                hangout.cars,
+                hangout.stopRoute
               )}
             />
           </CardContent>

@@ -1,4 +1,4 @@
-import type { CarSchedule } from "@/lib/routes";
+import type { CarSchedule, StopRoute } from "@/lib/routes";
 
 export type LatLon = [number, number];
 
@@ -56,7 +56,11 @@ const at = (lat: number | null, lon: number | null): LatLon | null =>
   lat === null || lon === null ? null : [lat, lon];
 
 /** Everything the commute map draws, from stored data only (no routing calls). */
-export function buildCommuteMap(stops: MapStop[], cars: MapCar[]) {
+export function buildCommuteMap(
+  stops: MapStop[],
+  cars: MapCar[],
+  stopRoute: StopRoute | null = null
+) {
   const markers = stops.flatMap((stop, index) => {
     const position = at(stop.lat, stop.lon);
     return position ? [{ number: index + 1, title: stop.title, time: stop.time, position }] : [];
@@ -64,9 +68,22 @@ export function buildCommuteMap(stops: MapStop[], cars: MapCar[]) {
   const stopPoints = markers.map((marker) => marker.position);
   const notOnMap = stops.filter((stop) => !at(stop.lat, stop.lon)).map((stop) => stop.title);
 
+  // A stored route only counts while it was routed through exactly the stops now located (AC 9).
+  const current =
+    stopRoute !== null &&
+    stopRoute.points.length === stopPoints.length &&
+    stopRoute.points.every(
+      (point, i) => point[0] === stopPoints[i][0] && point[1] === stopPoints[i][1]
+    );
+  const between =
+    stopPoints.length < 2
+      ? null
+      : { legs: current ? stopRoute.legs : [], dashed: !current, guide: stopPoints };
+
   return {
     markers,
     notOnMap,
+    between,
     cars: cars.map((car, index) => {
       const common = at(car.commonLat, car.commonLon);
       const homes = car.riders.flatMap((rider) => {

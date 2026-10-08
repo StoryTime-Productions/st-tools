@@ -38,6 +38,7 @@ type MapData = ReturnType<typeof buildCommuteMap>;
 const DATA: MapData = {
   markers: [{ number: 1, title: "Park", time: "7:00 PM", position: [5, 5] }],
   notOnMap: ["Mystery"],
+  between: null,
   cars: [
     {
       id: "c1",
@@ -144,7 +145,7 @@ describe("CommuteMap", () => {
   it("uses night tiles in dark mode, centers when empty, and omits empty lists", async () => {
     theme.resolvedTheme = "dark";
     const { unmount } = render(
-      <CommuteMap data={{ markers: [], notOnMap: [], cars: [] }} hasKey />
+      <CommuteMap data={{ markers: [], notOnMap: [], between: null, cars: [] }} hasKey />
     );
     await waitFor(() => expect(leaflet.instance.setView).toHaveBeenCalled());
     expect(leaflet.tileLayer.mock.calls[0][0]).toBe("/api/map-tiles/{z}/{x}/{y}?style=night");

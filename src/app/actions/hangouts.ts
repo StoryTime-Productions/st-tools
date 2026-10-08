@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { revalidateHangoutPage } from "@/lib/hangout-live";
 import { z } from "zod";
-import { AttendanceStatus, HangoutStatus, Role, StopType } from "@prisma/client";
+import { AttendanceStatus, HangoutStatus, Prisma, Role, StopType } from "@prisma/client";
 import { keepInWindow, rankRuns } from "@/lib/availability";
 import { applyAttendance, ENDED } from "@/lib/attendance";
 import { torontoToUtc } from "@/lib/calendar";
@@ -393,7 +393,7 @@ export async function reopenAvailabilityAction(hangoutId: string): Promise<Hango
   const reopened = await prisma.$transaction(async (tx) => {
     const result = await tx.hangout.updateMany({
       where: { id: parsed.data, status: HangoutStatus.SCHEDULED },
-      data: { status: HangoutStatus.COLLECTING, startSlot: null },
+      data: { status: HangoutStatus.COLLECTING, startSlot: null, stopRoute: Prisma.DbNull },
     });
     if (result.count === 0) return false;
     await tx.hangoutAttendee.deleteMany({ where: { hangoutId: parsed.data } });
