@@ -125,6 +125,11 @@ async function loadHub() {
     ),
   }));
 
+  vi.doMock("@/app/hub/hangouts/[hangoutId]/_components/hangout-cover", () => ({
+    HangoutCover: ({ canEdit }: { canEdit: boolean }) => (
+      <div data-testid="hangout-cover">{canEdit ? "editable" : "read-only"}</div>
+    ),
+  }));
   vi.doMock("@/app/hub/hangouts/[hangoutId]/_components/live-refresh", () => ({
     LiveRefresh: () => null,
   }));
@@ -437,13 +442,14 @@ describe("hub pages", () => {
     );
     expect(screen.queryByRole("button", { name: "Cancel hangout" })).not.toBeInTheDocument();
     expect(screen.queryByTestId("itinerary")).not.toBeInTheDocument();
+    expect(screen.getByTestId("hangout-cover")).toHaveTextContent("read-only");
     members.unmount();
 
     getCurrentUser.mockResolvedValue(admin);
     const admins = render(await HangoutPage(params()));
     expect(screen.getByRole("button", { name: "Edit Beach day" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel hangout" })).toBeInTheDocument();
-    expect(screen.getByTestId("cover-editor")).toHaveTextContent("hangout");
+    expect(screen.getByTestId("hangout-cover")).toHaveTextContent("editable");
     expect(screen.getByTestId("itinerary")).toHaveTextContent("0 editable");
     admins.unmount();
 
