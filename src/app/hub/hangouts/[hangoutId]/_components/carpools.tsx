@@ -101,7 +101,9 @@ export function Carpools({
           const mine = car.riders.find((rider) => rider.userId === viewer.id);
           const full = car.riders.length >= car.seats;
           const schedule =
-            car.schedule && "there" in car.schedule && !car.schedule.manual ? car.schedule : null;
+            car.schedule && !("error" in car.schedule) && !car.schedule.manual
+              ? car.schedule
+              : null;
           const join = (atCommonPoint: boolean, label: string) => (
             <Button
               size="sm"
@@ -144,11 +146,22 @@ export function Carpools({
                   ) : null}
                   {schedule ? (
                     <p>
-                      <span className="text-muted-foreground">Drive:</span> leaves{" "}
-                      {clock(schedule.there.start)}
-                      {delayNote(schedule.there)}, arrives {clock(schedule.there.end)} · back{" "}
-                      {clock(schedule.back.start)} – {clock(schedule.back.end)}
-                      {delayNote(schedule.back)}
+                      <span className="text-muted-foreground">Drive:</span>
+                      {schedule.there ? (
+                        <>
+                          {" "}
+                          leaves {clock(schedule.there.start)}
+                          {delayNote(schedule.there)}, arrives {clock(schedule.there.end)}
+                        </>
+                      ) : null}
+                      {schedule.there && schedule.back ? " ·" : null}
+                      {schedule.back ? (
+                        <>
+                          {" "}
+                          back {clock(schedule.back.start)} – {clock(schedule.back.end)}
+                          {delayNote(schedule.back)}
+                        </>
+                      ) : null}
                     </p>
                   ) : car.schedule ? (
                     <p className="text-muted-foreground">
@@ -206,8 +219,14 @@ export function Carpools({
                         {schedule ? (
                           <span className="text-muted-foreground">
                             {" "}
-                            · pick-up {clock(schedule.there.stops[rider.userId])} · drop-off{" "}
-                            {clock(schedule.back.stops[rider.userId])}
+                            · pick-up{" "}
+                            {schedule.there?.stops[rider.userId]
+                              ? clock(schedule.there.stops[rider.userId])
+                              : "—"}{" "}
+                            · drop-off{" "}
+                            {schedule.back?.stops[rider.userId]
+                              ? clock(schedule.back.stops[rider.userId])
+                              : "—"}
                           </span>
                         ) : null}
                       </span>

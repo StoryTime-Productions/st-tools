@@ -91,10 +91,10 @@ export function buildCommuteMap(
         return position ? [{ name: rider.name, position }] : [];
       });
       const roads: { trip: Trip; path: LatLon[] }[] =
-        car.schedule && "there" in car.schedule && !car.schedule.manual
+        car.schedule && !("error" in car.schedule) && !car.schedule.manual
           ? [
-              { trip: "there" as const, path: car.schedule.there.path },
-              { trip: "back" as const, path: car.schedule.back.path },
+              { trip: "there" as const, path: car.schedule.there?.path },
+              { trip: "back" as const, path: car.schedule.back?.path },
             ].flatMap(({ trip, path }) => (path?.length ? [{ trip, path }] : []))
           : [];
       const origin = at(car.startLat, car.startLon) ?? at(car.driver.homeLat, car.driver.homeLon);
