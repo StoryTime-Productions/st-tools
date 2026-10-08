@@ -57,26 +57,53 @@ async function loadModule() {
   return { ...lib, prisma, routeVia, routeLegs, getStopWeather };
 }
 
-const rider = (userId: string, atCommonPoint: boolean, home: typeof BOB | null) => ({
-  userId,
-  atCommonPoint,
-  user: {
-    name: userId === "carol" ? null : userId,
-    email: `${userId}@x.gg`,
-    homeLat: home?.lat ?? null,
-    homeLon: home?.lon ?? null,
-  },
+type Kind = "HOME" | "RIDER_HOME" | "COMMON";
+
+const person = (userId: string, home: typeof BOB | null) => ({
+  name: userId === "carol" ? null : userId,
+  email: `${userId}@x.gg`,
+  homeLat: home?.lat ?? null,
+  homeLon: home?.lon ?? null,
 });
+
+const passenger = (
+  userId: string,
+  direction: "PICKUP" | "DROPOFF",
+  pointKind: Kind,
+  home: typeof BOB | null,
+  extra: { via?: ReturnType<typeof person>; common?: typeof COMMON | null } = {}
+) => ({
+  userId,
+  direction,
+  pointKind,
+  commonLat: extra.common === undefined ? null : (extra.common?.lat ?? null),
+  commonLon: extra.common === undefined ? null : (extra.common?.lon ?? null),
+  user: person(userId, home),
+  viaUser: extra.via ?? null,
+});
+
+/** The same person on both lists, like a migrated rider. */
+const both = (
+  userId: string,
+  pointKind: Kind,
+  home: typeof BOB | null,
+  extra: Parameters<typeof passenger>[4] = {}
+) => [
+  passenger(userId, "PICKUP", pointKind, home, extra),
+  passenger(userId, "DROPOFF", pointKind, home, extra),
+];
 
 function car(overrides = {}) {
   return {
     id: "car1",
     startLat: START.lat,
     startLon: START.lon,
-    commonLat: COMMON.lat,
-    commonLon: COMMON.lon,
     driver: { homeLat: HOME.lat, homeLon: HOME.lon },
-    riders: [rider("bob", false, BOB), rider("carol", true, null), rider("dan", true, null)],
+    passengers: [
+      ...both("bob", "HOME", BOB),
+      ...both("carol", "COMMON", null, { common: COMMON }),
+      ...both("dan", "COMMON", null, { common: COMMON }),
+    ],
     ...overrides,
   };
 }
@@ -171,24 +198,104 @@ describe("recomputeRoutes", () => {
     prisma.hangout.findUnique.mockResolvedValue(
       hangout({
         cars: [
-          car({ id: "home", startLat: null, startLon: null, riders: [] }),
+          car({
+            id: "home",
+            startLat: null,
+            startLon: null,
+            passengers: [passenger("bob", "PICKUP", "HOME", BOB)],
+          }),
           car({ id: "nowhere", startLat: null, driver: { homeLat: null, homeLon: null } }),
-          car({ id: "lost", commonLat: null, riders: [rider("carol", true, null)] }),
+          car({
+            id: "lost",
+            passengers: [passenger("carol", "PICKUP", "COMMON", null, { common: null })],
+          }),
+          car({ id: "nohome", passengers: [passenger("carol", "DROPOFF", "HOME", null)] }),
         ],
       })
     );
-    routeVia.mockResolvedValueOnce({ error: "Routing failed (429)" });
 
     await recomputeRoutes("h1");
 
-    expect(routeVia).toHaveBeenCalledWith(HOME, [], CAFE, expect.anything());
+    expect(routeVia).toHaveBeenCalledWith(HOME, [BOB], CAFE, expect.anything());
     const schedules = Object.fromEntries(
       prisma.hangoutCar.update.mock.calls.map(([call]) => [call.where.id, call.data.schedule])
     );
     expect(schedules).toEqual({
-      home: { error: "Routing failed (429)" },
+      home: expect.objectContaining({ there: expect.anything() }),
       nowhere: { error: "The car has no start or home address on the map" },
-      lost: { error: "carol@x.gg has no home address on the map" },
+      lost: { error: "carol@x.gg's meeting point isn't on the map" },
+      nohome: { error: "carol@x.gg has no home address on the map" },
+    });
+    expect(schedules.home).not.toHaveProperty("back");
+  });
+
+  it("gives a direction with nobody on its list no trip at all (AC9)", async () => {
+    const { recomputeRoutes, prisma, routeVia } = await loadModule();
+    prisma.hangout.findUnique.mockResolvedValue(
+      hangout({
+        cars: [
+          car({ id: "empty", passengers: [] }),
+          car({ id: "backOnly", passengers: [passenger("bob", "DROPOFF", "HOME", BOB)] }),
+        ],
+      })
+    );
+
+    await recomputeRoutes("h1");
+
+    const schedules = Object.fromEntries(
+      prisma.hangoutCar.update.mock.calls.map(([call]) => [call.where.id, call.data.schedule])
+    );
+    expect(schedules.empty).toEqual({});
+    expect(Object.keys(schedules.backOnly)).toEqual(["back"]);
+    expect(routeVia).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses another rider's home for a rider-home point and times each list on its own", async () => {
+    const { recomputeRoutes, prisma, routeVia } = await loadModule();
+    const carolHome = { lat: 7, lon: 7 };
+    prisma.hangout.findUnique.mockResolvedValue(
+      hangout({
+        cars: [
+          car({
+            passengers: [
+              passenger("bob", "PICKUP", "HOME", BOB),
+              passenger("dan", "PICKUP", "RIDER_HOME", null, { via: person("carol", carolHome) }),
+              passenger("carol", "PICKUP", "HOME", carolHome),
+              passenger("dan", "DROPOFF", "HOME", BOB),
+            ],
+          }),
+        ],
+      })
+    );
+
+    await recomputeRoutes("h1");
+
+    expect(routeVia).toHaveBeenCalledWith(START, [BOB, carolHome], CAFE, expect.anything());
+    expect(routeVia).toHaveBeenCalledWith(BAR, [BOB], START, expect.anything());
+    const { there, back } = prisma.hangoutCar.update.mock.lastCall?.[0].data.schedule;
+    // dan and carol share a place, so they share a time.
+    expect(there.stops).toEqual({ bob: "T19:00", dan: "T19:01", carol: "T19:01" });
+    expect(back.stops).toEqual({ dan: "T22:40" });
+  });
+
+  it("reports a rider-home point whose owner has no home on the map", async () => {
+    const { recomputeRoutes, prisma } = await loadModule();
+    prisma.hangout.findUnique.mockResolvedValue(
+      hangout({
+        cars: [
+          car({
+            passengers: [
+              passenger("dan", "PICKUP", "RIDER_HOME", null, { via: person("carol", null) }),
+            ],
+          }),
+        ],
+      })
+    );
+
+    await recomputeRoutes("h1");
+
+    expect(prisma.hangoutCar.update.mock.lastCall?.[0].data.schedule).toEqual({
+      error: "carol@x.gg has no home address on the map",
     });
   });
 

@@ -45,6 +45,8 @@ const DATA: MapData = {
   markers: [{ number: 1, title: "Park", time: "7:00 PM", position: [5, 5] }],
   notOnMap: ["Mystery"],
   between: null,
+  transit: [],
+  planners: [],
   cars: [
     {
       id: "c1",
@@ -52,7 +54,7 @@ const DATA: MapData = {
       driver: "Alice",
       dashed: false,
       needsStart: false,
-      homes: [{ name: "Bob", position: [4, 4] }],
+      pins: [{ trip: "there", name: "Bob", position: [4, 4], kind: "home" }],
       lines: [
         [
           [1, 1],
@@ -67,7 +69,7 @@ const DATA: MapData = {
       driver: "Cara",
       dashed: true,
       needsStart: false,
-      homes: [],
+      pins: [],
       lines: [
         [
           [2, 2],
@@ -246,10 +248,72 @@ describe("CommuteMap", () => {
     expect(leaflet.polyline.mock.calls[0][1]?.dashArray).toBe("8 8");
   });
 
+  it("pins common points as round markers, and only the active phase's pins", async () => {
+    const data: MapData = {
+      ...DATA,
+      cars: [
+        {
+          ...DATA.cars[0],
+          pins: [
+            { trip: "there", name: "Bob", position: [4, 4], kind: "common" },
+            { trip: "back", name: "Cara", position: [8, 8], kind: "home" },
+          ],
+        },
+      ],
+    };
+    render(<CommuteMap data={data} hasKey />);
+    await waitFor(() => expect(leaflet.instance.fitBounds).toHaveBeenCalled());
+    const html = () =>
+      leaflet.divIcon.mock.calls.map(([options]) => String((options as { html: string }).html));
+    expect(html().some((h) => h.includes("rounded-full") && h.includes("●"))).toBe(true);
+    expect(html().some((h) => h.includes("⌂"))).toBe(false);
+
+    leaflet.divIcon.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Getting home" }));
+    await waitFor(() => expect(html().some((h) => h.includes("⌂"))).toBe(true));
+    expect(html().some((h) => h.includes("●"))).toBe(false);
+  });
+
+  it("pins transit riders in their phase and links the trip planners there (AC 8)", async () => {
+    const data: MapData = {
+      ...DATA,
+      transit: [
+        { name: "Eve", trip: "there", position: [9, 9] },
+        { name: "Finn", trip: "back", position: [7, 7] },
+      ],
+      planners: [
+        { label: "STM", url: "https://www.stm.info/en" },
+        { label: "exo", url: "https://exo.quebec/en" },
+      ],
+    };
+    render(<CommuteMap data={data} hasKey />);
+    await waitFor(() => expect(leaflet.instance.fitBounds).toHaveBeenCalled());
+    expect(screen.getByText(/By public transit: Eve\./)).toBeTruthy();
+    expect(screen.queryByText(/Finn/)).toBeNull();
+    expect(screen.getByRole("link", { name: "STM" }).getAttribute("href")).toBe(
+      "https://www.stm.info/en"
+    );
+    expect(screen.getByRole("link", { name: "exo" }).getAttribute("target")).toBe("_blank");
+    expect(leaflet.instance.fitBounds.mock.calls[0][0]).toContainEqual([9, 9]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Getting home" }));
+    await waitFor(() => expect(screen.getByText(/By public transit: Finn\./)).toBeTruthy());
+    expect(screen.queryByText(/Eve/)).toBeNull();
+  });
+
+  it("shows no transit line when nobody takes transit", async () => {
+    render(<CommuteMap data={DATA} hasKey />);
+    await waitFor(() => expect(leaflet.instance.fitBounds).toHaveBeenCalled());
+    expect(screen.queryByText(/public transit/i)).toBeNull();
+  });
+
   it("uses night tiles in dark mode, centers when empty, and omits empty lists", async () => {
     theme.resolvedTheme = "dark";
     const { unmount } = render(
-      <CommuteMap data={{ markers: [], notOnMap: [], between: null, cars: [] }} hasKey />
+      <CommuteMap
+        data={{ markers: [], notOnMap: [], between: null, transit: [], planners: [], cars: [] }}
+        hasKey
+      />
     );
     await waitFor(() => expect(leaflet.instance.setView).toHaveBeenCalled());
     expect(leaflet.tileLayer.mock.calls[0][0]).toBe("/api/map-tiles/{z}/{x}/{y}?style=night");
