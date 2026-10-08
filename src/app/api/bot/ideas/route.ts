@@ -23,7 +23,8 @@ const bodySchema = z.object({
 
 /**
  * `/idea` from STBot: stores the idea, posts it to the ideas channel (best effort, once) and
- * returns `{ ok, message }` where `message` is the ephemeral reply embed.
+ * returns `{ ok, posted, channelId, message }`: `message` is the ephemeral reply embed, `channelId` is
+ * where the public post landed so the bot can drop its duplicate private reply.
  */
 export async function POST(request: Request) {
   const denied = rejectUnlessBot(request);
@@ -40,7 +41,14 @@ export async function POST(request: Request) {
 
   const url = `${await siteUrl()}/hub/ideas`;
   const channelId = process.env.DISCORD_IDEAS_CHANNEL_ID;
-  if (channelId) await postToChannel(channelId, ideaPostMessage({ title, proposedBy: name, url }));
+  const posted = channelId
+    ? (await postToChannel(channelId, ideaPostMessage({ title, proposedBy: name, url }))) !== null
+    : false;
 
-  return NextResponse.json({ ok: true, message: ideaReplyMessage({ title, details, url }) });
+  return NextResponse.json({
+    ok: true,
+    posted,
+    channelId: posted ? channelId : null,
+    message: ideaReplyMessage({ title, details, url }),
+  });
 }
