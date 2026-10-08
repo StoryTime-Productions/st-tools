@@ -72,9 +72,20 @@ async function ownedCar(carId: string) {
   return { car };
 }
 
+const startAddressSchema = z
+  .string()
+  .trim()
+  .min(1, "Add your start address so the route can be computed")
+  .max(300, "Address is too long");
+
+/**
+ * A driver with no home address gives one when offering (O2): it is located and saved to their
+ * profile first, so later offers need nothing and routing has an origin.
+ */
 export async function offerCarAction(
   hangoutId: string,
-  seats: number
+  seats: number,
+  homeAddress?: string
 ): Promise<CarpoolActionResult> {
   if (!uuid.safeParse(hangoutId).success) return { error: "Hangout not found" };
   const parsedSeats = seatsSchema.safeParse(seats);
@@ -87,6 +98,17 @@ export async function offerCarAction(
     return { error: "Leave the car you're riding in first" };
   if (await prisma.hangoutCar.findFirst({ where: { hangoutId, driverId: going.user.id } }))
     return { error: "You already have a car" };
+
+  if (!going.user.homeAddress) {
+    const typed = startAddressSchema.safeParse(homeAddress ?? "");
+    if (!typed.success) return { error: typed.error.issues[0].message };
+    const place = await locateAddress(typed.data);
+    if (!place || "error" in place) return { error: place?.error ?? "Couldn't use that address" };
+    await prisma.user.update({
+      where: { id: going.user.id },
+      data: { homeAddress: place.address, homeLat: place.lat, homeLon: place.lon },
+    });
+  }
 
   await prisma.hangoutCar.create({
     data: { hangoutId, driverId: going.user.id, seats: parsedSeats.data },

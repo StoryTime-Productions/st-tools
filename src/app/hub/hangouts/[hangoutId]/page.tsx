@@ -264,6 +264,7 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
                   going: hangout.attendees.some(
                     (attendee) => attendee.userId === user.id && attendee.status === "GOING"
                   ),
+                  homeAddress: user.homeAddress,
                 }}
               />
             </fieldset>
