@@ -111,7 +111,39 @@ describe("buildCommuteMap", () => {
 
   it("keeps a car with no usable points in the legend without lines or homes", () => {
     const [mapCar] = buildCommuteMap([], [car({ driver: person("Alice") })]).cars;
-    expect(mapCar).toMatchObject({ driver: "Alice", lines: [], homes: [] });
+    expect(mapCar).toMatchObject({ driver: "Alice", lines: [], homes: [], needsStart: true });
+  });
+
+  it("draws no line for a car with no start or home, even with riders, stops or a stored route (AC4)", () => {
+    const riders = [{ ...person("Bob", 4, 4), atCommonPoint: false }];
+    const noOrigin = car({ driver: person("Alice"), riders });
+    const routed = {
+      there: trip([
+        [1, 1],
+        [2, 2],
+      ]),
+      back: trip([
+        [2, 2],
+        [1, 1],
+      ]),
+    };
+    for (const schedule of [null, { error: "no start" }, routed]) {
+      const [mapCar] = buildCommuteMap([stop("Park", 5, 5)], [{ ...noOrigin, schedule }]).cars;
+      expect(mapCar).toMatchObject({ lines: [], trips: [], needsStart: true });
+      expect(mapCar.homes).toEqual([{ name: "Bob", position: [4, 4] }]);
+    }
+  });
+
+  it("does not ask for a start when the car has one or the driver has a home (AC5)", () => {
+    const stops = [stop("Park", 5, 5)];
+    expect(buildCommuteMap(stops, [car()]).cars[0]).toMatchObject({
+      needsStart: false,
+      dashed: true,
+    });
+    const withStart = car({ driver: person("Alice"), startLat: 2, startLon: 2 });
+    const [mapCar] = buildCommuteMap(stops, [withStart]).cars;
+    expect(mapCar.needsStart).toBe(false);
+    expect(mapCar.lines).toHaveLength(1);
   });
 
   it("skips riders with no home coordinates and common-point riders when there is no common point", () => {

@@ -122,6 +122,15 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
           ))}
         </ul>
       ) : null}
+      {data.cars.some((car) => car.needsStart) ? (
+        <p className="text-muted-foreground text-sm">
+          Needs a start address:{" "}
+          {data.cars
+            .filter((car) => car.needsStart)
+            .map((car) => `${car.driver}'s car`)
+            .join(", ")}
+        </p>
+      ) : null}
       {data.notOnMap.length > 0 ? (
         <p className="text-muted-foreground text-sm">Not on map: {data.notOnMap.join(", ")}</p>
       ) : null}

@@ -80,9 +80,12 @@ export function buildCommuteMap(stops: MapStop[], cars: MapCar[]) {
               { trip: "back" as const, path: car.schedule.back.path },
             ].flatMap(({ trip, path }) => (path?.length ? [{ trip, path }] : []))
           : [];
+      const origin = at(car.startLat, car.startLon) ?? at(car.driver.homeLat, car.driver.homeLon);
+      // A car that starts nowhere draws nothing, so a line never implies a route that was not computed.
+      const needsStart = origin === null;
       const dashed = roads.length === 0;
       const through = [
-        at(car.startLat, car.startLon) ?? at(car.driver.homeLat, car.driver.homeLon),
+        origin,
         ...car.riders.map((rider) =>
           rider.atCommonPoint ? common : at(rider.homeLat, rider.homeLon)
         ),
@@ -93,10 +96,17 @@ export function buildCommuteMap(stops: MapStop[], cars: MapCar[]) {
         color: CAR_COLORS[index % CAR_COLORS.length],
         driver: car.driver.name,
         dashed,
+        needsStart,
         homes,
-        lines: dashed ? (through.length > 1 ? [through] : []) : roads.map((road) => road.path),
+        lines: needsStart
+          ? []
+          : dashed
+            ? through.length > 1
+              ? [through]
+              : []
+            : roads.map((road) => road.path),
         /** Which trip each of `lines` is; empty for dashed cars, whose lines are only a guide. */
-        trips: dashed ? [] : roads.map((road) => road.trip),
+        trips: dashed || needsStart ? [] : roads.map((road) => road.trip),
       };
     }),
   };

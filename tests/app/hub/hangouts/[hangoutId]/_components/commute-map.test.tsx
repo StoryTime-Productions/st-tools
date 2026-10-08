@@ -44,6 +44,7 @@ const DATA: MapData = {
       color: "#2563eb",
       driver: "Alice",
       dashed: false,
+      needsStart: false,
       homes: [{ name: "Bob", position: [4, 4] }],
       lines: [
         [
@@ -58,6 +59,7 @@ const DATA: MapData = {
       color: "#dc2626",
       driver: "Cara",
       dashed: true,
+      needsStart: false,
       homes: [],
       lines: [
         [
@@ -65,6 +67,30 @@ const DATA: MapData = {
           [5, 5],
         ],
       ],
+      trips: [],
+    },
+  ],
+};
+
+const NO_START: MapData = {
+  ...DATA,
+  cars: [
+    {
+      ...DATA.cars[0],
+      id: "c3",
+      driver: "Dan",
+      needsStart: true,
+      dashed: true,
+      lines: [],
+      trips: [],
+    },
+    {
+      ...DATA.cars[0],
+      id: "c4",
+      driver: "Eve",
+      needsStart: true,
+      dashed: true,
+      lines: [],
       trips: [],
     },
   ],
@@ -102,6 +128,17 @@ describe("CommuteMap", () => {
     expect(screen.getByText(/way there/i)).toBeTruthy();
     expect(screen.getByText("© TomTom")).toBeTruthy();
     expect(screen.getByText("Not on map: Mystery")).toBeTruthy();
+  });
+
+  it("says which cars need a start address instead of drawing a line for them (AC4)", async () => {
+    const { unmount } = render(<CommuteMap data={NO_START} hasKey />);
+    expect(screen.getByText("Needs a start address: Dan's car, Eve's car")).toBeTruthy();
+    await waitFor(() => expect(leaflet.instance.fitBounds).toHaveBeenCalled());
+    expect(leaflet.polyline).not.toHaveBeenCalled();
+    unmount();
+
+    render(<CommuteMap data={DATA} hasKey />);
+    expect(screen.queryByText(/Needs a start address/)).toBeNull();
   });
 
   it("uses night tiles in dark mode, centers when empty, and omits empty lists", async () => {
