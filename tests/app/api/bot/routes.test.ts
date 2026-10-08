@@ -10,7 +10,7 @@ async function load() {
   };
   const applyAttendance = vi.fn().mockResolvedValue(null);
   const refreshAnnouncement = vi.fn();
-  const postToChannel = vi.fn();
+  const postToChannel = vi.fn().mockResolvedValue("msg-1");
   const revalidatePath = vi.fn();
   vi.doMock("@/lib/prisma", () => ({ prisma }));
   vi.doMock("@/lib/attendance", async () => ({
@@ -145,7 +145,19 @@ describe("bot API", () => {
     expect(mod.postToChannel.mock.calls[0][0]).toBe("ideas-1");
     expect(mod.revalidatePath).toHaveBeenCalledWith("/hub/ideas");
     expect(body.ok).toBe(true);
+    expect(body.posted).toBe(true);
+    expect(body.channelId).toBe("ideas-1");
     expect(body.message.embeds[0].title).toBe("Bowling");
+  });
+
+  it("reports posted: false when the channel post fails", async () => {
+    const mod = await load();
+    mod.postToChannel.mockResolvedValue(null);
+
+    const body = await (await mod.ideas.POST(post(IDEA))).json();
+
+    expect(body.posted).toBe(false);
+    expect(body.channelId).toBeNull();
   });
 
   it("still stores and replies when no ideas channel is configured", async () => {
@@ -154,5 +166,6 @@ describe("bot API", () => {
 
     expect((await mod.ideas.POST(post(IDEA))).status).toBe(200);
     expect(mod.postToChannel).not.toHaveBeenCalled();
+    expect((await (await mod.ideas.POST(post(IDEA))).json()).posted).toBe(false);
   });
 });
