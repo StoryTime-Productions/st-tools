@@ -98,6 +98,36 @@ describe("AvailabilityGrid", () => {
     expect(within(panel).getByText("No one")).toBeInTheDocument();
   });
 
+  it("pages one calendar week at a time when more than five days are set", () => {
+    const dates = [5, 6, 7, 8, 9, 10, 11, 12].map(
+      (day) => `2026-10-${String(day).padStart(2, "0")}`
+    );
+    render(
+      <AvailabilityGrid
+        hangoutId="h1"
+        setup={{ dates, startHour: 10, endHour: 11 }}
+        user={{ id: "me", name: "Me" }}
+        responses={[]}
+        editable
+      />
+    );
+    expect(screen.getByText("Oct 5 – Oct 11")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^Mon, Oct 5, 10:00 AM/ })).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: /Oct 12/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Previous week" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next week" }));
+    expect(screen.getByText("Oct 12", { selector: "p" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^Mon, Oct 12, 10:00 AM/ })).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: /Oct 5/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Next week" })).toBeDisabled();
+  });
+
+  it("shows no week controls with five or fewer days", () => {
+    renderGrid();
+    expect(screen.queryByRole("button", { name: "Next week" })).toBeNull();
+  });
+
   it("explains an empty group", () => {
     render(
       <AvailabilityGrid
