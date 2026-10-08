@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Clock, Pencil, Trash2, X } from "lucide-react";
+import { Pencil, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   joinCarAction,
@@ -12,7 +12,6 @@ import {
   recomputeRoutesAction,
   removeCarAction,
   removeRiderAction,
-  setCarTimesAction,
   updateCarAction,
   type CarpoolActionResult,
 } from "@/app/actions/carpools";
@@ -28,9 +27,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { torontoInputValue } from "@/lib/calendar";
-import { setWeatherBufferAction } from "@/app/actions/hangouts";
 import type { HangoutCarItem } from "@/lib/hangouts";
+import type { Trip } from "@/lib/routes";
 import { WeatherCredit } from "@/app/hub/hangouts/[hangoutId]/_components/weather";
 
 const clock = (iso: string) =>
@@ -40,13 +38,13 @@ const clock = (iso: string) =>
     minute: "2-digit",
   });
 
-const shift = (iso: string, minutes: number) =>
-  minutes === 0 ? iso : new Date(new Date(iso).getTime() - minutes * 60_000).toISOString();
+/** "+6 min for rain" when the forecast stretched this trip (T3). */
+const delayNote = (trip: Trip) =>
+  trip.delayMinutes ? ` (+${trip.delayMinutes} min for ${trip.reason})` : "";
 
 export interface CarpoolWeather {
-  /** Distinct warnings across the stops; empty = no buffer applies. */
+  /** Distinct warnings across the stops. */
   warnings: string[];
-  bufferMinutes: number;
   /** Whether forecasts were looked up at all (Scheduled with stops). */
   checked: boolean;
 }
@@ -73,7 +71,7 @@ export function Carpools({
   hangoutId,
   cars,
   viewer,
-  weather = { warnings: [], bufferMinutes: 0, checked: false },
+  weather = { warnings: [], checked: false },
 }: {
   hangoutId: string;
   cars: HangoutCarItem[];
@@ -81,8 +79,6 @@ export function Carpools({
   weather?: CarpoolWeather;
 }) {
   const [isPending, run] = useRun();
-  const [buffer, setBuffer] = useState(String(weather.bufferMinutes));
-  const buffered = weather.warnings.length > 0 ? weather.bufferMinutes : 0;
   const [seats, setSeats] = useState("4");
   const driving = cars.some((car) => car.driver.userId === viewer.id);
   const riding = cars.find((car) => car.riders.some((rider) => rider.userId === viewer.id));
@@ -91,11 +87,8 @@ export function Carpools({
     <div className="space-y-4 text-sm">
       {weather.warnings.length > 0 ? (
         <p role="status" className="text-destructive rounded-2xl border px-4 py-3">
-          Weather warning: {weather.warnings.join(", ")}.{" "}
-          {buffered > 0
-            ? `Routed leave and pick-up times include a ${buffered} min buffer.`
-            : "No buffer is set."}{" "}
-          Times you typed in are unchanged; consider leaving earlier.
+          Weather warning: {weather.warnings.join(", ")}. Drive times include extra time for the
+          conditions.
         </p>
       ) : null}
       {cars.length === 0 ? <p className="text-muted-foreground">No cars yet.</p> : null}
@@ -104,8 +97,8 @@ export function Carpools({
           const canManage = car.driver.userId === viewer.id || viewer.isAdmin;
           const mine = car.riders.find((rider) => rider.userId === viewer.id);
           const full = car.riders.length >= car.seats;
-          const typedIn = Boolean(car.schedule && "there" in car.schedule && car.schedule.manual);
-          const shiftThere = (iso: string) => (typedIn ? iso : shift(iso, buffered));
+          const schedule =
+            car.schedule && "there" in car.schedule && !car.schedule.manual ? car.schedule : null;
           const join = (atCommonPoint: boolean, label: string) => (
             <Button
               size="sm"
@@ -146,27 +139,26 @@ export function Carpools({
                       <span className="text-muted-foreground">Common point:</span> {car.commonPoint}
                     </p>
                   ) : null}
-                  {car.schedule && "there" in car.schedule ? (
+                  {schedule ? (
                     <p>
-                      <span className="text-muted-foreground">
-                        Drive{car.schedule.manual ? " (typed in)" : ""}:
-                      </span>{" "}
-                      leaves {clock(shiftThere(car.schedule.there.start))}
-                      {shiftThere(car.schedule.there.start) !== car.schedule.there.start
-                        ? ` (${clock(car.schedule.there.start)} without weather buffer)`
-                        : ""}
-                      , arrives {clock(car.schedule.there.end)} · back{" "}
-                      {clock(car.schedule.back.start)} – {clock(car.schedule.back.end)}
+                      <span className="text-muted-foreground">Drive:</span> leaves{" "}
+                      {clock(schedule.there.start)}
+                      {delayNote(schedule.there)}, arrives {clock(schedule.there.end)} · back{" "}
+                      {clock(schedule.back.start)} – {clock(schedule.back.end)}
+                      {delayNote(schedule.back)}
                     </p>
                   ) : car.schedule ? (
-                    <p className="text-muted-foreground">No drive times: {car.schedule.error}</p>
+                    <p className="text-muted-foreground">
+                      Routes could not be computed:{" "}
+                      {"error" in car.schedule
+                        ? car.schedule.error
+                        : "these times were typed in before they were computed"}
+                      . {viewer.isAdmin ? "Try Recompute routes." : "Ask an admin to recompute."}
+                    </p>
                   ) : null}
                 </div>
                 {canManage ? (
                   <div className="flex gap-1">
-                    {car.schedule && "there" in car.schedule && !car.schedule.manual ? null : (
-                      <TimesDialog car={car} />
-                    )}
                     <CarDialog car={car} />
                     <Button
                       size="icon"
@@ -208,11 +200,11 @@ export function Carpools({
                             ) : null}
                           </span>
                         )}
-                        {car.schedule && "there" in car.schedule ? (
+                        {schedule ? (
                           <span className="text-muted-foreground">
                             {" "}
-                            · pick-up {clock(shiftThere(car.schedule.there.stops[rider.userId]))} ·
-                            drop-off {clock(car.schedule.back.stops[rider.userId])}
+                            · pick-up {clock(schedule.there.stops[rider.userId])} · drop-off{" "}
+                            {clock(schedule.back.stops[rider.userId])}
                           </span>
                         ) : null}
                       </span>
@@ -265,31 +257,6 @@ export function Carpools({
         >
           Recompute routes
         </Button>
-      ) : null}
-      {viewer.isAdmin && weather.checked ? (
-        <form
-          className="flex flex-wrap items-end gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            run(() => setWeatherBufferAction(hangoutId, Number(buffer)), "Buffer saved");
-          }}
-        >
-          <div className="space-y-2">
-            <Label htmlFor="weather-buffer">Weather buffer (minutes)</Label>
-            <Input
-              id="weather-buffer"
-              type="number"
-              min={0}
-              max={120}
-              className="w-24"
-              value={buffer}
-              onChange={(event) => setBuffer(event.target.value)}
-            />
-          </div>
-          <Button type="submit" variant="outline" size="sm" disabled={isPending}>
-            Save buffer
-          </Button>
-        </form>
       ) : null}
       {weather.checked ? <WeatherCredit /> : null}
       {!viewer.going ? (
@@ -399,97 +366,6 @@ function CarDialog({ car }: { car: HangoutCarItem }) {
           <DialogFooter showCloseButton>
             <Button type="submit" disabled={isPending}>
               {isPending ? "Saving..." : "Save car"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-const local = (iso?: string) => (iso ? torontoInputValue(new Date(iso)) : "");
-
-/** Fallback for cars routing couldn't handle: type the leave, pick-up and drop-off times. */
-function TimesDialog({ car }: { car: HangoutCarItem }) {
-  const initial = () => {
-    const kept = car.schedule && "there" in car.schedule ? car.schedule : null;
-    const trip = (t?: { start: string; end: string; stops: Record<string, string> }) => ({
-      start: local(t?.start),
-      end: local(t?.end),
-      stops: Object.fromEntries(car.riders.map((r) => [r.userId, local(t?.stops[r.userId])])),
-    });
-    return { there: trip(kept?.there), back: trip(kept?.back) };
-  };
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState(initial);
-  const [isPending, run] = useRun();
-  type Leg = "there" | "back";
-  const field = (leg: Leg, label: string, value: string, change: (v: string) => void) => (
-    <div className="space-y-1">
-      <Label htmlFor={`car-${car.id}-${leg}-${label}`}>{label}</Label>
-      <Input
-        id={`car-${car.id}-${leg}-${label}`}
-        type="datetime-local"
-        required
-        value={value}
-        onChange={(event) => change(event.target.value)}
-      />
-    </div>
-  );
-  const edit = (leg: Leg, patch: Partial<(typeof form)["there"]>) =>
-    setForm({ ...form, [leg]: { ...form[leg], ...patch } });
-  const section = (leg: Leg, title: string, start: string, end: string) => (
-    <fieldset className="space-y-2">
-      <legend className="font-medium">{title}</legend>
-      {field(leg, start, form[leg].start, (v) => edit(leg, { start: v }))}
-      {car.riders.map((rider) =>
-        field(
-          leg,
-          `${rider.name} ${leg === "there" ? "pick-up" : "drop-off"}`,
-          form[leg].stops[rider.userId],
-          (v) => edit(leg, { stops: { ...form[leg].stops, [rider.userId]: v } })
-        )
-      )}
-      {field(leg, end, form[leg].end, (v) => edit(leg, { end: v }))}
-    </fieldset>
-  );
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (next) setForm(initial());
-        setOpen(next);
-      }}
-    >
-      <DialogTrigger asChild>
-        <Button size="icon" variant="ghost" aria-label={`Set ${car.driver.name}'s drive times`}>
-          <Clock />
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Drive times</DialogTitle>
-          <DialogDescription>
-            Type the times yourself. The next successful route recompute replaces them.
-          </DialogDescription>
-        </DialogHeader>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            run(
-              () => setCarTimesAction(car.id, form),
-              "Drive times saved",
-              () => setOpen(false)
-            );
-          }}
-          className="space-y-4"
-        >
-          {section("there", "Way there", "Leaves", "Arrives")}
-          {section("back", "Way back", "Leaves the last stop", "Home")}
-          <DialogFooter showCloseButton>
-            <Button type="submit" disabled={isPending}>
-              {isPending ? "Saving..." : "Save times"}
             </Button>
           </DialogFooter>
         </form>

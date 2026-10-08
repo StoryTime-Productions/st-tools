@@ -53,7 +53,7 @@ export function HomeAddressForm({
           {saved.located ? null : (
             <span className="text-muted-foreground">
               {" "}
-              · couldn&apos;t locate it on the map, so drive times will be manual
+              · couldn&apos;t locate it on the map, so drive times can&apos;t be computed for it
             </span>
           )}
         </p>

@@ -294,7 +294,6 @@ model Hangout {
   windowEndHour        Int           @default(17)
   availabilityDeadline DateTime?
   startSlot            String?
-  weatherBufferMinutes Int           @default(15)
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
 

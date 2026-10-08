@@ -332,49 +332,6 @@ describe("carpool actions", () => {
     await expect(mod.leaveCarAction(HANGOUT_ID)).resolves.toEqual({ error: "Unauthorized" });
   });
 
-  it("saves typed-in drive times for the driver or an admin", async () => {
-    const mod = await loadModule();
-    const trip = (a: string, b: string, c: string) => ({
-      start: `2026-10-03T${a}`,
-      end: `2026-10-03T${b}`,
-      stops: { [rider.id]: `2026-10-03T${c}` },
-    });
-    const times = { there: trip("18:00", "19:30", "18:20"), back: trip("22:00", "23:00", "22:40") };
-    const car = ownedCar({ hangout: { status: "SCHEDULED" }, riders: [{ userId: rider.id }] });
-    mod.prisma.hangoutCar.findUnique.mockResolvedValue(car);
-
-    await expect(mod.setCarTimesAction(CAR_ID, times)).resolves.toEqual({ success: true });
-    const saved = mod.prisma.hangoutCar.update.mock.calls[0][0].data.schedule;
-    expect(saved.manual).toBe(true);
-    expect(saved.there.start).toBe("2026-10-03T22:00:00.000Z");
-    expect(saved.back.stops[rider.id]).toBe("2026-10-04T02:40:00.000Z");
-    expect(mod.revalidatePath).toHaveBeenCalledWith(`/hub/hangouts/${HANGOUT_ID}`);
-
-    const bad = (patch: object) => mod.setCarTimesAction(CAR_ID, { ...times, ...patch });
-    await expect(bad({ there: trip("20:00", "19:30", "18:20") })).resolves.toEqual({
-      error: "A trip can't arrive before it leaves",
-    });
-    await expect(bad({ back: { ...times.back, stops: {} } })).resolves.toEqual({
-      error: "Fill in every pick-up and drop-off",
-    });
-    await expect(bad({ back: { ...times.back, end: "" } })).resolves.toEqual({
-      error: "Fill in every time",
-    });
-    mod.prisma.hangoutCar.findUnique.mockResolvedValue({
-      ...car,
-      hangout: { status: "COLLECTING" },
-    });
-    await expect(mod.setCarTimesAction(CAR_ID, times)).resolves.toEqual({
-      error: "This hangout isn't scheduled",
-    });
-    mod.getCurrentUser.mockResolvedValue(rider);
-    mod.prisma.hangoutCar.findUnique.mockResolvedValue(car);
-    await expect(mod.setCarTimesAction(CAR_ID, times)).resolves.toEqual({
-      error: "Only the driver or an admin can change this car",
-    });
-    expect(mod.prisma.hangoutCar.update).toHaveBeenCalledTimes(1);
-  });
-
   it("lets admins recompute every route", async () => {
     const mod = await loadModule();
     mod.getCurrentUser.mockResolvedValue(admin);

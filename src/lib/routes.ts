@@ -3,6 +3,7 @@ import { addDays, torontoToUtc } from "@/lib/calendar";
 import { scheduleStops } from "@/lib/itinerary";
 import { prisma } from "@/lib/prisma";
 import { routeVia, type Point } from "@/lib/tomtom";
+import { getStopWeather, weatherDelay } from "@/lib/weather";
 
 export interface Trip {
   /** ISO times. `stops` maps rider user id to their pick-up (there) or drop-off (back). */
@@ -11,9 +12,46 @@ export interface Trip {
   stops: Record<string, string>;
   /** Road geometry as [lat, lon]; absent on manual trips and on schedules stored before the map. */
   path?: [number, number][];
+  /** Minutes the forecast added to this trip's drive (already included in the times above), and why. */
+  delayMinutes?: number;
+  reason?: string;
 }
 
+/** `manual` is only on schedules typed in before times became computed; they are treated as uncomputed. */
 export type CarSchedule = { there: Trip; back: Trip; manual?: true } | { error: string };
+
+/**
+ * Stretch a routed trip by the weather (T3/T4). The arrival of a trip there stays put, so it
+ * leaves earlier; a trip back keeps its departure, so it arrives later. Stops scale with the drive.
+ */
+export function withWeatherDelay(
+  trip: Trip,
+  direction: "there" | "back",
+  delay: { percent: number; reason: string } | null
+): Trip {
+  if (!delay) return trip;
+  const start = Date.parse(trip.start);
+  const end = Date.parse(trip.end);
+  const drive = end - start;
+  const extra = Math.ceil((drive * delay.percent) / 100 / 60_000) * 60_000;
+  if (drive <= 0 || extra === 0) return trip;
+
+  const scale = 1 + extra / drive;
+  const iso = (ms: number) => new Date(Math.round(ms)).toISOString();
+  const stops = Object.fromEntries(
+    Object.entries(trip.stops).map(([userId, at]) => {
+      const time = Date.parse(at);
+      return [
+        userId,
+        iso(direction === "there" ? end - (end - time) * scale : start + (time - start) * scale),
+      ];
+    })
+  );
+  const delayed = { ...trip, stops, delayMinutes: extra / 60_000, reason: delay.reason };
+  return direction === "there"
+    ? { ...delayed, start: iso(start - extra) }
+    : { ...delayed, end: iso(end + extra) };
+}
 
 const located = (lat: number | null, lon: number | null): Point | null =>
   lat === null || lon === null ? null : { lat, lon };
@@ -66,19 +104,23 @@ export async function recomputeRoutes(hangoutId: string) {
   const first = placed[0];
   const last = placed[placed.length - 1];
 
+  // Forecast at the arrival stop for the way there and at the last stop's end for the way home.
+  const [thereWeather, backWeather] = first
+    ? await getStopWeather(startDay, [
+        { lat: first.point.lat, lon: first.point.lon, at: first.at, durationMinutes: 1 },
+        { lat: last.point.lat, lon: last.point.lon, at: last.end, durationMinutes: 1 },
+      ])
+    : [];
+
   for (const car of hangout.cars) {
     const routed = await routeCar(car, first, last, instant);
-    // Manual times are only a fallback (M6): keep them when routing fails and they still cover every rider.
-    const kept = car.schedule as CarSchedule | null;
-    const schedule =
-      "error" in routed &&
-      kept &&
-      "manual" in kept &&
-      car.riders.every(
-        (rider) => rider.userId in kept.there.stops && rider.userId in kept.back.stops
-      )
-        ? kept
-        : routed;
+    const schedule: CarSchedule =
+      "error" in routed
+        ? routed
+        : {
+            there: withWeatherDelay(routed.there, "there", weatherDelay(thereWeather)),
+            back: withWeatherDelay(routed.back, "back", weatherDelay(backWeather)),
+          };
     await prisma.hangoutCar.update({
       where: { id: car.id },
       data: { schedule: schedule as unknown as Prisma.InputJsonValue },

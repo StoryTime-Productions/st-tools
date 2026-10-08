@@ -17,6 +17,7 @@ const BACK_PATH: [number, number][] = [
 ];
 
 type RouteVia = typeof import("@/lib/tomtom").routeVia;
+type StopWeather = import("@/lib/weather").StopWeather;
 
 async function loadModule() {
   const prisma = { hangout: { findUnique: vi.fn() }, hangoutCar: { update: vi.fn() } };
@@ -35,10 +36,17 @@ async function loadModule() {
           path: BACK_PATH,
         }
   );
+  const getStopWeather = vi.fn(
+    async (): Promise<StopWeather[]> => [{ status: "none" }, { status: "none" }]
+  );
   vi.doMock("@/lib/prisma", () => ({ prisma }));
   vi.doMock("@/lib/tomtom", () => ({ routeVia }));
+  vi.doMock("@/lib/weather", async () => ({
+    ...(await vi.importActual<typeof import("@/lib/weather")>("@/lib/weather")),
+    getStopWeather,
+  }));
   const lib = await import("@/lib/routes");
-  return { ...lib, prisma, routeVia };
+  return { ...lib, prisma, routeVia, getStopWeather };
 }
 
 const rider = (userId: string, atCommonPoint: boolean, home: typeof BOB | null) => ({
@@ -78,6 +86,39 @@ function hangout(overrides = {}) {
     ...overrides,
   };
 }
+
+describe("withWeatherDelay", () => {
+  const trip = {
+    start: "2026-10-03T23:00:00.000Z",
+    end: "2026-10-04T00:00:00.000Z",
+    stops: { bob: "2026-10-03T23:30:00.000Z" },
+  };
+  const rain = { percent: 10, reason: "rain" };
+
+  it("leaves the trip alone with no delay or a zero-length drive", async () => {
+    const { withWeatherDelay } = await loadModule();
+    expect(withWeatherDelay(trip, "there", null)).toBe(trip);
+    expect(
+      withWeatherDelay({ ...trip, end: trip.start }, "there", rain).delayMinutes
+    ).toBeUndefined();
+  });
+
+  it("rounds the delay up to whole minutes and scales the pick-ups with the drive", async () => {
+    const { withWeatherDelay } = await loadModule();
+    const delayed = withWeatherDelay(trip, "there", { percent: 5, reason: "fog" });
+    expect(delayed).toMatchObject({
+      start: "2026-10-03T22:57:00.000Z",
+      end: trip.end,
+      delayMinutes: 3,
+      reason: "fog",
+    });
+    expect(delayed.stops.bob).toBe("2026-10-03T23:28:30.000Z");
+
+    const back = withWeatherDelay(trip, "back", rain);
+    expect(back).toMatchObject({ start: trip.start, end: "2026-10-04T00:06:00.000Z" });
+    expect(back.stops.bob).toBe("2026-10-03T23:33:00.000Z");
+  });
+});
 
 describe("recomputeRoutes", () => {
   beforeEach(() => {
@@ -165,36 +206,66 @@ describe("recomputeRoutes", () => {
     });
   });
 
-  it("keeps typed-in times when routing fails, until a route succeeds", async () => {
+  it("replaces typed-in schedules from before times were computed (T7)", async () => {
     const { recomputeRoutes, prisma, routeVia } = await loadModule();
     const trip = { start: "s", end: "e", stops: { bob: "x", carol: "x", dan: "x" } };
     const manual = { there: trip, back: trip, manual: true };
-    const stale = { there: { ...trip, stops: {} }, back: trip, manual: true };
 
-    routeVia.mockResolvedValue({ error: "Routing failed (429)" });
+    routeVia.mockResolvedValueOnce({ error: "Routing failed (429)" });
     prisma.hangout.findUnique.mockResolvedValueOnce(hangout({ cars: [car({ schedule: manual })] }));
-    await recomputeRoutes("h1");
-    expect(prisma.hangoutCar.update).toHaveBeenLastCalledWith({
-      where: { id: "car1" },
-      data: { schedule: manual },
-    });
-
-    prisma.hangout.findUnique.mockResolvedValueOnce(hangout({ cars: [car({ schedule: stale })] }));
     await recomputeRoutes("h1");
     expect(prisma.hangoutCar.update).toHaveBeenLastCalledWith({
       where: { id: "car1" },
       data: { schedule: { error: "Routing failed (429)" } },
     });
 
-    routeVia.mockImplementation(async () => ({
-      depart: "d",
-      arrive: "a",
-      waypoints: ["w", "w", "w"],
-      path: [],
-    }));
     prisma.hangout.findUnique.mockResolvedValueOnce(hangout({ cars: [car({ schedule: manual })] }));
     await recomputeRoutes("h1");
     expect(prisma.hangoutCar.update.mock.lastCall?.[0].data.schedule).not.toHaveProperty("manual");
+  });
+
+  it("adds the forecast's delay to both trips, keeping arrival there and departure back (T3)", async () => {
+    const { recomputeRoutes, prisma, routeVia, getStopWeather } = await loadModule();
+    routeVia.mockImplementation(async (_o, waypoints, _d, time) =>
+      "arriveAt" in time
+        ? {
+            depart: "2026-10-03T23:00:00.000Z",
+            arrive: "2026-10-04T00:00:00.000Z",
+            waypoints: waypoints.map(() => "2026-10-03T23:30:00.000Z"),
+            path: [],
+          }
+        : {
+            depart: "2026-10-04T05:00:00.000Z",
+            arrive: "2026-10-04T06:00:00.000Z",
+            waypoints: waypoints.map(() => "2026-10-04T05:30:00.000Z"),
+            path: [],
+          }
+    );
+    getStopWeather.mockResolvedValueOnce([
+      { status: "ok", temperature: 1, chance: 90, code: 63, warnings: [] },
+      { status: "ok", temperature: 1, chance: 90, code: 73, warnings: ["Snow"] },
+    ]);
+    prisma.hangout.findUnique.mockResolvedValueOnce(hangout({ cars: [car()] }));
+
+    await recomputeRoutes("h1");
+
+    expect(getStopWeather).toHaveBeenCalledWith("2026-10-03", [
+      { lat: 5, lon: 5, at: 1200, durationMinutes: 1 },
+      { lat: 6, lon: 6, at: 1500, durationMinutes: 1 },
+    ]);
+    const { there, back } = prisma.hangoutCar.update.mock.lastCall?.[0].data.schedule;
+    expect(there).toMatchObject({
+      start: "2026-10-03T22:54:00.000Z",
+      end: "2026-10-04T00:00:00.000Z",
+      delayMinutes: 6,
+      reason: "rain",
+    });
+    expect(back).toMatchObject({
+      start: "2026-10-04T05:00:00.000Z",
+      end: "2026-10-04T06:12:00.000Z",
+      delayMinutes: 12,
+      reason: "snow",
+    });
   });
 
   it("does nothing for hangouts that aren't scheduled", async () => {
