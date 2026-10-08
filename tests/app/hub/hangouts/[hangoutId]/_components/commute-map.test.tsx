@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { CommuteMap } from "@/app/hub/hangouts/[hangoutId]/_components/commute-map";
 import type { buildCommuteMap } from "@/lib/commute-map";
 
@@ -23,7 +23,13 @@ const leaflet = vi.hoisted(() => {
     tileLayer: vi.fn<(url: string, options?: unknown) => ReturnType<typeof layer>>(layer),
     polyline:
       vi.fn<(line: unknown, options?: { dashArray?: string }) => ReturnType<typeof layer>>(layer),
-    marker: vi.fn(layer),
+    marker:
+      vi.fn<
+        (
+          position: unknown,
+          options?: { interactive?: boolean; keyboard?: boolean }
+        ) => ReturnType<typeof layer>
+      >(layer),
     divIcon: vi.fn((options: unknown) => options),
     instance: map,
   };
@@ -115,6 +121,12 @@ describe("CommuteMap", () => {
     expect(leaflet.tileLayer.mock.calls[0][0]).toBe("/api/map-tiles/{z}/{x}/{y}");
     // A marker, a home pin, and four direction arrows on the routed car only.
     expect(leaflet.marker).toHaveBeenCalledTimes(6);
+    // Arrows are decoration: Leaflet gives keyboard markers role=button, which axe flags unnamed.
+    const arrows = leaflet.marker.mock.calls.filter(
+      ([, options]) => options?.interactive === false
+    );
+    expect(arrows).toHaveLength(4);
+    expect(arrows.every(([, options]) => options?.keyboard === false)).toBe(true);
     expect(leaflet.polyline.mock.calls.map(([, options]) => options?.dashArray)).toEqual([
       undefined,
       "8 8",
@@ -126,7 +138,7 @@ describe("CommuteMap", () => {
     render(<CommuteMap data={DATA} hasKey />);
     expect(screen.getByText("Alice's car")).toBeTruthy();
     expect(screen.getByText("Cara's car")).toBeTruthy();
-    expect(screen.getByText(/way there/i)).toBeTruthy();
+    expect(screen.getByText(/arrows show the direction/i)).toBeTruthy();
     expect(screen.getByText("© TomTom")).toBeTruthy();
     expect(screen.getByText("Not on map: Mystery")).toBeTruthy();
   });
@@ -140,6 +152,98 @@ describe("CommuteMap", () => {
 
     render(<CommuteMap data={DATA} hasKey />);
     expect(screen.queryByText(/Needs a start address/)).toBeNull();
+  });
+
+  it("shows one phase at a time, defaulting to Getting there, with no routing (AC 1, 7)", async () => {
+    const data: MapData = {
+      ...DATA,
+      cars: [
+        {
+          ...DATA.cars[0],
+          lines: [
+            ...DATA.cars[0].lines,
+            [
+              [5, 5],
+              [1, 1],
+            ],
+          ],
+          trips: ["there", "back"],
+        },
+      ],
+    };
+    render(<CommuteMap data={data} hasKey />);
+    await waitFor(() => expect(leaflet.polyline).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("button", { name: "Getting there" }).getAttribute("aria-pressed")).toBe(
+      "true"
+    );
+    expect(screen.queryByRole("button", { name: "Between stops" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Getting home" }));
+    await waitFor(() => expect(leaflet.polyline).toHaveBeenCalledTimes(2));
+    expect(leaflet.polyline.mock.calls[1][0]).toEqual([
+      [5, 5],
+      [1, 1],
+    ]);
+  });
+
+  it("draws the between-stops road with leg times, or a dashed guide before a recompute (AC 4, 9)", async () => {
+    const legs = [
+      {
+        from: 1,
+        to: 2,
+        minutes: 12,
+        path: [
+          [5, 5],
+          [6, 6],
+        ] as [number, number][],
+      },
+    ];
+    const { unmount } = render(
+      <CommuteMap
+        data={{
+          ...DATA,
+          cars: [],
+          between: {
+            legs,
+            dashed: false,
+            guide: [
+              [5, 5],
+              [6, 6],
+            ],
+          },
+        }}
+        hasKey
+      />
+    );
+    await waitFor(() => expect(leaflet.instance.fitBounds).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Between stops" }));
+    await waitFor(() => expect(leaflet.polyline).toHaveBeenCalledTimes(1));
+    expect(leaflet.polyline.mock.calls[0][1]?.dashArray).toBeUndefined();
+    expect(screen.getByText("Stop 1 to stop 2: 12 min")).toBeTruthy();
+    unmount();
+
+    vi.clearAllMocks();
+    render(
+      <CommuteMap
+        data={{
+          ...DATA,
+          cars: [],
+          between: {
+            legs: [],
+            dashed: true,
+            guide: [
+              [5, 5],
+              [6, 6],
+            ],
+          },
+        }}
+        hasKey
+      />
+    );
+    await waitFor(() => expect(leaflet.instance.fitBounds).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Between stops" }));
+    await waitFor(() => expect(leaflet.polyline).toHaveBeenCalledTimes(1));
+    expect(leaflet.polyline.mock.calls[0][1]?.dashArray).toBe("8 8");
   });
 
   it("uses night tiles in dark mode, centers when empty, and omits empty lists", async () => {

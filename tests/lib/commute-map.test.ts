@@ -83,7 +83,12 @@ describe("buildCommuteMap", () => {
         [4, 4],
         [3, 3],
         [5, 5],
+      ],
+      [
         [6, 6],
+        [4, 4],
+        [3, 3],
+        [2, 2],
       ],
     ];
     for (const schedule of [
@@ -95,7 +100,7 @@ describe("buildCommuteMap", () => {
       const [mapCar] = buildCommuteMap(stops, [{ ...base, schedule }]).cars;
       expect(mapCar.dashed).toBe(true);
       expect(mapCar.lines).toEqual(expected);
-      expect(mapCar.trips).toEqual([]);
+      expect(mapCar.trips).toEqual(["there", "back"]);
     }
   });
 
@@ -143,7 +148,7 @@ describe("buildCommuteMap", () => {
     const withStart = car({ driver: person("Alice"), startLat: 2, startLon: 2 });
     const [mapCar] = buildCommuteMap(stops, [withStart]).cars;
     expect(mapCar.needsStart).toBe(false);
-    expect(mapCar.lines).toHaveLength(1);
+    expect(mapCar.lines).toHaveLength(2);
   });
 
   it("skips riders with no home coordinates and common-point riders when there is no common point", () => {
@@ -164,7 +169,12 @@ describe("buildCommuteMap", () => {
         [1, 1],
         [5, 5],
       ],
+      [
+        [5, 5],
+        [1, 1],
+      ],
     ]);
+    expect(mapCar.trips).toEqual(["there", "back"]);
   });
 });
 
