@@ -10,6 +10,7 @@ const driver = {
   role: "MEMBER",
   name: "Dana",
   email: "dana@x.test",
+  homeAddress: "1 Main St",
 };
 const rider = {
   id: "55555555-5555-4555-8555-555555555555",
@@ -29,6 +30,7 @@ async function loadModule() {
         : { address: `${address} (found)`, lat: 1, lon: 2 }
   );
   const prisma = {
+    user: { update: vi.fn() },
     hangoutAttendee: { findFirst: vi.fn().mockResolvedValue({ userId: driver.id }) },
     hangoutCar: {
       create: vi.fn(),
@@ -144,6 +146,51 @@ describe("carpool actions", () => {
     mod.getCurrentUser.mockResolvedValueOnce(null);
     await expect(mod.offerCarAction(HANGOUT_ID, 3)).resolves.toEqual({ error: "Unauthorized" });
     expect(mod.prisma.hangoutCar.create).toHaveBeenCalledTimes(1);
+    // A driver who already has a home address is never asked for one (AC1).
+    expect(mod.locateAddress).not.toHaveBeenCalled();
+    expect(mod.prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it("asks a driver with no home address for one, saves it to their profile, then offers the car (AC2, AC3)", async () => {
+    const mod = await loadModule();
+    mod.getCurrentUser.mockResolvedValue({ ...driver, homeAddress: null });
+
+    await expect(mod.offerCarAction(HANGOUT_ID, 3)).resolves.toEqual({
+      error: "Add your start address so the route can be computed",
+    });
+    await expect(mod.offerCarAction(HANGOUT_ID, 3, "   ")).resolves.toEqual({
+      error: "Add your start address so the route can be computed",
+    });
+    await expect(mod.offerCarAction(HANGOUT_ID, 3, "x".repeat(301))).resolves.toEqual({
+      error: "Address is too long",
+    });
+
+    mod.locateAddress.mockResolvedValueOnce({
+      error: "Couldn't find that address. Check it and try again.",
+    });
+    await expect(mod.offerCarAction(HANGOUT_ID, 3, "Nowhere")).resolves.toEqual({
+      error: "Couldn't find that address. Check it and try again.",
+    });
+    expect(mod.prisma.hangoutCar.create).not.toHaveBeenCalled();
+    expect(mod.prisma.user.update).not.toHaveBeenCalled();
+
+    await expect(mod.offerCarAction(HANGOUT_ID, 3, " 39 Rue Fountain ")).resolves.toEqual({
+      success: true,
+    });
+    expect(mod.locateAddress).toHaveBeenLastCalledWith("39 Rue Fountain");
+    expect(mod.prisma.user.update).toHaveBeenCalledWith({
+      where: { id: driver.id },
+      data: { homeAddress: "39 Rue Fountain (found)", homeLat: 1, homeLon: 2 },
+    });
+    expect(mod.prisma.hangoutCar.create).toHaveBeenCalledWith({
+      data: { hangoutId: HANGOUT_ID, driverId: driver.id, seats: 3 },
+    });
+    expect(mod.recomputeRoutes).toHaveBeenCalledWith(HANGOUT_ID);
+
+    mod.locateAddress.mockResolvedValueOnce(null);
+    await expect(mod.offerCarAction(HANGOUT_ID, 3, "somewhere")).resolves.toEqual({
+      error: "Couldn't use that address",
+    });
   });
 
   it("updates seats and geocodes changed addresses for the driver or an admin", async () => {

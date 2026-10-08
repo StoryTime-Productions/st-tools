@@ -151,7 +151,39 @@ describe("Carpools", () => {
     fireEvent.change(screen.getByLabelText("Seats for riders"), { target: { value: "3" } });
     fireEvent.click(screen.getByRole("button", { name: "Offer my car" }));
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Car added"));
-    expect(actionMocks.offerCarAction).toHaveBeenCalledWith("h1", 3);
+    expect(actionMocks.offerCarAction).toHaveBeenCalledWith("h1", 3, undefined);
+    // Without a home address on file nothing asks for one unless the page says so.
+    expect(screen.queryByLabelText("Your start address")).not.toBeInTheDocument();
+  });
+
+  it("asks for a start address next to the seats only when the viewer has no home address (AC1, AC2)", async () => {
+    const { unmount } = renderCarpools([], viewer("c", { homeAddress: "1 Main St" }));
+    expect(screen.queryByLabelText("Your start address")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Offer my car" })).toBeEnabled();
+    unmount();
+
+    renderCarpools([], viewer("c", { homeAddress: null }));
+    const offer = screen.getByRole("button", { name: "Offer my car" });
+    expect(offer).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("Your start address"), {
+      target: { value: "39 Rue Fountain" },
+    });
+    expect(offer).toBeEnabled();
+    fireEvent.click(offer);
+    await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Car added"));
+    expect(actionMocks.offerCarAction).toHaveBeenCalledWith("h1", 4, "39 Rue Fountain");
+
+    // The same error the profile card shows is surfaced and nothing is added (AC3).
+    actionMocks.offerCarAction.mockResolvedValueOnce({
+      error: "Couldn't find that address. Check it and try again.",
+    });
+    fireEvent.click(offer);
+    await waitFor(() =>
+      expect(toastMocks.error).toHaveBeenCalledWith(
+        "Couldn't find that address. Check it and try again."
+      )
+    );
   });
 
   it("lets the driver edit the car, remove riders and remove the car", async () => {

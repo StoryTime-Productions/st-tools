@@ -75,11 +75,14 @@ export function Carpools({
 }: {
   hangoutId: string;
   cars: HangoutCarItem[];
-  viewer: { id: string; isAdmin: boolean; going: boolean };
+  /** `homeAddress` is empty when the viewer has none, so offering a car asks for one (O2). */
+  viewer: { id: string; isAdmin: boolean; going: boolean; homeAddress?: string | null };
   weather?: CarpoolWeather;
 }) {
   const [isPending, run] = useRun();
   const [seats, setSeats] = useState("4");
+  const [address, setAddress] = useState("");
+  const needsAddress = viewer.homeAddress !== undefined && !viewer.homeAddress;
   const driving = cars.some((car) => car.driver.userId === viewer.id);
   const riding = cars.find((car) => car.riders.some((rider) => rider.userId === viewer.id));
 
@@ -275,9 +278,27 @@ export function Carpools({
               onChange={(event) => setSeats(event.target.value)}
             />
           </div>
+          {needsAddress ? (
+            <div className="min-w-56 flex-1 space-y-2">
+              <Label htmlFor="offer-address">Your start address</Label>
+              <Input
+                id="offer-address"
+                autoComplete="street-address"
+                maxLength={300}
+                placeholder="Saved to your profile"
+                value={address}
+                onChange={(event) => setAddress(event.target.value)}
+              />
+            </div>
+          ) : null}
           <Button
-            disabled={isPending}
-            onClick={() => run(() => offerCarAction(hangoutId, Number(seats)), "Car added")}
+            disabled={isPending || (needsAddress && address.trim().length === 0)}
+            onClick={() =>
+              run(
+                () => offerCarAction(hangoutId, Number(seats), needsAddress ? address : undefined),
+                "Car added"
+              )
+            }
           >
             Offer my car
           </Button>
