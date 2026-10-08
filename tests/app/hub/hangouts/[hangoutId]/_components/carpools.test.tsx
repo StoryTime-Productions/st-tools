@@ -15,6 +15,10 @@ const toastMocks = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 const routerMocks = vi.hoisted(() => ({ refresh: vi.fn() }));
 
 vi.mock("@/app/actions/carpools", () => actionMocks);
+vi.mock("@/app/actions/hangout-transit", () => ({
+  setTransitAction: vi.fn(),
+  clearTransitAction: vi.fn(),
+}));
 vi.mock("sonner", () => ({ toast: toastMocks }));
 vi.mock("next/navigation", () => ({ useRouter: () => routerMocks }));
 
@@ -404,11 +408,11 @@ describe("Carpools", () => {
 
     it("shows no add form when nobody needs a ride or you can't manage the car", () => {
       const { unmount } = render_([empty], viewer("a"), [attendees[0]]);
-      expect(screen.queryByRole("form")).not.toBeInTheDocument();
+      expect(screen.queryByRole("form", { name: /^Add to/ })).not.toBeInTheDocument();
       unmount();
 
       render_([empty], viewer("c"));
-      expect(screen.queryByRole("form")).not.toBeInTheDocument();
+      expect(screen.queryByRole("form", { name: /^Add to/ })).not.toBeInTheDocument();
     });
 
     it("tells drivers and admins who needs a ride, and nobody else", () => {
@@ -432,6 +436,50 @@ describe("Carpools", () => {
     it("hides the chips when nobody needs a ride in a direction", () => {
       render_([empty], viewer("a"), [attendees[0]]);
       expect(screen.queryByText(/Needs a ride/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe("public transit (R4, R5)", () => {
+    const eve = {
+      userId: "e",
+      name: "Eve",
+      direction: "DROPOFF" as const,
+      startAddress: "Bar",
+      startLat: 1,
+      startLon: 2,
+      destAddress: "7 Home Rd",
+      destLat: 3,
+      destLon: 4,
+    };
+    const rideWith = { ...CAR, pickups: [{ ...BOB, userId: "c", name: "Cara" }], dropoffs: [] };
+
+    it("lists everyone's transit choices on the card", () => {
+      render(<Carpools hangoutId="h1" cars={[CAR]} transit={[eve]} viewer={viewer("z")} />);
+      expect(screen.getByRole("list", { name: "Taking public transit" })).toHaveTextContent(
+        "Eve · getting home · Bar → 7 Home Rd"
+      );
+    });
+
+    it("warns a rider that transit takes them off the car for that trip only", () => {
+      render(<Carpools hangoutId="h1" cars={[rideWith]} viewer={viewer("c")} />);
+      expect(
+        screen.getByText("This takes you off Alice's car for getting there.")
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/for getting home/)).not.toBeInTheDocument();
+    });
+
+    it("warns for a drop-off car and leaves drivers without the transit forms", () => {
+      const dropWith = { ...CAR, pickups: [], dropoffs: [{ ...BOB, userId: "c", name: "Cara" }] };
+      const { unmount } = render(
+        <Carpools hangoutId="h1" cars={[dropWith]} viewer={viewer("c")} />
+      );
+      expect(
+        screen.getByText("This takes you off Alice's car for getting home.")
+      ).toBeInTheDocument();
+      unmount();
+
+      render(<Carpools hangoutId="h1" cars={[CAR]} viewer={viewer("a")} />);
+      expect(screen.queryByRole("form", { name: /public transit/ })).not.toBeInTheDocument();
     });
   });
 

@@ -1,10 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { Pencil, Trash2, X } from "lucide-react";
 import type { RideDirection } from "@prisma/client";
-import { toast } from "sonner";
 import {
   offerCarAction,
   recomputeRoutesAction,
@@ -12,7 +10,6 @@ import {
   removeCarAction,
   unassignPassengerAction,
   updateCarAction,
-  type CarpoolActionResult,
   type PassengerPoint,
 } from "@/app/actions/carpools";
 import { Badge } from "@/components/ui/badge";
@@ -28,8 +25,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { CarPassenger, HangoutAttendeeItem, HangoutCarItem } from "@/lib/hangouts";
+import type {
+  CarPassenger,
+  HangoutAttendeeItem,
+  HangoutCarItem,
+  HangoutTransitItem,
+} from "@/lib/hangouts";
 import type { Trip } from "@/lib/routes";
+import { TransitChoice } from "@/app/hub/hangouts/[hangoutId]/_components/transit-choice";
+import { useRun } from "@/app/hub/hangouts/[hangoutId]/_components/use-run";
 import { WeatherCredit } from "@/app/hub/hangouts/[hangoutId]/_components/weather";
 
 const clock = (iso: string) =>
@@ -50,34 +54,18 @@ export interface CarpoolWeather {
   checked: boolean;
 }
 
-function useRun() {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  function run(action: () => Promise<CarpoolActionResult>, done: string, after?: () => void) {
-    startTransition(async () => {
-      const result = await action();
-      if ("error" in result) {
-        toast.error(result.error);
-        return;
-      }
-      toast.success(done);
-      after?.();
-      router.refresh();
-    });
-  }
-  return [isPending, run] as const;
-}
-
 export function Carpools({
   hangoutId,
   cars,
   attendees = [],
+  transit = [],
   viewer,
   weather = { warnings: [], checked: false },
 }: {
   hangoutId: string;
   cars: HangoutCarItem[];
   attendees?: HangoutAttendeeItem[];
+  transit?: HangoutTransitItem[];
   /** `homeAddress` is empty when the viewer has none, so offering a car asks for one (O2). */
   viewer: { id: string; isAdmin: boolean; going: boolean; homeAddress?: string | null };
   weather?: CarpoolWeather;
@@ -268,6 +256,19 @@ export function Carpools({
           );
         })}
       </ul>
+      <TransitChoice
+        hangoutId={hangoutId}
+        transit={transit}
+        viewer={{ ...viewer, driving }}
+        carsFor={{
+          PICKUP:
+            cars.find((car) => car.pickups.some((p) => p.userId === viewer.id))?.driver.name ??
+            null,
+          DROPOFF:
+            cars.find((car) => car.dropoffs.some((p) => p.userId === viewer.id))?.driver.name ??
+            null,
+        }}
+      />
       {viewer.isAdmin && cars.length > 0 ? (
         <Button
           variant="outline"
