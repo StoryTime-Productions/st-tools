@@ -256,6 +256,12 @@ describe("Carpools", () => {
     expect(screen.queryByRole("button", { name: "Recompute routes" })).not.toBeInTheDocument();
   });
 
+  it("shows no drive line for a car with nobody to route", () => {
+    renderCarpools([{ ...CAR, pickups: [], dropoffs: [], schedule: {} }]);
+    expect(screen.queryByText(/Drive:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Routes could not be computed/)).not.toBeInTheDocument();
+  });
+
   it("treats schedules typed in before times were computed as uncomputed", () => {
     const trip = { start: "2026-10-03T23:01:00.000Z", end: "2026-10-03T23:31:00.000Z", stops: {} };
     render(

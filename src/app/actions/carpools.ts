@@ -54,6 +54,8 @@ async function ownedCar(carId: string) {
         select: {
           userId: true,
           direction: true,
+          pointKind: true,
+          viaUserId: true,
           user: { select: { homeLat: true, homeLon: true } },
         },
       },
@@ -103,6 +105,8 @@ export async function offerCarAction(
   // Driving yourself means you no longer ride in anyone else's car (Q1).
   await prisma.$transaction([
     clearFromRides(hangoutId, going.user.id),
+    // A driver is not also on public transit.
+    prisma.hangoutTransit.deleteMany({ where: { hangoutId, userId: going.user.id } }),
     prisma.hangoutCar.create({
       data: { hangoutId, driverId: going.user.id, seats: parsedSeats.data },
     }),
@@ -251,6 +255,11 @@ export async function assignPassengerAction(
     if (!via || via.userId === userId) return { error: `Pick someone else on this ${list} list` };
     if (via.user.homeLat === null || via.user.homeLon === null)
       return { error: "That rider has no home address yet" };
+    // Entries stay one level deep so removing a rider never leaves a stale chain behind (Q2).
+    if (via.pointKind === PassengerPointKind.RIDER_HOME)
+      return { error: "That rider meets at someone else's home; pick another" };
+    if (onList.some((p) => p.viaUserId === userId))
+      return { error: `Others meet at ${name}'s home; move them first` };
     values.viaUserId = via.userId;
   } else {
     const place = await geocodeAddress(chosen.address);
@@ -262,11 +271,18 @@ export async function assignPassengerAction(
     });
   }
 
-  await prisma.hangoutPassenger.upsert({
-    where: { hangoutId_userId_direction: key },
-    create: { ...key, carId: car.id, ...values },
-    update: values,
-  });
+  try {
+    await prisma.hangoutPassenger.upsert({
+      where: { hangoutId_userId_direction: key },
+      create: { ...key, carId: car.id, ...values },
+      update: values,
+    });
+  } catch (error) {
+    // Two drivers adding the same person at the same moment: the second loses.
+    if ((error as { code?: string }).code === "P2002")
+      return { error: `${name} was just added to a car for the ${list}` };
+    throw error;
+  }
   if (!existing)
     await queueUpdate(car.hangoutId, "Carpools", "—", `${personName(car.driver)} ${verb} ${name}`);
   await reroute(car.hangoutId);

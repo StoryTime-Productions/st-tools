@@ -142,7 +142,7 @@ export function Carpools({
                         ? `${car.driver.homeAddress} (home)`
                         : "no address yet")}
                   </p>
-                  {schedule ? (
+                  {schedule && !schedule.there && !schedule.back ? null : schedule ? (
                     <p>
                       <span className="text-muted-foreground">Drive:</span>
                       {schedule.there ? (

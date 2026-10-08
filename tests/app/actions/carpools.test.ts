@@ -48,7 +48,10 @@ async function loadModule() {
       upsert: vi.fn(),
       deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
-    hangoutTransit: { findUnique: vi.fn().mockResolvedValue(null) },
+    hangoutTransit: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
     $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
   };
   vi.doMock("next/cache", () => ({ revalidatePath }));
@@ -177,6 +180,9 @@ describe("carpool actions", () => {
         hangoutId: HANGOUT_ID,
         OR: [{ userId: driver.id }, { viaUserId: driver.id }],
       },
+    });
+    expect(mod.prisma.hangoutTransit.deleteMany).toHaveBeenCalledWith({
+      where: { hangoutId: HANGOUT_ID, userId: driver.id },
     });
     expect(mod.prisma.$transaction).toHaveBeenCalledTimes(1);
   });
@@ -405,6 +411,59 @@ describe("carpool actions", () => {
       await expect(
         mod.assignPassengerAction(CAR_ID, rider.id, "PICKUP", via(nohome))
       ).resolves.toEqual({ error: "That rider has no home address yet" });
+    });
+
+    it("keeps rider-home entries one level deep, so removals never leave a chain", async () => {
+      const carol = "66666666-6666-4666-8666-666666666666";
+      const dan = "77777777-7777-4777-8777-777777777779";
+      const mod = await setup(
+        ownedCar({
+          seats: 4,
+          passengers: [
+            { ...passenger(carol, "PICKUP"), pointKind: "RIDER_HOME", viaUserId: dan },
+            passenger(dan, "PICKUP"),
+          ],
+        })
+      );
+      const via = (viaUserId: string) => ({ kind: "RIDER_HOME" as const, viaUserId });
+
+      // Carol already meets at someone's home, so she can't be somebody else's meeting point.
+      await expect(
+        mod.assignPassengerAction(CAR_ID, rider.id, "PICKUP", via(carol))
+      ).resolves.toEqual({ error: "That rider meets at someone else's home; pick another" });
+      // Dan is carol's meeting point, so he can't move to someone else's home.
+      mod.prisma.hangoutAttendee.findUnique.mockResolvedValue({
+        status: "GOING",
+        user: { name: "Dan", email: "d@x.test", homeLat: 5, homeLon: 6 },
+      });
+      const car = ownedCar({
+        seats: 4,
+        passengers: [
+          { ...passenger(carol, "PICKUP"), pointKind: "HOME", viaUserId: null },
+          { ...passenger(rider.id, "PICKUP"), pointKind: "HOME", viaUserId: dan },
+        ],
+      });
+      mod.prisma.hangoutCar.findUnique.mockResolvedValue(car);
+      await expect(mod.assignPassengerAction(CAR_ID, dan, "PICKUP", via(carol))).resolves.toEqual({
+        error: "Others meet at Dan's home; move them first",
+      });
+      expect(mod.prisma.hangoutPassenger.upsert).not.toHaveBeenCalled();
+    });
+
+    it("turns a simultaneous add of the same person into an error result", async () => {
+      const mod = await setup();
+      mod.prisma.hangoutPassenger.upsert.mockRejectedValueOnce(
+        Object.assign(new Error("unique"), { code: "P2002" })
+      );
+
+      await expect(
+        mod.assignPassengerAction(CAR_ID, rider.id, "PICKUP", { kind: "HOME" })
+      ).resolves.toEqual({ error: "riley was just added to a car for the pick-up" });
+
+      mod.prisma.hangoutPassenger.upsert.mockRejectedValueOnce(new Error("db down"));
+      await expect(
+        mod.assignPassengerAction(CAR_ID, rider.id, "PICKUP", { kind: "HOME" })
+      ).rejects.toThrow("db down");
     });
 
     it("limits the longer list to the seats (AC5), but lets a move stay put", async () => {
