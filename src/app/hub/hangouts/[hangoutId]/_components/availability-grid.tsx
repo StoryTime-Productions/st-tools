@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState, useTransition, type PointerEvent, type ReactNode } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import { saveAvailabilityAction } from "@/app/actions/hangouts";
 import { slotTimes, type AvailabilityResponse, type AvailabilityWindow } from "@/lib/availability";
 import { dayLabel, hourLabel, timeLabel } from "@/lib/calendar";
@@ -13,6 +15,32 @@ interface Drag {
   mode: boolean;
   from: Cell;
   to: Cell;
+}
+
+const MAX_UNPAGED_DAYS = 5;
+
+/** Groups date keys (sorted) by Monday-start calendar week; `days` are indexes into `dates`. */
+function weekGroups(dates: string[]) {
+  const monday = (day: string) => {
+    const date = new Date(`${day}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+    return date.toISOString().slice(0, 10);
+  };
+  const groups: { start: string; days: number[] }[] = [];
+  dates.forEach((day, index) => {
+    const start = monday(day);
+    const last = groups[groups.length - 1];
+    if (last?.start === start) last.days.push(index);
+    else groups.push({ start, days: [index] });
+  });
+  return groups;
+}
+
+function weekLabel(first: string, last: string) {
+  const format = { month: "short", day: "numeric" } as const;
+  return first === last
+    ? dayLabel(first, format)
+    : `${dayLabel(first, format)} – ${dayLabel(last, format)}`;
 }
 
 function slotLabel(day: string, time: string) {
@@ -38,6 +66,11 @@ export function AvailabilityGrid({
   const [mine, setMine] = useState(
     () => new Set(responses.find((response) => response.userId === user.id)?.slots)
   );
+  const weeks = weekGroups(dates);
+  const paged = dates.length > MAX_UNPAGED_DAYS;
+  const [weekAt, setWeek] = useState(0);
+  const week = Math.min(weekAt, weeks.length - 1);
+  const visible = paged ? weeks[week].days : dates.map((_, index) => index);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [focus, setFocus] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -121,16 +154,16 @@ export function AvailabilityGrid({
       <div className="overflow-x-auto">
         <div
           className="grid min-w-fit select-none"
-          style={{ gridTemplateColumns: `auto repeat(${dates.length}, minmax(2.75rem, 1fr))` }}
+          style={{ gridTemplateColumns: `auto repeat(${visible.length}, minmax(2.75rem, 6rem))` }}
           onPointerMove={onMove}
         >
           <span />
-          {dates.map((day) => (
-            <span key={day} className="pb-1 text-center text-xs leading-tight">
+          {visible.map((index) => (
+            <span key={dates[index]} className="pb-1 text-center text-xs leading-tight">
               <span className="text-muted-foreground block">
-                {dayLabel(day, { weekday: "short" })}
+                {dayLabel(dates[index], { weekday: "short" })}
               </span>
-              {dayLabel(day, { month: "short", day: "numeric" })}
+              {dayLabel(dates[index], { month: "short", day: "numeric" })}
             </span>
           ))}
           {times.flatMap((time, row) => [
@@ -140,14 +173,14 @@ export function AvailabilityGrid({
             >
               {time.endsWith(":00") ? hourLabel(Number(time.slice(0, 2))) : ""}
             </span>,
-            ...dates.map((day, index) => renderCell([index, row], `${day}T${time}`)),
+            ...visible.map((index) => renderCell([index, row], `${dates[index]}T${time}`)),
           ])}
         </div>
       </div>
     );
   }
 
-  const green = "[--avail:var(--color-green-600)] dark:[--avail:var(--color-green-400)]";
+  const green = "[--avail:var(--color-green-500)] dark:[--avail:var(--color-green-400)]";
   const cellClass = (row: number) =>
     cn(
       green,
@@ -164,6 +197,33 @@ export function AvailabilityGrid({
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_1fr_13rem]">
+      {paged ? (
+        <div className="flex items-center gap-2 lg:col-span-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="Previous week"
+            disabled={week === 0}
+            onClick={() => setWeek(week - 1)}
+          >
+            <ChevronLeft className="size-4" aria-hidden="true" />
+          </Button>
+          <p className="min-w-40 text-center text-sm font-medium" aria-live="polite">
+            {weekLabel(dates[visible[0]], dates[visible[visible.length - 1]])}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="Next week"
+            disabled={week === weeks.length - 1}
+            onClick={() => setWeek(week + 1)}
+          >
+            <ChevronRight className="size-4" aria-hidden="true" />
+          </Button>
+        </div>
+      ) : null}
       <section className="space-y-2">
         <div>
           <h3 className="text-sm font-medium">Your availability</h3>
@@ -193,7 +253,9 @@ export function AvailabilityGrid({
                 className={cn(
                   cellClass(cell[1]),
                   "touch-none",
-                  selected ? "bg-[var(--avail)]" : "bg-muted/40",
+                  selected
+                    ? "bg-[color-mix(in_oklab,var(--avail)_35%,transparent)]"
+                    : "bg-muted/40",
                   editable && "cursor-pointer"
                 )}
               />
@@ -229,7 +291,7 @@ export function AvailabilityGrid({
               style={
                 free > 0
                   ? {
-                      backgroundColor: `color-mix(in oklab, var(--avail) ${Math.round(25 + (free / people.length) * 75)}%, transparent)`,
+                      backgroundColor: `color-mix(in oklab, var(--avail) ${Math.round(15 + (free / people.length) * 30)}%, transparent)`,
                     }
                   : undefined
               }
