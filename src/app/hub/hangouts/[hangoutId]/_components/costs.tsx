@@ -84,7 +84,7 @@ export function Costs({
   viewer,
   members,
   scheduled,
-  headcount,
+  goingIds,
   canEdit,
 }: {
   hangoutId: string;
@@ -92,34 +92,39 @@ export function Costs({
   viewer: CostViewer;
   members: { id: string; name: string }[];
   scheduled: boolean;
-  /** People an item is split across: Going once scheduled, else those who answered. */
-  headcount: number;
+  /** Members currently Going, for the "Select all Going" shortcut. */
+  goingIds: string[];
   canEdit: boolean;
 }) {
+  // AC6: an item shows to its group, its collector and admins.
+  const visible = items.filter(
+    (item) =>
+      viewer.isAdmin ||
+      item.collector.userId === viewer.id ||
+      item.participants.some((person) => person.userId === viewer.id)
+  );
   return (
     <div className="space-y-4 text-sm">
-      {items.length === 0 ? <p className="text-muted-foreground">No costs yet.</p> : null}
-      {!scheduled && items.length > 0 ? (
+      {visible.length === 0 ? <p className="text-muted-foreground">No costs yet.</p> : null}
+      {!scheduled && visible.length > 0 ? (
         <p className="text-muted-foreground">
-          {headcount > 0
-            ? `Estimates split ${headcount} ${headcount === 1 ? "person" : "people"} who filled in availability. Shares start once the hangout is scheduled.`
-            : "Estimates appear once someone has filled in availability."}
+          Estimates split each item between its group. Shares start once the hangout is scheduled.
         </p>
       ) : null}
       <ul className="space-y-3">
-        {items.map((item) => (
+        {visible.map((item) => (
           <CostRow
             key={item.id}
             item={item}
             viewer={viewer}
             members={members}
             scheduled={scheduled}
-            headcount={headcount}
+            goingIds={goingIds}
             canEdit={canEdit}
           />
         ))}
       </ul>
-      {canEdit ? <CostDialog hangoutId={hangoutId} members={members} /> : null}
+      {canEdit ? <CostDialog hangoutId={hangoutId} members={members} goingIds={goingIds} /> : null}
     </div>
   );
 }
@@ -129,19 +134,20 @@ function CostRow({
   viewer,
   members,
   scheduled,
-  headcount,
+  goingIds,
   canEdit,
 }: {
   item: HangoutCostItem;
   viewer: CostViewer;
   members: { id: string; name: string }[];
   scheduled: boolean;
-  headcount: number;
+  goingIds: string[];
   canEdit: boolean;
 }) {
   const [isPending, run] = useRun();
-  const estimate = estimateCents(item.amountCents, headcount);
+  const estimate = estimateCents(item.amountCents, item.participants.length);
   const isCollector = viewer.id === item.collector.userId;
+  const inGroup = item.participants.some((person) => person.userId === viewer.id);
 
   return (
     <li className="space-y-2 rounded-2xl border px-4 py-3">
@@ -154,10 +160,16 @@ function CostRow({
             Collected by {item.collector.name}
             {estimate !== null && !scheduled ? ` · about ${usd(estimate)} each` : ""}
           </p>
+          <p className="text-muted-foreground text-xs">
+            Split between:{" "}
+            {item.participants.length > 0
+              ? item.participants.map((person) => person.name).join(", ")
+              : "nobody yet"}
+          </p>
         </div>
         {canEdit ? (
           <div className="flex gap-1">
-            <CostDialog hangoutId="" item={item} members={members} />
+            <CostDialog hangoutId="" item={item} members={members} goingIds={goingIds} />
             <Button
               size="icon"
               variant="ghost"
@@ -174,7 +186,7 @@ function CostRow({
         ) : null}
       </div>
       {item.notes ? <p className="whitespace-pre-line">{item.notes}</p> : null}
-      {viewer.status === "MAYBE" && estimate !== null ? (
+      {viewer.status === "MAYBE" && inGroup && estimate !== null ? (
         <p className="text-muted-foreground">Would owe about {usd(estimate)} if Going.</p>
       ) : null}
       {scheduled && item.shares.length > 0 ? (
@@ -277,24 +289,34 @@ function CostDialog({
   hangoutId,
   item,
   members,
+  goingIds,
 }: {
   hangoutId: string;
   item?: HangoutCostItem;
   members: { id: string; name: string }[];
+  goingIds: string[];
 }) {
   const initial = () => ({
     title: item?.title ?? "",
     amount: item ? (item.amountCents / 100).toFixed(2) : "",
     collectorId: item?.collector.userId ?? "",
     notes: item?.notes ?? "",
+    participantIds: item?.participants.map((person) => person.userId) ?? ([] as string[]),
   });
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(initial);
   const [isPending, run] = useRun();
   const set =
-    (key: keyof ReturnType<typeof initial>) =>
+    (key: "title" | "amount" | "collectorId" | "notes") =>
     (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setForm({ ...form, [key]: event.target.value });
+  const toggle = (userId: string, on: boolean) =>
+    setForm({
+      ...form,
+      participantIds: on
+        ? [...form.participantIds, userId]
+        : form.participantIds.filter((id) => id !== userId),
+    });
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -302,6 +324,7 @@ function CostDialog({
       title: form.title,
       amountCents: Math.round(Number(form.amount) * 100),
       collectorId: form.collectorId,
+      participantIds: form.participantIds,
       notes: form.notes,
     };
     run(
@@ -340,7 +363,7 @@ function CostDialog({
         <DialogHeader>
           <DialogTitle>{item ? "Edit cost" : "Add a cost"}</DialogTitle>
           <DialogDescription>
-            The amount is the group total, split evenly across everyone Going.
+            The amount is the total, split evenly between the people you pick who are Going.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -379,6 +402,54 @@ function CostDialog({
               </SelectContent>
             </Select>
           </div>
+          <fieldset className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <legend className="text-sm leading-none font-medium">Split between</legend>
+              <div className="flex gap-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    setForm({
+                      ...form,
+                      participantIds: members
+                        .filter((member) => goingIds.includes(member.id))
+                        .map((member) => member.id),
+                    })
+                  }
+                >
+                  Select all Going
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setForm({ ...form, participantIds: [] })}
+                >
+                  Clear
+                </Button>
+              </div>
+            </div>
+            <ul className="grid max-h-40 gap-1 overflow-y-auto sm:grid-cols-2">
+              {members.map((member) => (
+                <li key={member.id}>
+                  <label className="flex items-center gap-2 py-1">
+                    <input
+                      type="checkbox"
+                      className="size-4"
+                      checked={form.participantIds.includes(member.id)}
+                      onChange={(event) => toggle(member.id, event.target.checked)}
+                    />
+                    {member.name}
+                    {goingIds.includes(member.id) ? null : (
+                      <span className="text-muted-foreground text-xs">not going</span>
+                    )}
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </fieldset>
           <div className="space-y-2">
             <Label htmlFor={id("notes")}>Notes (optional)</Label>
             <Textarea id={id("notes")} value={form.notes} onChange={set("notes")} rows={3} />

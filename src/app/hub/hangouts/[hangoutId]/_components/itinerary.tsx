@@ -50,6 +50,8 @@ export interface StopCost {
   id: string;
   title: string;
   amountCents: number;
+  /** The item's group; its size sets the "cash each" estimate (G8). */
+  participants?: { userId: string }[];
 }
 
 const NO_COST = "none";
@@ -86,7 +88,6 @@ export function Itinerary({
   canEdit,
   weather = [],
   costs = [],
-  headcount = 0,
 }: {
   hangoutId: string;
   startSlot: string | null;
@@ -94,8 +95,6 @@ export function Itinerary({
   canEdit: boolean;
   weather?: StopWeather[];
   costs?: StopCost[];
-  /** People the cost items are split across (Going, or those who answered before lock-in). */
-  headcount?: number;
 }) {
   const [isPending, run] = useRun();
   const { times, end } = scheduleStops(startSlot, stops);
@@ -110,7 +109,9 @@ export function Itinerary({
           {stops.map((stop, index) => {
             const time = times[index];
             const linked = costs.find((cost) => cost.id === stop.costItemId);
-            const cash = linked ? estimateCents(linked.amountCents, headcount) : stop.cashCents;
+            const cash = linked
+              ? estimateCents(linked.amountCents, linked.participants?.length ?? 0)
+              : stop.cashCents;
             return (
               <li key={stop.id} className="space-y-1 rounded-2xl border px-4 py-3 text-sm">
                 <div className="flex flex-wrap items-start justify-between gap-2">

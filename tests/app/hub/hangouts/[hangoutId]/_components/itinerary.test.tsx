@@ -222,18 +222,16 @@ describe("Itinerary", () => {
   });
 
   it("derives cash each from a linked cost item and lets admins link one", async () => {
-    const costs = [{ id: "c1", title: "Dinner bill", amountCents: 10_000 }];
+    const costs = [
+      {
+        id: "c1",
+        title: "Dinner bill",
+        amountCents: 10_000,
+        participants: [{ userId: "a" }, { userId: "b" }, { userId: "c" }],
+      },
+    ];
     const linked = stop({ id: "s4", title: "Dinner", cashCents: 999, costItemId: "c1" });
-    render(
-      <Itinerary
-        hangoutId="h1"
-        startSlot={null}
-        stops={[linked]}
-        canEdit
-        costs={costs}
-        headcount={3}
-      />
-    );
+    render(<Itinerary hangoutId="h1" startSlot={null} stops={[linked]} canEdit costs={costs} />);
     expect(screen.getByText(/about \$33\.34 cash each/)).toBeInTheDocument();
     expect(screen.queryByText(/9\.99/)).not.toBeInTheDocument();
 
@@ -251,7 +249,7 @@ describe("Itinerary", () => {
     );
   });
 
-  it("shows no cash when nobody is counted yet for a linked item", () => {
+  it("shows no cash when a linked item has nobody in its group", () => {
     const costs = [{ id: "c1", title: "Dinner bill", amountCents: 10_000 }];
     render(
       <Itinerary

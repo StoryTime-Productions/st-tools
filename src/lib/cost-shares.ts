@@ -14,6 +14,7 @@ export async function resplitCosts(hangoutId: string) {
           id: true,
           amountCents: true,
           collectorId: true,
+          participants: { select: { userId: true } },
           shares: {
             select: {
               userId: true,
@@ -36,7 +37,13 @@ export async function resplitCosts(hangoutId: string) {
 
   const going = hangout.attendees.map((attendee) => attendee.userId);
   const ops = hangout.costs.flatMap((cost) => {
-    const plan = planShares(cost, going, cost.shares);
+    // An item is only split between its own group, and only those in it who are Going.
+    const group = new Set(cost.participants.map((participant) => participant.userId));
+    const plan = planShares(
+      cost,
+      going.filter((userId) => group.has(userId)),
+      cost.shares
+    );
     const costId = cost.id;
     return [
       ...(plan.remove.length

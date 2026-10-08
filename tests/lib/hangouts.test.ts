@@ -122,6 +122,7 @@ describe("hangout data loaders", () => {
             amountCents: 6000,
             notes: null,
             collector: { id: "a", name: "Alice", email: "a@x.gg" },
+            participants: [{ user: { id: "b", name: null, email: "b@x.gg" } }],
             shares: [
               {
                 amountCents: 2000,
@@ -176,6 +177,7 @@ describe("hangout data loaders", () => {
           amountCents: 6000,
           notes: null,
           collector: { userId: "a", name: "Alice" },
+          participants: [{ userId: "b", name: "b@x.gg" }],
           shares: [
             {
               userId: "b",

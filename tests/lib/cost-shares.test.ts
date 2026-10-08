@@ -18,6 +18,7 @@ const costs = [
     id: "cost1",
     amountCents: 2000,
     collectorId: "c",
+    participants: [{ userId: "c" }, { userId: "a" }],
     shares: [{ userId: "gone", amountCents: 1000, paidCents: 0, status: "UNPAID", method: null }],
   },
 ];
@@ -61,6 +62,25 @@ describe("resplitCosts", () => {
       update: expect.objectContaining({ amountCents: 1000, status: "UNPAID" }),
     });
     expect(mod.prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("splits an item only between its group, so Going members outside it get no share (G1, G5)", async () => {
+    const mod = await loadModule();
+    mod.prisma.hangout.findUnique.mockResolvedValue({
+      status: "SCHEDULED",
+      attendees: [{ userId: "c" }, { userId: "a" }, { userId: "outsider" }],
+      costs: [{ ...costs[0], shares: [], participants: [{ userId: "a" }, { userId: "absent" }] }],
+    });
+    await mod.resplitCosts(HANGOUT_ID);
+
+    // Only "a" is both in the group and Going: the collector is outside it, so "a" owes it all.
+    expect(mod.prisma.hangoutCostShare.upsert).toHaveBeenCalledTimes(1);
+    expect(mod.prisma.hangoutCostShare.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { costId_userId: { costId: "cost1", userId: "a" } },
+        create: expect.objectContaining({ amountCents: 2000 }),
+      })
+    );
   });
 
   it("skips the transaction when there is nothing to write", async () => {
