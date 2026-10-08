@@ -101,13 +101,20 @@ export function buildCommuteMap(
       // A car that starts nowhere draws nothing, so a line never implies a route that was not computed.
       const needsStart = origin === null;
       const dashed = roads.length === 0;
-      const through = [
-        origin,
-        ...car.riders.map((rider) =>
-          rider.atCommonPoint ? common : at(rider.homeLat, rider.homeLon)
-        ),
-        ...stopPoints,
-      ].filter((point): point is LatLon => point !== null);
+      const riderPoints = car.riders
+        .map((rider) => (rider.atCommonPoint ? common : at(rider.homeLat, rider.homeLon)))
+        .filter((point): point is LatLon => point !== null);
+      // Guide lines per phase: out to the first stop, and from the last stop back home (AC 8).
+      const guides: { trip: Trip; path: LatLon[] }[] = [
+        { trip: "there", path: [origin, ...riderPoints, ...stopPoints.slice(0, 1)] },
+        { trip: "back", path: [...stopPoints.slice(-1), ...riderPoints, origin] },
+      ].flatMap(({ trip, path }) => {
+        const points = path.filter((point): point is LatLon => point !== null);
+        return points.length > 1 && (trip === "there" || stopPoints.length > 0)
+          ? [{ trip: trip as Trip, path: points }]
+          : [];
+      });
+      const drawn = needsStart ? [] : dashed ? guides : roads;
       return {
         id: car.id,
         color: CAR_COLORS[index % CAR_COLORS.length],
@@ -115,15 +122,9 @@ export function buildCommuteMap(
         dashed,
         needsStart,
         homes,
-        lines: needsStart
-          ? []
-          : dashed
-            ? through.length > 1
-              ? [through]
-              : []
-            : roads.map((road) => road.path),
-        /** Which trip each of `lines` is; empty for dashed cars, whose lines are only a guide. */
-        trips: dashed || needsStart ? [] : roads.map((road) => road.trip),
+        lines: drawn.map((line) => line.path),
+        /** Which phase each of `lines` belongs to: "there" is Getting there, "back" is Getting home. */
+        trips: drawn.map((line) => line.trip),
       };
     }),
   };

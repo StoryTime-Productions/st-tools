@@ -1,11 +1,30 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import "leaflet/dist/leaflet.css";
 import { arrowsAlong, type buildCommuteMap } from "@/lib/commute-map";
+import { Button } from "@/components/ui/button";
 
 type MapData = ReturnType<typeof buildCommuteMap>;
+
+type Phase = "there" | "between" | "home";
+
+const PHASES: { id: Phase; label: string }[] = [
+  { id: "there", label: "Getting there" },
+  { id: "between", label: "Between stops" },
+  { id: "home", label: "Getting home" },
+];
+
+const arrow = (position: [number, number], bearing: number, L: typeof import("leaflet")) =>
+  L.marker(position, {
+    interactive: false,
+    icon: L.divIcon({
+      className: "",
+      html: `<svg width="20" height="20" viewBox="0 0 20 20" style="transform:rotate(${bearing}deg)"><polygon points="10,1 18,18 10,13 2,18" fill="#111" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>`,
+      iconSize: [20, 20],
+    }),
+  });
 
 const text = (value: string) =>
   Object.assign(document.createElement("div"), { textContent: value });
@@ -13,6 +32,8 @@ const text = (value: string) =>
 export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean }) {
   const container = useRef<HTMLDivElement>(null);
   const dark = useTheme().resolvedTheme === "dark";
+  const [phase, setPhase] = useState<Phase>("there");
+  const active = phase === "between" && !data.between ? "there" : phase;
 
   useEffect(() => {
     if (!hasKey || !container.current) return;
@@ -46,27 +67,20 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
       for (const car of data.cars) {
         car.lines.forEach((line, index) => {
           const trip = car.trips[index];
-          const label = trip === "back" ? "Way back" : "Way there";
+          if ((trip === "back" ? "home" : "there") !== active) return;
           L.polyline(line, {
             color: car.color,
-            weight: trip === "back" ? 3 : 5,
-            opacity: trip === "back" ? 0.6 : 1,
+            weight: 5,
             dashArray: car.dashed ? "8 8" : undefined,
           })
-            .bindTooltip(text(trip ? `${car.driver}'s car: ${label}` : `${car.driver}'s car`), {
-              sticky: true,
-            })
+            .bindTooltip(
+              text(`${car.driver}'s car: ${trip === "back" ? "Getting home" : "Getting there"}`),
+              { sticky: true }
+            )
             .addTo(map!);
-          if (trip) {
+          if (!car.dashed) {
             for (const { position, bearing } of arrowsAlong(line)) {
-              L.marker(position, {
-                interactive: false,
-                icon: L.divIcon({
-                  className: "",
-                  html: `<svg width="20" height="20" viewBox="0 0 20 20" style="transform:rotate(${bearing}deg)"><polygon points="10,1 18,18 10,13 2,18" fill="${trip === "back" ? "#fff" : "#111"}" stroke="${trip === "back" ? "#111" : "#fff"}" stroke-width="2" stroke-linejoin="round"/></svg>`,
-                  iconSize: [20, 20],
-                }),
-              }).addTo(map!);
+              arrow(position, bearing, L).addTo(map!);
             }
           }
           points.push(...line);
@@ -81,6 +95,26 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
           points.push(home.position);
         }
       }
+      if (active === "between" && data.between) {
+        const { legs, dashed, guide } = data.between;
+        const lines = dashed
+          ? [{ path: guide, label: "Between stops" }]
+          : legs.map((leg) => ({
+              path: leg.path,
+              label: `Stop ${leg.from} to stop ${leg.to}: ${leg.minutes} min`,
+            }));
+        for (const { path, label } of lines) {
+          L.polyline(path, { color: "#111", weight: 5, dashArray: dashed ? "8 8" : undefined })
+            .bindTooltip(text(label), { sticky: true })
+            .addTo(map);
+          if (!dashed) {
+            for (const { position, bearing } of arrowsAlong(path)) {
+              arrow(position, bearing, L).addTo(map);
+            }
+          }
+          points.push(...path);
+        }
+      }
       if (points.length > 0) map.fitBounds(points, { padding: [24, 24] });
       else map.setView([43.65, -79.38], 10);
     });
@@ -88,7 +122,7 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
       cancelled = true;
       map?.remove();
     };
-  }, [data, hasKey, dark]);
+  }, [data, hasKey, dark, active]);
 
   if (!hasKey) {
     return <p className="text-muted-foreground text-sm">The map isn&apos;t set up yet.</p>;
@@ -96,6 +130,20 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
 
   return (
     <div className="space-y-3">
+      <div role="group" aria-label="Map phase" className="flex flex-wrap gap-2">
+        {PHASES.filter(({ id }) => id !== "between" || data.between).map(({ id, label }) => (
+          <Button
+            key={id}
+            type="button"
+            size="sm"
+            variant={active === id ? "default" : "outline"}
+            aria-pressed={active === id}
+            onClick={() => setPhase(id)}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
       <div
         ref={container}
         className="relative z-0 h-72 w-full overflow-hidden rounded-2xl sm:h-96"
@@ -113,11 +161,19 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
                 style={{ borderColor: car.color, borderTopStyle: car.dashed ? "dashed" : "solid" }}
               />
               {car.driver}&apos;s car
-              {car.trips.length > 0 ? (
-                <span className="text-muted-foreground text-xs">
-                  Arrows show the direction: black = way there, white = way back
-                </span>
-              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {data.cars.some((car) => !car.dashed && car.lines.length > 0) ||
+      (data.between && !data.between.dashed) ? (
+        <p className="text-muted-foreground text-xs">Arrows show the direction of travel.</p>
+      ) : null}
+      {active === "between" && data.between && !data.between.dashed ? (
+        <ul className="text-sm">
+          {data.between.legs.map((leg) => (
+            <li key={leg.from}>
+              Stop {leg.from} to stop {leg.to}: {leg.minutes} min
             </li>
           ))}
         </ul>
