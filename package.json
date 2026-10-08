@@ -17,6 +17,7 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
+    "ride:dry-run": "tsx --env-file=.env scripts/ride-migration-dry-run.ts",
     "discord:preview": "tsx --env-file=.env scripts/discord-preview.ts",
     "db:studio": "prisma studio",
     "db:local:up": "docker compose up -d db",
