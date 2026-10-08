@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useTheme } from "next-themes";
 import "leaflet/dist/leaflet.css";
-import type { buildCommuteMap } from "@/lib/commute-map";
+import { arrowsAlong, type buildCommuteMap } from "@/lib/commute-map";
 
 type MapData = ReturnType<typeof buildCommuteMap>;
 
@@ -44,14 +44,33 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
         points.push(marker.position);
       }
       for (const car of data.cars) {
-        for (const line of car.lines) {
+        car.lines.forEach((line, index) => {
+          const trip = car.trips[index];
+          const label = trip === "back" ? "Way back" : "Way there";
           L.polyline(line, {
             color: car.color,
-            weight: 4,
+            weight: trip === "back" ? 3 : 5,
+            opacity: trip === "back" ? 0.6 : 1,
             dashArray: car.dashed ? "8 8" : undefined,
-          }).addTo(map);
+          })
+            .bindTooltip(text(trip ? `${car.driver}'s car: ${label}` : `${car.driver}'s car`), {
+              sticky: true,
+            })
+            .addTo(map!);
+          if (trip) {
+            for (const { position, bearing } of arrowsAlong(line)) {
+              L.marker(position, {
+                interactive: false,
+                icon: L.divIcon({
+                  className: "",
+                  html: `<svg width="20" height="20" viewBox="0 0 20 20" style="transform:rotate(${bearing}deg)"><polygon points="10,1 18,18 10,13 2,18" fill="${trip === "back" ? "#fff" : "#111"}" stroke="${trip === "back" ? "#111" : "#fff"}" stroke-width="2" stroke-linejoin="round"/></svg>`,
+                  iconSize: [20, 20],
+                }),
+              }).addTo(map!);
+            }
+          }
           points.push(...line);
-        }
+        });
         for (const home of car.homes) {
           pin(
             "flex size-[22px] items-center justify-center rounded-md border-2 border-white text-xs text-white shadow",
@@ -94,6 +113,11 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
                 style={{ borderColor: car.color, borderTopStyle: car.dashed ? "dashed" : "solid" }}
               />
               {car.driver}&apos;s car
+              {car.trips.length > 0 ? (
+                <span className="text-muted-foreground text-xs">
+                  Arrows show the direction: black = way there, white = way back
+                </span>
+              ) : null}
             </li>
           ))}
         </ul>
