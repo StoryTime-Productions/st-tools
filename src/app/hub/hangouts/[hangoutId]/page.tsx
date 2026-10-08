@@ -37,8 +37,9 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
   const hasDates = hangout.availabilityDates.length > 0;
   const responses = hasDates ? await getAvailabilityResponses(hangout.id) : [];
   const scheduled = hangout.status === "SCHEDULED";
-  const going = hangout.attendees.filter((attendee) => attendee.status === "GOING").length;
-  const headcount = scheduled ? going : responses.length;
+  const goingIds = hangout.attendees
+    .filter((attendee) => attendee.status === "GOING")
+    .map((attendee) => attendee.userId);
   const showCosts = canEdit || hangout.costs.length > 0;
   const members = canEdit ? await getMemberOptions() : [];
   const startSlot = hangout.status === "SCHEDULED" ? hangout.startSlot : null;
@@ -219,7 +220,6 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
               canEdit={canEdit && !ended}
               weather={weather}
               costs={hangout.costs}
-              headcount={headcount}
             />
           </CardContent>
         </Card>
@@ -282,7 +282,7 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
               items={hangout.costs}
               members={members}
               scheduled={scheduled}
-              headcount={headcount}
+              goingIds={goingIds}
               canEdit={canEdit}
               viewer={{
                 id: user.id,

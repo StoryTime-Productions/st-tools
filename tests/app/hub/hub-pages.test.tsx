@@ -166,18 +166,18 @@ async function loadHub() {
     Costs: ({
       items,
       members,
-      headcount,
+      goingIds,
       scheduled,
       canEdit,
     }: {
       items: unknown[];
       members: unknown[];
-      headcount: number;
+      goingIds: string[];
       scheduled: boolean;
       canEdit: boolean;
     }) => (
       <p data-testid="costs">
-        {items.length} {members.length} {headcount} {scheduled ? "scheduled" : "estimate"}{" "}
+        {items.length} {members.length} {goingIds.length} {scheduled ? "scheduled" : "estimate"}{" "}
         {canEdit ? "editable" : "read-only"}
       </p>
     ),

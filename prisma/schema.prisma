@@ -54,6 +54,7 @@ model User {
   hangoutCars                  HangoutCar[]
   hangoutCostsCollected        HangoutCost[]
   hangoutCostShares            HangoutCostShare[]
+  hangoutCostParticipants      HangoutCostParticipant[]
   hangoutRides                 HangoutRider[]
 
   @@map("users")
@@ -567,11 +568,25 @@ model HangoutCost {
   collectorId String
   collector   User   @relation(fields: [collectorId], references: [id], onDelete: Cascade)
 
-  shares HangoutCostShare[]
-  stops  HangoutStop[]
+  shares       HangoutCostShare[]
+  participants HangoutCostParticipant[]
+  stops        HangoutStop[]
 
   @@index([hangoutId, position])
   @@map("hangout_costs")
+}
+
+/** Who an item is split between; only participants who are Going get a share. */
+model HangoutCostParticipant {
+  costId String
+  cost   HangoutCost @relation(fields: [costId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([costId, userId])
+  @@index([userId])
+  @@map("hangout_cost_participants")
 }
 
 model HangoutCostShare {

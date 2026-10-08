@@ -52,6 +52,11 @@ function item(overrides: Partial<HangoutCostItem> = {}): HangoutCostItem {
     amountCents: 6000,
     notes: "Split three ways",
     collector: { userId: "a", name: "Alice" },
+    participants: [
+      { userId: "a", name: "Alice" },
+      { userId: "b", name: "Bob" },
+      { userId: "c", name: "Cy" },
+    ],
     shares: [],
     ...overrides,
   };
@@ -65,7 +70,7 @@ const viewer = (id: string, status: CostViewer["status"] = "GOING", isAdmin = fa
 
 function renderCosts(
   items: HangoutCostItem[],
-  options: { who?: CostViewer; scheduled?: boolean; headcount?: number; canEdit?: boolean } = {}
+  options: { who?: CostViewer; scheduled?: boolean; goingIds?: string[]; canEdit?: boolean } = {}
 ) {
   return render(
     <Costs
@@ -74,7 +79,7 @@ function renderCosts(
       viewer={options.who ?? viewer("c")}
       members={MEMBERS}
       scheduled={options.scheduled ?? true}
-      headcount={options.headcount ?? 3}
+      goingIds={options.goingIds ?? ["a"]}
       canEdit={options.canEdit ?? false}
     />
   );
@@ -92,18 +97,51 @@ describe("Costs", () => {
     expect(screen.getByText("No costs yet.")).toBeInTheDocument();
     empty.unmount();
 
-    const some = renderCosts([item()], { scheduled: false, headcount: 3 });
+    const some = renderCosts([item()], { scheduled: false });
     expect(screen.getByText(/about \$20\.00 each/)).toBeInTheDocument();
-    expect(screen.getByText(/Estimates split 3 people/)).toBeInTheDocument();
+    expect(screen.getByText(/Estimates split each item between its group/)).toBeInTheDocument();
+    expect(screen.getByText("Split between: Alice, Bob, Cy")).toBeInTheDocument();
     some.unmount();
 
-    const single = renderCosts([item()], { scheduled: false, headcount: 1 });
-    expect(screen.getByText(/split 1 person who/)).toBeInTheDocument();
+    const single = renderCosts([item({ participants: [{ userId: "c", name: "Cy" }] })], {
+      scheduled: false,
+    });
+    expect(screen.getByText(/about \$60\.00 each/)).toBeInTheDocument();
     single.unmount();
 
-    renderCosts([item()], { scheduled: false, headcount: 0 });
-    expect(screen.getByText(/Estimates appear once/)).toBeInTheDocument();
-    expect(screen.queryByText(/each/)).not.toBeInTheDocument();
+    renderCosts([item({ participants: [] })], {
+      scheduled: false,
+      who: viewer("z", "GOING", true),
+    });
+    expect(screen.getByText("Split between: nobody yet")).toBeInTheDocument();
+    expect(screen.queryByText(/about \$.* each/)).not.toBeInTheDocument();
+  });
+
+  it("shows an item only to its group, its collector and admins (AC6)", () => {
+    const items = [item({ participants: [{ userId: "b", name: "Bob" }] })];
+
+    const outsider = renderCosts(items, { who: viewer("c") });
+    expect(screen.queryByText(/Dinner/)).not.toBeInTheDocument();
+    expect(screen.getByText("No costs yet.")).toBeInTheDocument();
+    outsider.unmount();
+
+    const member = renderCosts(items, { who: viewer("b") });
+    expect(screen.getByText(/Dinner/)).toBeInTheDocument();
+    member.unmount();
+
+    const collector = renderCosts(items, { who: viewer("a") });
+    expect(screen.getByText(/Dinner/)).toBeInTheDocument();
+    collector.unmount();
+
+    renderCosts(items, { who: viewer("z", "GOING", true) });
+    expect(screen.getByText(/Dinner/)).toBeInTheDocument();
+  });
+
+  it("only tells a Maybe member what they would owe when they are in the group", () => {
+    renderCosts([item({ participants: [{ userId: "b", name: "Bob" }] })], {
+      who: viewer("a", "MAYBE"),
+    });
+    expect(screen.queryByText(/Would owe/)).not.toBeInTheDocument();
   });
 
   it("tells a Maybe member what they would owe", () => {
@@ -216,6 +254,18 @@ describe("Costs", () => {
     fireEvent.change(within(dialog).getByLabelText("Notes (optional)"), {
       target: { value: "Cash only" },
     });
+    // Nobody starts in the group (G2); "Select all Going" fills it, Clear empties it, ticks toggle.
+    const alice = within(dialog).getByRole("checkbox", { name: "Alice" });
+    expect(alice).not.toBeChecked();
+    expect(within(dialog).getByText("not going")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Select all Going" }));
+    expect(alice).toBeChecked();
+    expect(within(dialog).getByRole("checkbox", { name: /Bob/ })).not.toBeChecked();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear" }));
+    expect(alice).not.toBeChecked();
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: /Bob/ }));
+    fireEvent.click(alice);
+    fireEvent.click(alice);
     fireEvent.click(submit);
 
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Cost added"));
@@ -223,6 +273,7 @@ describe("Costs", () => {
       title: "Pizza",
       amountCents: 4550,
       collectorId: "b",
+      participantIds: ["b"],
       notes: "Cash only",
     });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -243,6 +294,7 @@ describe("Costs", () => {
       title: "Dinner",
       amountCents: 7500,
       collectorId: "a",
+      participantIds: ["a", "b", "c"],
       notes: "Split three ways",
     });
 

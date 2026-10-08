@@ -41,6 +41,8 @@ export interface HangoutCostItem {
   amountCents: number;
   notes: string | null;
   collector: { userId: string; name: string };
+  /** Who this item is split between (G1); only those Going get a share. */
+  participants: { userId: string; name: string }[];
   shares: {
     userId: string;
     name: string;
@@ -223,6 +225,10 @@ export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail
           amountCents: true,
           notes: true,
           collector: { select: { id: true, name: true, email: true } },
+          participants: {
+            select: { user: { select: { id: true, name: true, email: true } } },
+            orderBy: { user: { name: "asc" } },
+          },
           shares: {
             select: {
               amountCents: true,
@@ -246,9 +252,13 @@ export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail
     unpaid,
     phase: hangoutPhase(detail, detail.stops, unpaid),
     proposerName: idea?.proposerName ?? null,
-    costs: costs.map(({ collector, shares, ...cost }) => ({
+    costs: costs.map(({ collector, participants, shares, ...cost }) => ({
       ...cost,
       collector: { userId: collector.id, name: collector.name ?? collector.email },
+      participants: participants.map(({ user }) => ({
+        userId: user.id,
+        name: user.name ?? user.email,
+      })),
       shares: shares.map(({ user, ...share }) => ({
         ...share,
         userId: user.id,

@@ -22,6 +22,11 @@ const costSchema = z.object({
     .min(1, "Amount must be above $0")
     .max(10_000_000, "Amount is too large"),
   collectorId: z.string().uuid("Pick who collects"),
+  /** Who the item is split between (G1); empty is allowed (G10). */
+  participantIds: z
+    .array(z.string().uuid("Participant not found"))
+    .max(200, "Too many participants")
+    .transform((ids) => [...new Set(ids)]),
   notes: z
     .string()
     .trim()
@@ -46,6 +51,12 @@ async function collectorExists(id: string) {
   return Boolean(await prisma.user.findUnique({ where: { id }, select: { id: true } }));
 }
 
+async function usersExist(ids: string[]) {
+  return (
+    ids.length === 0 || (await prisma.user.count({ where: { id: { in: ids } } })) === ids.length
+  );
+}
+
 export async function addCostAction(
   hangoutId: string,
   values: CostValues
@@ -62,9 +73,16 @@ export async function addCostAction(
   if (!hangout) return { error: NOT_FOUND };
   if (hangout.status === HangoutStatus.CANCELLED) return { error: CLOSED };
   if (!(await collectorExists(parsed.data.collectorId))) return { error: "Collector not found" };
+  const { participantIds, ...fields } = parsed.data;
+  if (!(await usersExist(participantIds))) return { error: "Participant not found" };
 
   await prisma.hangoutCost.create({
-    data: { ...parsed.data, hangoutId, position: hangout._count.costs },
+    data: {
+      ...fields,
+      hangoutId,
+      position: hangout._count.costs,
+      participants: { create: participantIds.map((userId) => ({ userId })) },
+    },
   });
   await queueUpdate(
     hangoutId,
@@ -103,8 +121,40 @@ export async function updateCostAction(
   const found = await editableCost(costId);
   if (!found.cost) return { error: found.error };
   if (!(await collectorExists(parsed.data.collectorId))) return { error: "Collector not found" };
+  const { participantIds, ...fields } = parsed.data;
+  if (!(await usersExist(participantIds))) return { error: "Participant not found" };
 
-  await prisma.hangoutCost.update({ where: { id: costId }, data: parsed.data });
+  // G7: someone who already paid can only leave the group after they are refunded.
+  const current = await prisma.hangoutCostParticipant.findMany({
+    where: { costId },
+    select: { userId: true },
+  });
+  const removed = current.map(({ userId }) => userId).filter((id) => !participantIds.includes(id));
+  if (removed.length > 0) {
+    const paid = await prisma.hangoutCostShare.findFirst({
+      where: {
+        costId,
+        userId: { in: removed, not: fields.collectorId },
+        OR: [{ paidCents: { gt: 0 } }, { status: { in: ["SENT", "CONFIRMED"] } }],
+      },
+      select: { user: { select: { name: true, email: true } } },
+    });
+    if (paid)
+      return {
+        error: `${paid.user.name ?? paid.user.email} has paid; mark them refunded before removing them`,
+      };
+  }
+
+  await prisma.$transaction([
+    prisma.hangoutCost.update({ where: { id: costId }, data: fields }),
+    prisma.hangoutCostParticipant.deleteMany({
+      where: { costId, userId: { notIn: participantIds } },
+    }),
+    prisma.hangoutCostParticipant.createMany({
+      data: participantIds.map((userId) => ({ costId, userId })),
+      skipDuplicates: true,
+    }),
+  ]);
   const { cost } = found;
   await queueUpdate(
     cost.hangoutId,
