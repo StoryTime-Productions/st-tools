@@ -154,7 +154,7 @@ export function AvailabilityGrid({
       <div className="overflow-x-auto">
         <div
           className="grid min-w-fit select-none"
-          style={{ gridTemplateColumns: `auto repeat(${visible.length}, minmax(2.75rem, 6rem))` }}
+          style={{ gridTemplateColumns: `auto repeat(${visible.length}, minmax(2.75rem, 1fr))` }}
           onPointerMove={onMove}
         >
           <span />
