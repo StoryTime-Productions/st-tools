@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const HOME = { lat: 1, lon: 1 };
@@ -17,10 +18,14 @@ const BACK_PATH: [number, number][] = [
 ];
 
 type RouteVia = typeof import("@/lib/tomtom").routeVia;
+type RouteLegs = typeof import("@/lib/tomtom").routeLegs;
 type StopWeather = import("@/lib/weather").StopWeather;
 
 async function loadModule() {
-  const prisma = { hangout: { findUnique: vi.fn() }, hangoutCar: { update: vi.fn() } };
+  const prisma = {
+    hangout: { findUnique: vi.fn(), update: vi.fn() },
+    hangoutCar: { update: vi.fn() },
+  };
   const routeVia = vi.fn<RouteVia>(async (_origin, waypoints, _dest, time) =>
     "arriveAt" in time
       ? {
@@ -36,17 +41,20 @@ async function loadModule() {
           path: BACK_PATH,
         }
   );
+  const routeLegs = vi.fn<RouteLegs>(async (points) =>
+    points.slice(1).map((_, i) => ({ minutes: 10 + i, path: [[i, i]] }))
+  );
   const getStopWeather = vi.fn(
     async (): Promise<StopWeather[]> => [{ status: "none" }, { status: "none" }]
   );
   vi.doMock("@/lib/prisma", () => ({ prisma }));
-  vi.doMock("@/lib/tomtom", () => ({ routeVia }));
+  vi.doMock("@/lib/tomtom", () => ({ routeVia, routeLegs }));
   vi.doMock("@/lib/weather", async () => ({
     ...(await vi.importActual<typeof import("@/lib/weather")>("@/lib/weather")),
     getStopWeather,
   }));
   const lib = await import("@/lib/routes");
-  return { ...lib, prisma, routeVia, getStopWeather };
+  return { ...lib, prisma, routeVia, routeLegs, getStopWeather };
 }
 
 const rider = (userId: string, atCommonPoint: boolean, home: typeof BOB | null) => ({
@@ -275,5 +283,73 @@ describe("recomputeRoutes", () => {
     prisma.hangout.findUnique.mockResolvedValueOnce(null);
     await recomputeRoutes("h1");
     expect(prisma.hangoutCar.update).not.toHaveBeenCalled();
+  });
+
+  describe("stop route", () => {
+    const stopRouteWrites = (prisma: { hangout: { update: ReturnType<typeof vi.fn> } }) =>
+      prisma.hangout.update.mock.calls.map(([arg]) => arg.data.stopRoute);
+
+    it("stores one leg per consecutive located pair, using itinerary numbers", async () => {
+      const { recomputeRoutes, prisma, routeLegs } = await loadModule();
+      prisma.hangout.findUnique.mockResolvedValue(hangout());
+
+      await recomputeRoutes("h1");
+
+      // Stop 1 has no address, so the stored leg is 2 -> 3, leaving at the first located stop's start.
+      expect(routeLegs).toHaveBeenCalledWith([CAFE, BAR], new Date("2026-10-04T00:00:00Z"));
+      expect(prisma.hangout.update).toHaveBeenCalledWith({
+        where: { id: "h1" },
+        data: {
+          stopRoute: {
+            points: [
+              [5, 5],
+              [6, 6],
+            ],
+            legs: [{ from: 2, to: 3, minutes: 10, path: [[0, 0]] }],
+          },
+        },
+      });
+    });
+
+    it("stores two legs for three located stops, with no cars, and leaves the times alone", async () => {
+      const { recomputeRoutes, prisma } = await loadModule();
+      const stops = [
+        { ...HOME, durationMinutes: 30, arriveBy: null },
+        { ...CAFE, durationMinutes: 60, arriveBy: null },
+        { ...BAR, durationMinutes: 60, arriveBy: null },
+      ];
+      prisma.hangout.findUnique.mockResolvedValue(hangout({ stops, cars: [] }));
+
+      await recomputeRoutes("h1");
+
+      const [route] = stopRouteWrites(prisma);
+      expect(route.legs.map((l: { from: number; to: number }) => [l.from, l.to])).toEqual([
+        [1, 2],
+        [2, 3],
+      ]);
+      expect(prisma.hangoutCar.update).not.toHaveBeenCalled();
+      expect(prisma.hangout.update).toHaveBeenCalledTimes(1);
+    });
+
+    it("clears the route with fewer than two located stops", async () => {
+      const { recomputeRoutes, prisma, routeLegs } = await loadModule();
+      const stops = [{ ...CAFE, durationMinutes: 60, arriveBy: null }];
+      prisma.hangout.findUnique.mockResolvedValue(hangout({ stops, cars: [] }));
+
+      await recomputeRoutes("h1");
+
+      expect(routeLegs).not.toHaveBeenCalled();
+      expect(stopRouteWrites(prisma)).toEqual([Prisma.DbNull]);
+    });
+
+    it("keeps the old route when routing fails", async () => {
+      const { recomputeRoutes, prisma, routeLegs } = await loadModule();
+      routeLegs.mockResolvedValueOnce({ error: "Routing failed (429)" });
+      prisma.hangout.findUnique.mockResolvedValue(hangout());
+
+      await recomputeRoutes("h1");
+
+      expect(prisma.hangout.update).not.toHaveBeenCalled();
+    });
   });
 });

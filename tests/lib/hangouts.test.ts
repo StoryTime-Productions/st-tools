@@ -81,6 +81,23 @@ describe("hangout data loaders", () => {
     prisma.hangout.findUnique
       .mockResolvedValueOnce({
         ...base,
+        stopRoute: {
+          points: [
+            [1, 1],
+            [2, 2],
+          ],
+          legs: [
+            {
+              from: 1,
+              to: 2,
+              minutes: 5,
+              path: [
+                [1, 1],
+                [2, 2],
+              ],
+            },
+          ],
+        },
         idea: { proposerName: "sam#1" },
         attendees: [
           { userId: "a", status: "GOING", user: { name: "Alice", email: "a@x.gg" } },
@@ -135,10 +152,34 @@ describe("hangout data loaders", () => {
           },
         ],
       })
-      .mockResolvedValueOnce({ ...base, idea: null, attendees: [], cars: [], costs: [] });
+      .mockResolvedValueOnce({
+        ...base,
+        stopRoute: null,
+        idea: null,
+        attendees: [],
+        cars: [],
+        costs: [],
+      });
 
     await expect(getHangoutDetail("h1")).resolves.toEqual({
       ...base,
+      stopRoute: {
+        points: [
+          [1, 1],
+          [2, 2],
+        ],
+        legs: [
+          {
+            from: 1,
+            to: 2,
+            minutes: 5,
+            path: [
+              [1, 1],
+              [2, 2],
+            ],
+          },
+        ],
+      },
       unpaid: 1,
       proposerName: "sam#1",
       attendees: [
@@ -193,6 +234,7 @@ describe("hangout data loaders", () => {
     });
     await expect(getHangoutDetail("h1")).resolves.toEqual({
       ...base,
+      stopRoute: null,
       unpaid: 0,
       proposerName: null,
       attendees: [],

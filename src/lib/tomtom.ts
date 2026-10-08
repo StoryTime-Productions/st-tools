@@ -96,6 +96,52 @@ function thin<T>(items: T[], max: number): T[] {
   );
 }
 
+export interface RouteLeg {
+  /** Drive time to the next point, in whole minutes, rounded up. */
+  minutes: number;
+  path: [number, number][];
+}
+
+function legPath(points: { latitude: number; longitude: number }[]) {
+  return thin(
+    simplify(
+      points.map((p): [number, number] => [p.latitude, p.longitude]),
+      PATH_TOLERANCE
+    ),
+    MAX_PATH_POINTS
+  );
+}
+
+/** One leg per consecutive pair of points, in the given order (never reordered), leaving at `departAt`. */
+export async function routeLegs(
+  points: Point[],
+  departAt: Date
+): Promise<RouteLeg[] | { error: string }> {
+  const key = process.env.TOMTOM_API_KEY;
+  if (!key) return { error: "Routing isn't set up" };
+
+  const stops = points.map((p) => `${p.lat},${p.lon}`).join(":");
+  const url = `https://api.tomtom.com/routing/1/calculateRoute/${stops}/json?departAt=${departAt.toISOString()}&traffic=true&key=${key}`;
+  try {
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) return { error: `Routing failed (${response.status})` };
+    const { routes } = (await response.json()) as {
+      routes: {
+        legs: {
+          summary: { travelTimeInSeconds: number };
+          points: { latitude: number; longitude: number }[];
+        }[];
+      }[];
+    };
+    return routes[0].legs.map((leg) => ({
+      minutes: Math.ceil(leg.summary.travelTimeInSeconds / 60),
+      path: legPath(leg.points),
+    }));
+  } catch {
+    return { error: "Routing failed" };
+  }
+}
+
 /** One car trip with the best waypoint order, live traffic, and either an arrival or departure time. */
 export async function routeVia(
   origin: Point,
@@ -132,15 +178,7 @@ export async function routeVia(
       depart: route.summary.departureTime,
       arrive: route.summary.arrivalTime,
       waypoints: waypoints.map((_, index) => route.legs[legOf(index)].summary.arrivalTime),
-      path: thin(
-        simplify(
-          route.legs.flatMap((leg) =>
-            leg.points.map((p): [number, number] => [p.latitude, p.longitude])
-          ),
-          PATH_TOLERANCE
-        ),
-        MAX_PATH_POINTS
-      ),
+      path: legPath(route.legs.flatMap((leg) => leg.points)),
     };
   } catch {
     return { error: "Routing failed" };

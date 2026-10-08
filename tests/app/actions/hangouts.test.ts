@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const HANGOUT_ID = "22222222-2222-4222-8222-222222222222";
@@ -491,7 +492,7 @@ describe("hangout actions", () => {
     await expect(mod.reopenAvailabilityAction(HANGOUT_ID)).resolves.toEqual({ success: true });
     expect(mod.prisma.hangout.updateMany).toHaveBeenCalledWith({
       where: { id: HANGOUT_ID, status: "SCHEDULED" },
-      data: { status: "COLLECTING", startSlot: null },
+      data: { status: "COLLECTING", startSlot: null, stopRoute: Prisma.DbNull },
     });
     expect(mod.prisma.hangoutAttendee.deleteMany).toHaveBeenCalledWith({
       where: { hangoutId: HANGOUT_ID },

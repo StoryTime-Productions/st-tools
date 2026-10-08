@@ -1,8 +1,8 @@
-import { HangoutStatus, type Prisma } from "@prisma/client";
+import { HangoutStatus, Prisma } from "@prisma/client";
 import { addDays, torontoToUtc } from "@/lib/calendar";
 import { scheduleStops } from "@/lib/itinerary";
 import { prisma } from "@/lib/prisma";
-import { routeVia, type Point } from "@/lib/tomtom";
+import { routeLegs, routeVia, type Point } from "@/lib/tomtom";
 import { getStopWeather, weatherDelay } from "@/lib/weather";
 
 export interface Trip {
@@ -98,7 +98,7 @@ export async function recomputeRoutes(hangoutId: string) {
     const point = located(stop.lat, stop.lon);
     const time = times[index];
     return point && "at" in time
-      ? [{ point, at: time.at, end: time.at + stop.durationMinutes }]
+      ? [{ point, number: index + 1, at: time.at, end: time.at + stop.durationMinutes }]
       : [];
   });
   const first = placed[0];
@@ -126,6 +126,48 @@ export async function recomputeRoutes(hangoutId: string) {
       data: { schedule: schedule as unknown as Prisma.InputJsonValue },
     });
   }
+
+  await routeStops(hangoutId, placed, instant);
+}
+
+/** Drive between the located stops, as stored on `hangouts.stopRoute` for the map's between-stops phase. */
+export interface StopRoute {
+  /** The located stops it was routed through, so a stale route can be told from a current one. */
+  points: [number, number][];
+  /** `from`/`to` are the 1-based itinerary numbers the map markers use. */
+  legs: { from: number; to: number; minutes: number; path: [number, number][] }[];
+}
+
+/** Itinerary times are untouched: the drive is informational, so one departure time is enough. */
+async function routeStops(
+  hangoutId: string,
+  placed: { point: Point; number: number; at: number }[],
+  instant: (minutes: number) => Date
+) {
+  if (placed.length < 2) {
+    await prisma.hangout.update({
+      where: { id: hangoutId },
+      data: { stopRoute: Prisma.DbNull },
+    });
+    return;
+  }
+  const legs = await routeLegs(
+    placed.map((p) => p.point),
+    instant(placed[0].at)
+  );
+  if ("error" in legs) return; // keep the old route; the map ignores one that no longer matches
+  const stopRoute: StopRoute = {
+    points: placed.map((p): [number, number] => [p.point.lat, p.point.lon]),
+    legs: legs.map((leg, i) => ({
+      from: placed[i].number,
+      to: placed[i + 1].number,
+      ...leg,
+    })),
+  };
+  await prisma.hangout.update({
+    where: { id: hangoutId },
+    data: { stopRoute: stopRoute as unknown as Prisma.InputJsonValue },
+  });
 }
 
 type RoutableCar = {

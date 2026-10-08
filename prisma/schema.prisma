@@ -295,6 +295,7 @@ model Hangout {
   windowEndHour        Int           @default(17)
   availabilityDeadline DateTime?
   startSlot            String?
+  stopRoute            Json?
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
 

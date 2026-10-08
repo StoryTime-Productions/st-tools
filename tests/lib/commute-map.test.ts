@@ -203,4 +203,60 @@ describe("arrowsAlong", () => {
     expect(arrow.position[1]).toBeCloseTo(2);
     expect(arrowsAlong([[1, 1]])).toEqual([]);
   });
+
+  describe("between stops", () => {
+    const stops = [stop("Park", 5, 5), stop("Gap", null, null), stop("Bar", 6, 6)];
+    const route = {
+      points: [
+        [5, 5],
+        [6, 6],
+      ] as [number, number][],
+      legs: [
+        {
+          from: 1,
+          to: 3,
+          minutes: 9,
+          path: [
+            [5, 5],
+            [5.5, 5.5],
+            [6, 6],
+          ] as [number, number][],
+        },
+      ],
+    };
+
+    it("is null with fewer than two located stops (AC 5)", () => {
+      expect(buildCommuteMap([stop("Park", 5, 5)], []).between).toBeNull();
+      expect(buildCommuteMap([], [], route).between).toBeNull();
+    });
+
+    it("uses the stored road legs while they match the located stops", () => {
+      expect(buildCommuteMap(stops, [], route).between).toEqual({
+        legs: route.legs,
+        dashed: false,
+        guide: [
+          [5, 5],
+          [6, 6],
+        ],
+      });
+    });
+
+    it("falls back to a dashed guide with no route or a stale one (AC 9)", () => {
+      const guide = [
+        [5, 5],
+        [6, 6],
+      ];
+      expect(buildCommuteMap(stops, []).between).toEqual({ legs: [], dashed: true, guide });
+      const stale = {
+        ...route,
+        points: [
+          [5, 5],
+          [7, 7],
+        ] as [number, number][],
+      };
+      expect(buildCommuteMap(stops, [], stale).between).toEqual({ legs: [], dashed: true, guide });
+      const longer = { ...route, points: [...route.points, [8, 8]] as [number, number][] };
+      expect(buildCommuteMap(stops, [], longer).between?.dashed).toBe(true);
+    });
+  });
 });

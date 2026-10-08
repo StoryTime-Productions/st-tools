@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { geocodeAddress, locateAddress, routeVia } from "@/lib/tomtom";
+import { geocodeAddress, locateAddress, routeLegs, routeVia } from "@/lib/tomtom";
 
 const pt = (latitude: number, longitude: number) => ({ latitude, longitude });
 
@@ -175,6 +175,51 @@ describe("geocodeAddress", () => {
     expect(route.path[0]).toEqual([43, -79]);
     expect(route.path).toContainEqual([43.05, -79.0005]);
     expect(route.path).toContainEqual([43.0501, -79.0005]);
+  });
+
+  it("routes legs between stops in the given order with rounded-up minutes and simplified paths", async () => {
+    const straight = Array.from({ length: 300 }, (_, i) => pt(43 + i * 0.0001, -79));
+    fetchMock.mockResolvedValueOnce(
+      reply(200, {
+        routes: [
+          {
+            legs: [
+              { summary: { travelTimeInSeconds: 601 }, points: straight },
+              { summary: { travelTimeInSeconds: 600 }, points: [pt(2, 2), pt(3, 3)] },
+            ],
+          },
+        ],
+      })
+    );
+    const legs = await routeLegs([A, B, C], new Date("2026-10-04T02:30:00Z"));
+    if ("error" in legs) throw new Error(legs.error);
+    expect(legs.map((l) => l.minutes)).toEqual([11, 10]);
+    expect(legs[0].path).toEqual([
+      [43, -79],
+      [43 + 299 * 0.0001, -79],
+    ]);
+    expect(legs[1].path).toEqual([
+      [2, 2],
+      [3, 3],
+    ]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.tomtom.com/routing/1/calculateRoute/1,1:2,2:3,3/json?departAt=2026-10-04T02:30:00.000Z&traffic=true&key=tt-key",
+      { cache: "no-store" }
+    );
+    expect(fetchMock.mock.calls[0][0]).not.toContain("computeBestOrder");
+  });
+
+  it("reports leg routing failures", async () => {
+    fetchMock.mockResolvedValueOnce(reply(429, {}));
+    await expect(routeLegs([A, B], new Date(0))).resolves.toEqual({
+      error: "Routing failed (429)",
+    });
+    fetchMock.mockRejectedValueOnce(new Error("offline"));
+    await expect(routeLegs([A, B], new Date(0))).resolves.toEqual({ error: "Routing failed" });
+    vi.stubEnv("TOMTOM_API_KEY", "");
+    await expect(routeLegs([A, B], new Date(0))).resolves.toEqual({
+      error: "Routing isn't set up",
+    });
   });
 
   it("departs at a time, keeps a single waypoint in place, and reports failures", async () => {
