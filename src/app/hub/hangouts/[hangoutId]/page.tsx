@@ -8,12 +8,11 @@ import { AvailabilitySetup } from "@/app/hub/hangouts/[hangoutId]/_components/av
 import { Carpools } from "@/app/hub/hangouts/[hangoutId]/_components/carpools";
 import { Costs } from "@/app/hub/hangouts/[hangoutId]/_components/costs";
 import { CommuteMap } from "@/app/hub/hangouts/[hangoutId]/_components/commute-map";
+import { HangoutCover } from "@/app/hub/hangouts/[hangoutId]/_components/hangout-cover";
 import { Itinerary } from "@/app/hub/hangouts/[hangoutId]/_components/itinerary";
 import { LockedIn, RankedSlots } from "@/app/hub/hangouts/[hangoutId]/_components/lock-in";
 import { LiveRefresh } from "@/app/hub/hangouts/[hangoutId]/_components/live-refresh";
 import { CancelHangoutButton, HangoutDialog } from "@/app/hub/_components/hangout-dialog";
-import { ProjectCover } from "@/app/hub/_components/project-cover";
-import { ProjectCoverEditor } from "@/app/hub/projects/[projectId]/_components/project-cover-editor";
 import { dayLabel, hourLabel, todayKey, torontoInputValue } from "@/lib/calendar";
 import { rankRuns } from "@/lib/availability";
 import { getCurrentUser } from "@/lib/get-current-user";
@@ -78,10 +77,11 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-start gap-4">
-          <ProjectCover
+          <HangoutCover
+            id={hangout.id}
             title={hangout.title}
             coverImageUrl={hangout.coverImageUrl}
-            className="size-16 text-lg"
+            canEdit={canEdit}
           />
           <div className="space-y-2">
             <h2 className="text-2xl font-semibold tracking-tight">{hangout.title}</h2>
@@ -297,17 +297,6 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
             />
           </CardContent>
         </Card>
-      ) : null}
-
-      {canEdit ? (
-        <div className="max-w-xl">
-          <ProjectCoverEditor
-            id={hangout.id}
-            title={hangout.title}
-            coverImageUrl={hangout.coverImageUrl}
-            kind="hangout"
-          />
-        </div>
       ) : null}
     </div>
   );
