@@ -35,6 +35,9 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
   const dark = useTheme().resolvedTheme === "dark";
   const [phase, setPhase] = useState<Phase>("there");
   const active = phase === "between" && !data.between ? "there" : phase;
+  const transitNow = data.transit.filter(
+    (rider) => (rider.trip === "back" ? "home" : "there") === active
+  );
 
   useEffect(() => {
     if (!hasKey || !container.current) return;
@@ -86,15 +89,31 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
           }
           points.push(...line);
         });
-        for (const home of car.homes) {
+        for (const stop of car.pins) {
+          if ((stop.trip === "back" ? "home" : "there") !== active) continue;
           pin(
-            "flex size-[22px] items-center justify-center rounded-md border-2 border-white text-xs text-white shadow",
-            "⌂",
-            home.position,
+            "flex size-[22px] items-center justify-center border-2 border-white text-xs text-white shadow " +
+              (stop.kind === "home" ? "rounded-md" : "rounded-full"),
+            stop.kind === "home" ? "⌂" : "●",
+            stop.position,
             car.color
-          ).bindTooltip(text(home.name), { permanent: true, direction: "bottom" });
-          points.push(home.position);
+          ).bindTooltip(text(stop.name), { permanent: true, direction: "bottom" });
+          points.push(stop.position);
         }
+      }
+      for (const rider of data.transit.filter(
+        (r) => (r.trip === "back" ? "home" : "there") === active
+      )) {
+        pin(
+          "flex size-[22px] items-center justify-center rounded-md border-2 border-white text-xs text-white shadow",
+          "🚌",
+          rider.position,
+          "#475569"
+        ).bindTooltip(text(`${rider.name} (public transit)`), {
+          permanent: true,
+          direction: "bottom",
+        });
+        points.push(rider.position);
       }
       if (active === "between" && data.between) {
         const { legs, dashed, guide } = data.between;
@@ -178,6 +197,27 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
             </li>
           ))}
         </ul>
+      ) : null}
+      {transitNow.length > 0 ? (
+        <p className="text-sm">
+          <span className="text-muted-foreground">
+            By public transit: {transitNow.map((rider) => rider.name).join(", ")}. Plan the
+            trip:{" "}
+          </span>
+          {data.planners.map((planner, index) => (
+            <span key={planner.url}>
+              {index > 0 ? " · " : null}
+              <a
+                href={planner.url}
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2"
+              >
+                {planner.label}
+              </a>
+            </span>
+          ))}
+        </p>
       ) : null}
       {data.cars.some((car) => car.needsStart) ? (
         <p className="text-muted-foreground text-sm">

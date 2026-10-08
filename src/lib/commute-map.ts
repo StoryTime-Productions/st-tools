@@ -1,3 +1,4 @@
+import type { CarPassenger, HangoutCarItem, HangoutTransitItem } from "@/lib/hangouts";
 import type { CarSchedule, StopRoute } from "@/lib/routes";
 
 export type LatLon = [number, number];
@@ -16,16 +17,35 @@ interface MapPerson {
   homeLon: number | null;
 }
 
+/** Where one passenger is met, already resolved to coordinates (null when it isn't on the map). */
+export interface MapPassenger {
+  name: string;
+  position: LatLon | null;
+  kind: "home" | "common";
+}
+
 export interface MapCar {
   id: string;
   startLat: number | null;
   startLon: number | null;
-  commonLat: number | null;
-  commonLon: number | null;
   schedule: CarSchedule | null;
   driver: MapPerson;
-  riders: (MapPerson & { atCommonPoint: boolean })[];
+  pickups: MapPassenger[];
+  dropoffs: MapPassenger[];
 }
+
+/** Someone travelling by public transit; `trip` says which phase their start pin belongs to. */
+export interface MapTransit {
+  name: string;
+  trip: "there" | "back";
+  position: LatLon;
+}
+
+/** Until transit routing exists the map links out to the regional trip planners. */
+export const TRIP_PLANNERS = [
+  { label: "STM", url: "https://www.stm.info/en" },
+  { label: "exo", url: "https://exo.quebec/en" },
+];
 
 export type Trip = "there" | "back";
 
@@ -55,11 +75,45 @@ export const CAR_COLORS = ["#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c"
 const at = (lat: number | null, lon: number | null): LatLon | null =>
   lat === null || lon === null ? null : [lat, lon];
 
+/** A car as the map needs it; `homeOf` finds another rider's home for "another rider's home" points. */
+export function toMapCar(car: HangoutCarItem, homeOf: (userId: string) => LatLon | null): MapCar {
+  const resolve = (passenger: CarPassenger): MapPassenger => ({
+    name: passenger.name,
+    kind: passenger.pointKind === "COMMON" ? "common" : "home",
+    position:
+      passenger.pointKind === "COMMON"
+        ? at(passenger.commonLat, passenger.commonLon)
+        : passenger.pointKind === "RIDER_HOME"
+          ? passenger.viaUserId
+            ? homeOf(passenger.viaUserId)
+            : null
+          : at(passenger.homeLat, passenger.homeLon),
+  });
+  return {
+    id: car.id,
+    startLat: car.startLat,
+    startLon: car.startLon,
+    schedule: car.schedule,
+    driver: { name: car.driver.name, homeLat: car.driver.homeLat, homeLon: car.driver.homeLon },
+    pickups: car.pickups.map(resolve),
+    dropoffs: car.dropoffs.map(resolve),
+  };
+}
+
+export function toMapTransit(rows: HangoutTransitItem[]): MapTransit[] {
+  return rows.map((row) => ({
+    name: row.name,
+    trip: row.direction === "PICKUP" ? "there" : "back",
+    position: [row.startLat, row.startLon],
+  }));
+}
+
 /** Everything the commute map draws, from stored data only (no routing calls). */
 export function buildCommuteMap(
   stops: MapStop[],
   cars: MapCar[],
-  stopRoute: StopRoute | null = null
+  stopRoute: StopRoute | null = null,
+  transit: MapTransit[] = []
 ) {
   const markers = stops.flatMap((stop, index) => {
     const position = at(stop.lat, stop.lon);
@@ -84,11 +138,29 @@ export function buildCommuteMap(
     markers,
     notOnMap,
     between,
+    transit,
+    /** Shown in a phase that has transit people, since no transit line is drawn yet (AC 8). */
+    planners: transit.length > 0 ? TRIP_PLANNERS : [],
     cars: cars.map((car, index) => {
-      const common = at(car.commonLat, car.commonLon);
-      const homes = car.riders.flatMap((rider) => {
-        const position = rider.atCommonPoint ? null : at(rider.homeLat, rider.homeLon);
-        return position ? [{ name: rider.name, position }] : [];
+      // One pin per distinct place and phase; people who share a place share a pin.
+      const pins = (["there", "back"] as const).flatMap((trip) => {
+        const places = new Map<
+          string,
+          { names: string[]; position: LatLon; kind: "home" | "common" }
+        >();
+        for (const { name, position, kind } of trip === "there" ? car.pickups : car.dropoffs) {
+          if (!position) continue;
+          const key = `${position[0]},${position[1]}`;
+          const place = places.get(key);
+          if (place) place.names.push(name);
+          else places.set(key, { names: [name], position, kind });
+        }
+        return [...places.values()].map(({ names, position, kind }) => ({
+          trip: trip as Trip,
+          name: names.join(", "),
+          position,
+          kind,
+        }));
       });
       const roads: { trip: Trip; path: LatLon[] }[] =
         car.schedule && !("error" in car.schedule) && !car.schedule.manual
@@ -101,17 +173,25 @@ export function buildCommuteMap(
       // A car that starts nowhere draws nothing, so a line never implies a route that was not computed.
       const needsStart = origin === null;
       const dashed = roads.length === 0;
-      const riderPoints = car.riders
-        .map((rider) => (rider.atCommonPoint ? common : at(rider.homeLat, rider.homeLon)))
-        .filter((point): point is LatLon => point !== null);
+      const points = (list: MapPassenger[]) =>
+        list.map((p) => p.position).filter((point): point is LatLon => point !== null);
       // Guide lines per phase: out to the first stop, and from the last stop back home (AC 8).
+      // A phase with nobody on its list has no line at all (AC 9).
       const guides: { trip: Trip; path: LatLon[] }[] = [
-        { trip: "there", path: [origin, ...riderPoints, ...stopPoints.slice(0, 1)] },
-        { trip: "back", path: [...stopPoints.slice(-1), ...riderPoints, origin] },
-      ].flatMap(({ trip, path }) => {
-        const points = path.filter((point): point is LatLon => point !== null);
-        return points.length > 1 && (trip === "there" || stopPoints.length > 0)
-          ? [{ trip: trip as Trip, path: points }]
+        {
+          trip: "there" as const,
+          list: car.pickups,
+          path: [origin, ...points(car.pickups), ...stopPoints.slice(0, 1)],
+        },
+        {
+          trip: "back" as const,
+          list: car.dropoffs,
+          path: [...stopPoints.slice(-1), ...points(car.dropoffs), origin],
+        },
+      ].flatMap(({ trip, list, path }) => {
+        const drawable = path.filter((point): point is LatLon => point !== null);
+        return list.length > 0 && drawable.length > 1 && (trip === "there" || stopPoints.length > 0)
+          ? [{ trip, path: drawable }]
           : [];
       });
       const drawn = needsStart ? [] : dashed ? guides : roads;
@@ -121,7 +201,7 @@ export function buildCommuteMap(
         driver: car.driver.name,
         dashed,
         needsStart,
-        homes,
+        pins,
         lines: drawn.map((line) => line.path),
         /** Which phase each of `lines` belongs to: "there" is Getting there, "back" is Getting home. */
         trips: drawn.map((line) => line.trip),
