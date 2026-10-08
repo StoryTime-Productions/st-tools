@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { Carpools } from "@/app/hub/hangouts/[hangoutId]/_components/carpools";
-import type { CarPassenger, HangoutCarItem } from "@/lib/hangouts";
+import type { CarPassenger, HangoutAttendeeItem, HangoutCarItem } from "@/lib/hangouts";
 
 const actionMocks = vi.hoisted(() => ({
   offerCarAction: vi.fn(),
@@ -9,6 +9,7 @@ const actionMocks = vi.hoisted(() => ({
   updateCarAction: vi.fn(),
   removeCarAction: vi.fn(),
   unassignPassengerAction: vi.fn(),
+  assignPassengerAction: vi.fn(),
 }));
 const toastMocks = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 const routerMocks = vi.hoisted(() => ({ refresh: vi.fn() }));
@@ -274,6 +275,166 @@ describe("Carpools", () => {
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Routes recomputed"));
     expect(actionMocks.recomputeRoutesAction).toHaveBeenCalledWith("h1");
   });
+  describe("assigning (R1-R3, AC1, AC7)", () => {
+    const attendee = (
+      userId: string,
+      name: string,
+      needs: { pickup: boolean; dropoff: boolean }
+    ): HangoutAttendeeItem => ({ userId, name, status: "GOING", needsRide: needs });
+    const both = { pickup: true, dropoff: true };
+    const attendees = [
+      attendee("a", "Alice", { pickup: false, dropoff: false }),
+      attendee("e", "Eve", both),
+      attendee("f", "Finn", { pickup: false, dropoff: true }),
+    ];
+    const empty = { ...CAR, seats: 3, pickups: [], dropoffs: [] };
+    const render_ = (cars: HangoutCarItem[], who = viewer("a"), people = attendees) =>
+      render(<Carpools hangoutId="h1" cars={cars} attendees={people} viewer={who} />);
+
+    it("offers only people still needing a ride in that direction", () => {
+      render_([empty]);
+
+      const there = screen.getByRole("form", { name: "Add to pick up" });
+      expect(
+        within(there)
+          .getAllByRole("option")
+          .map((o) => o.textContent)
+      ).toEqual(["Eve", "Their home", "A common point"]);
+      const home = screen.getByRole("form", { name: "Add to drop off" });
+      expect(within(home).getByLabelText("Drop off")).toHaveDisplayValue("Eve");
+      expect(
+        within(home)
+          .getAllByRole("option")
+          .slice(0, 2)
+          .map((o) => o.textContent)
+      ).toEqual(["Eve", "Finn"]);
+    });
+
+    it("adds someone at their home, then clears the choice", async () => {
+      render_([empty]);
+
+      const form = screen.getByRole("form", { name: "Add to pick up" });
+      fireEvent.click(within(form).getByRole("button", { name: "Add" }));
+
+      await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Added to pick up"));
+      expect(actionMocks.assignPassengerAction).toHaveBeenCalledWith("car1", "e", "PICKUP", {
+        kind: "HOME",
+      });
+      expect(routerMocks.refresh).toHaveBeenCalled();
+    });
+
+    it("adds a typed common point, needing an address first", async () => {
+      render_([empty]);
+
+      const form = screen.getByRole("form", { name: "Add to drop off" });
+      fireEvent.change(within(form).getByLabelText("Drop off"), { target: { value: "f" } });
+      fireEvent.change(within(form).getByLabelText("Meet at"), { target: { value: "COMMON" } });
+      const add = within(form).getByRole("button", { name: "Add" });
+      expect(add).toBeDisabled();
+
+      fireEvent.change(within(form).getByLabelText("Meeting address"), {
+        target: { value: "Union Station" },
+      });
+      fireEvent.click(add);
+
+      await waitFor(() =>
+        expect(actionMocks.assignPassengerAction).toHaveBeenCalledWith("car1", "f", "DROPOFF", {
+          kind: "COMMON",
+          address: "Union Station",
+        })
+      );
+    });
+
+    it("offers another rider's home only when someone with a home is on the list", () => {
+      const noHome: CarPassenger = { ...BOB, userId: "n", name: "Nia", homeLat: null };
+      render_([{ ...empty, pickups: [noHome] }]);
+
+      expect(
+        screen.queryByRole("option", { name: "Another rider's home" })
+      ).not.toBeInTheDocument();
+    });
+
+    it("lets the driver pick a listed rider's home", async () => {
+      const carol: CarPassenger = { ...BOB, userId: "c", name: "Cara", homeLat: 4, homeLon: 4 };
+      render_([{ ...empty, pickups: [carol] }]);
+
+      const form = screen.getByRole("form", { name: "Add to pick up" });
+      fireEvent.change(within(form).getByLabelText("Meet at"), {
+        target: { value: "RIDER_HOME" },
+      });
+      expect(within(form).getByLabelText("Whose home")).toHaveDisplayValue("Cara");
+      fireEvent.change(within(form).getByLabelText("Whose home"), { target: { value: "c" } });
+      fireEvent.click(within(form).getByRole("button", { name: "Add" }));
+
+      await waitFor(() =>
+        expect(actionMocks.assignPassengerAction).toHaveBeenCalledWith("car1", "e", "PICKUP", {
+          kind: "RIDER_HOME",
+          viaUserId: "c",
+        })
+      );
+    });
+
+    it("shows a server refusal and keeps the form", async () => {
+      actionMocks.assignPassengerAction.mockResolvedValueOnce({ error: "That car is full" });
+      render_([empty]);
+
+      fireEvent.click(
+        within(screen.getByRole("form", { name: "Add to pick up" })).getByRole("button", {
+          name: "Add",
+        })
+      );
+
+      await waitFor(() => expect(toastMocks.error).toHaveBeenCalledWith("That car is full"));
+      expect(screen.getByRole("form", { name: "Add to pick up" })).toBeInTheDocument();
+    });
+
+    it("says a full list is full instead of offering to add", () => {
+      const full = {
+        ...CAR,
+        seats: 1,
+        pickups: [BOB],
+        dropoffs: [],
+      };
+      render_([full]);
+
+      expect(screen.getByText("Full: no seat left to add to pick up.")).toBeInTheDocument();
+      expect(screen.queryByRole("form", { name: "Add to pick up" })).not.toBeInTheDocument();
+      expect(screen.getByRole("form", { name: "Add to drop off" })).toBeInTheDocument();
+    });
+
+    it("shows no add form when nobody needs a ride or you can't manage the car", () => {
+      const { unmount } = render_([empty], viewer("a"), [attendees[0]]);
+      expect(screen.queryByRole("form")).not.toBeInTheDocument();
+      unmount();
+
+      render_([empty], viewer("c"));
+      expect(screen.queryByRole("form")).not.toBeInTheDocument();
+    });
+
+    it("tells drivers and admins who needs a ride, and nobody else", () => {
+      const { unmount } = render_([empty], viewer("a"));
+      expect(screen.getByText("Needs a ride, getting there:").parentElement).toHaveTextContent(
+        "Eve"
+      );
+      expect(screen.getByText("Needs a ride, getting home:").parentElement).toHaveTextContent(
+        "EveFinn"
+      );
+      unmount();
+
+      const admin = render_([empty], viewer("z", { isAdmin: true }));
+      expect(screen.getByText("Needs a ride, getting there:")).toBeInTheDocument();
+      admin.unmount();
+
+      render_([empty], viewer("c"));
+      expect(screen.queryByText(/Needs a ride/)).not.toBeInTheDocument();
+    });
+
+    it("hides the chips when nobody needs a ride in a direction", () => {
+      render_([empty], viewer("a"), [attendees[0]]);
+      expect(screen.queryByText(/Needs a ride/)).not.toBeInTheDocument();
+    });
+  });
+
   describe("weather", () => {
     const delayed = (reason: string, there: number, back: number): HangoutCarItem => ({
       ...CAR,

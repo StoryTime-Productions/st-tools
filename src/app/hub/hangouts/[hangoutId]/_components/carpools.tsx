@@ -8,11 +8,14 @@ import { toast } from "sonner";
 import {
   offerCarAction,
   recomputeRoutesAction,
+  assignPassengerAction,
   removeCarAction,
   unassignPassengerAction,
   updateCarAction,
   type CarpoolActionResult,
+  type PassengerPoint,
 } from "@/app/actions/carpools";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,7 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { HangoutCarItem } from "@/lib/hangouts";
+import type { CarPassenger, HangoutAttendeeItem, HangoutCarItem } from "@/lib/hangouts";
 import type { Trip } from "@/lib/routes";
 import { WeatherCredit } from "@/app/hub/hangouts/[hangoutId]/_components/weather";
 
@@ -68,11 +71,13 @@ function useRun() {
 export function Carpools({
   hangoutId,
   cars,
+  attendees = [],
   viewer,
   weather = { warnings: [], checked: false },
 }: {
   hangoutId: string;
   cars: HangoutCarItem[];
+  attendees?: HangoutAttendeeItem[];
   /** `homeAddress` is empty when the viewer has none, so offering a car asks for one (O2). */
   viewer: { id: string; isAdmin: boolean; going: boolean; homeAddress?: string | null };
   weather?: CarpoolWeather;
@@ -82,6 +87,10 @@ export function Carpools({
   const [address, setAddress] = useState("");
   const needsAddress = viewer.homeAddress !== undefined && !viewer.homeAddress;
   const driving = cars.some((car) => car.driver.userId === viewer.id);
+  // Only drivers and admins see who still needs a ride (R6).
+  const waiting = (key: "pickup" | "dropoff") =>
+    attendees.filter((attendee) => attendee.needsRide[key]);
+  const showNeeds = (driving || viewer.isAdmin) && cars.length > 0;
 
   return (
     <div className="space-y-4 text-sm">
@@ -92,6 +101,25 @@ export function Carpools({
         </p>
       ) : null}
       {cars.length === 0 ? <p className="text-muted-foreground">No cars yet.</p> : null}
+      {showNeeds
+        ? (
+            [
+              ["Getting there", waiting("pickup")],
+              ["Getting home", waiting("dropoff")],
+            ] as const
+          ).map(([label, people]) =>
+            people.length > 0 ? (
+              <p key={label} className="flex flex-wrap items-center gap-2">
+                <span className="text-muted-foreground">Needs a ride, {label.toLowerCase()}:</span>
+                {people.map((person) => (
+                  <Badge key={person.userId} variant="outline">
+                    {person.name}
+                  </Badge>
+                ))}
+              </p>
+            ) : null
+          )
+        : null}
       <ul className="space-y-3">
         {cars.map((car) => {
           const canManage = car.driver.userId === viewer.id || viewer.isAdmin;
@@ -173,49 +201,69 @@ export function Carpools({
                   </div>
                 ) : null}
               </div>
-              {lists.map(({ direction, title, people }) =>
-                people.length > 0 ? (
-                  <ul key={direction} aria-label={title} className="space-y-1">
-                    {people.map((rider) => {
-                      const at =
-                        schedule?.[direction === "PICKUP" ? "there" : "back"]?.stops[rider.userId];
-                      return (
-                        <li key={rider.userId} className="flex items-center justify-between gap-2">
-                          <span>
-                            <span className="text-muted-foreground">{title}: </span>
-                            {rider.name}
-                            <span className="text-muted-foreground"> · </span>
-                            {rider.pointKind === "COMMON"
-                              ? (rider.commonLabel ?? "common point")
-                              : rider.pointKind === "RIDER_HOME"
-                                ? "another rider's home"
-                                : (rider.homeAddress ?? "no home address")}
-                            {at ? (
-                              <span className="text-muted-foreground"> · {clock(at)}</span>
+              {lists.map(({ direction, title, people }) => (
+                <div key={direction} className="space-y-1">
+                  {people.length > 0 ? (
+                    <ul aria-label={title} className="space-y-1">
+                      {people.map((rider) => {
+                        const at =
+                          schedule?.[direction === "PICKUP" ? "there" : "back"]?.stops[
+                            rider.userId
+                          ];
+                        return (
+                          <li
+                            key={rider.userId}
+                            className="flex items-center justify-between gap-2"
+                          >
+                            <span>
+                              <span className="text-muted-foreground">{title}: </span>
+                              {rider.name}
+                              <span className="text-muted-foreground"> · </span>
+                              {rider.pointKind === "COMMON"
+                                ? (rider.commonLabel ?? "common point")
+                                : rider.pointKind === "RIDER_HOME"
+                                  ? "another rider's home"
+                                  : (rider.homeAddress ?? "no home address")}
+                              {at ? (
+                                <span className="text-muted-foreground"> · {clock(at)}</span>
+                              ) : null}
+                            </span>
+                            {canManage ? (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                aria-label={`Remove ${rider.name} from ${title.toLowerCase()}`}
+                                disabled={isPending}
+                                onClick={() =>
+                                  run(
+                                    () => unassignPassengerAction(car.id, rider.userId, direction),
+                                    "Removed"
+                                  )
+                                }
+                              >
+                                <X />
+                              </Button>
                             ) : null}
-                          </span>
-                          {canManage ? (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              aria-label={`Remove ${rider.name} from ${title.toLowerCase()}`}
-                              disabled={isPending}
-                              onClick={() =>
-                                run(
-                                  () => unassignPassengerAction(car.id, rider.userId, direction),
-                                  "Removed"
-                                )
-                              }
-                            >
-                              <X />
-                            </Button>
-                          ) : null}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                ) : null
-              )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : null}
+                  {canManage ? (
+                    <AddPassenger
+                      carId={car.id}
+                      direction={direction}
+                      title={title}
+                      people={people}
+                      candidates={attendees.filter(
+                        (attendee) =>
+                          attendee.needsRide[direction === "PICKUP" ? "pickup" : "dropoff"]
+                      )}
+                      seatsFull={people.length >= car.seats}
+                    />
+                  ) : null}
+                </div>
+              ))}
             </li>
           );
         })}
@@ -274,6 +322,142 @@ export function Carpools({
         </div>
       ) : null}
     </div>
+  );
+}
+
+const selectClass = "border-input bg-background h-9 min-w-0 flex-1 rounded-md border px-3 text-sm";
+
+type PointKind = "HOME" | "RIDER_HOME" | "COMMON";
+
+/** Add one Going attendee to a car's list, choosing where they are met (R3). */
+function AddPassenger({
+  carId,
+  direction,
+  title,
+  people,
+  candidates,
+  seatsFull,
+}: {
+  carId: string;
+  direction: RideDirection;
+  title: string;
+  people: CarPassenger[];
+  candidates: HangoutAttendeeItem[];
+  seatsFull: boolean;
+}) {
+  const [isPending, run] = useRun();
+  const [pickedPerson, setPickedPerson] = useState("");
+  const [kind, setKind] = useState<PointKind>("HOME");
+  const [pickedVia, setPickedVia] = useState("");
+  const [address, setAddress] = useState("");
+  const id = `${carId}-${direction}`;
+  const lower = title.toLowerCase();
+
+  if (candidates.length === 0) return null;
+  if (seatsFull)
+    return <p className="text-muted-foreground text-xs">Full: no seat left to add to {lower}.</p>;
+
+  const person = candidates.some((c) => c.userId === pickedPerson)
+    ? pickedPerson
+    : candidates[0].userId;
+  const hosts = people.filter((p) => p.userId !== person && p.homeLat !== null);
+  const via = hosts.some((h) => h.userId === pickedVia) ? pickedVia : (hosts[0]?.userId ?? "");
+  const point: PassengerPoint | null =
+    kind === "HOME"
+      ? { kind }
+      : kind === "RIDER_HOME"
+        ? via
+          ? { kind, viaUserId: via }
+          : null
+        : address.trim()
+          ? { kind, address }
+          : null;
+
+  return (
+    <form
+      aria-label={`Add to ${lower}`}
+      className="flex flex-wrap items-end gap-2 pt-1"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!point) return;
+        run(
+          () => assignPassengerAction(carId, person, direction, point),
+          `Added to ${lower}`,
+          () => {
+            setPickedPerson("");
+            setAddress("");
+          }
+        );
+      }}
+    >
+      <div className="flex min-w-36 flex-1 flex-col gap-1">
+        <Label htmlFor={`${id}-person`} className="text-xs">
+          {title}
+        </Label>
+        <select
+          id={`${id}-person`}
+          className={selectClass}
+          value={person}
+          onChange={(event) => setPickedPerson(event.target.value)}
+        >
+          {candidates.map((candidate) => (
+            <option key={candidate.userId} value={candidate.userId}>
+              {candidate.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="flex min-w-36 flex-1 flex-col gap-1">
+        <Label htmlFor={`${id}-point`} className="text-xs">
+          Meet at
+        </Label>
+        <select
+          id={`${id}-point`}
+          className={selectClass}
+          value={kind}
+          onChange={(event) => setKind(event.target.value as PointKind)}
+        >
+          <option value="HOME">Their home</option>
+          {hosts.length > 0 ? <option value="RIDER_HOME">Another rider&apos;s home</option> : null}
+          <option value="COMMON">A common point</option>
+        </select>
+      </div>
+      {kind === "RIDER_HOME" ? (
+        <div className="flex min-w-36 flex-1 flex-col gap-1">
+          <Label htmlFor={`${id}-via`} className="text-xs">
+            Whose home
+          </Label>
+          <select
+            id={`${id}-via`}
+            className={selectClass}
+            value={via}
+            onChange={(event) => setPickedVia(event.target.value)}
+          >
+            {hosts.map((host) => (
+              <option key={host.userId} value={host.userId}>
+                {host.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+      {kind === "COMMON" ? (
+        <div className="flex min-w-44 flex-1 flex-col gap-1">
+          <Label htmlFor={`${id}-address`} className="text-xs">
+            Meeting address
+          </Label>
+          <Input
+            id={`${id}-address`}
+            maxLength={300}
+            value={address}
+            onChange={(event) => setAddress(event.target.value)}
+          />
+        </div>
+      ) : null}
+      <Button type="submit" size="sm" disabled={isPending || !point}>
+        Add
+      </Button>
+    </form>
   );
 }
 

@@ -271,6 +271,7 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
               <Carpools
                 hangoutId={hangout.id}
                 cars={hangout.cars}
+                attendees={hangout.attendees}
                 weather={{ warnings, checked: weather.length > 0 }}
                 viewer={{
                   id: user.id,
