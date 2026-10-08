@@ -13,14 +13,13 @@ import { getCurrentUser } from "@/lib/get-current-user";
 import { queueUpdate } from "@/lib/hangout-updates";
 import { hangoutEnded } from "@/lib/hangouts";
 import { prisma } from "@/lib/prisma";
-import { clearFromRides } from "@/lib/rides";
+import { clearFromRides, goingUser } from "@/lib/rides";
 import { recomputeRoutes } from "@/lib/routes";
 import { geocodeAddress, locateAddress } from "@/lib/tomtom";
 
 export type CarpoolActionResult = { error: string } | { success: true };
 
 const UNAUTHORIZED = "Unauthorized";
-const NOT_GOING = "Only people going can drive or ride";
 const CAR_GONE = "Car not found";
 const ENDED = "This hangout has already ended";
 const NOT_YOURS = "Only the driver or an admin can change this car";
@@ -34,24 +33,6 @@ const seatsSchema = z.number().int().min(1, "At least 1 seat").max(12, "12 seats
 async function reroute(hangoutId: string) {
   await recomputeRoutes(hangoutId);
   revalidateHangoutPage(hangoutId);
-}
-
-/** The caller, if they are Going to this scheduled hangout. */
-async function goingUser(hangoutId: string) {
-  const user = await getCurrentUser();
-  if (!user) return { error: UNAUTHORIZED } as const;
-  const attendee = await prisma.hangoutAttendee.findFirst({
-    where: {
-      hangoutId,
-      userId: user.id,
-      status: AttendanceStatus.GOING,
-      hangout: { status: HangoutStatus.SCHEDULED },
-    },
-    select: { userId: true },
-  });
-  if (!attendee) return { error: NOT_GOING } as const;
-  if (await hangoutEnded(hangoutId)) return { error: ENDED } as const;
-  return { user };
 }
 
 /** The car, if the caller is its driver or an admin. */
