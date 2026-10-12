@@ -11,7 +11,7 @@ function ExternalAnchor({ href, children }: { href: string; children: React.Reac
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="text-primary inline-flex items-center gap-1 underline-offset-4 hover:underline"
+      className="text-foreground inline-flex items-center gap-1 underline underline-offset-4 hover:decoration-2"
     >
       {children}
       <ExternalLink className="size-3.5" aria-hidden />
