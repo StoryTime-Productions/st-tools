@@ -29,6 +29,15 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "images.dog.ceo",
       },
+      // Playlist widget cover art (Deezer, iTunes)
+      {
+        protocol: "https",
+        hostname: "*.dzcdn.net",
+      },
+      {
+        protocol: "https",
+        hostname: "*.mzstatic.com",
+      },
     ],
   },
 };

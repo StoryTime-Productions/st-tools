@@ -30,6 +30,10 @@ async function loadDashboardPageModule() {
   vi.doMock("@/app/dashboard/_components/online-users-card", () => ({
     OnlineUsersCard: onlineUsersCard,
   }));
+  const playlistWidget = vi.fn(() => <div data-testid="playlist-widget" />);
+  vi.doMock("@/app/dashboard/_components/playlist-widget", () => ({
+    PlaylistWidget: playlistWidget,
+  }));
   vi.doMock("@/app/dashboard/_components/puppy-of-the-day", () => ({
     PuppyOfTheDayCard: puppyOfTheDayCard,
   }));
@@ -44,6 +48,7 @@ async function loadDashboardPageModule() {
     liveTimeWeather,
     onlineUsersCard,
     puppyOfTheDayCard,
+    playlistWidget,
   };
 }
 
@@ -72,6 +77,7 @@ describe("DashboardPage", () => {
       workspaceShell,
       liveTimeWeather,
       onlineUsersCard,
+      playlistWidget,
     } = await loadDashboardPageModule();
 
     const user = {
@@ -80,6 +86,7 @@ describe("DashboardPage", () => {
       email: "member@example.com",
       avatarUrl: null,
       role: "MEMBER",
+      discordId: "d-1",
     };
 
     getCurrentUser.mockResolvedValueOnce(user);
@@ -99,6 +106,7 @@ describe("DashboardPage", () => {
     expect(screen.queryByRole("link", { name: /member access/i })).not.toBeInTheDocument();
     expect(screen.getAllByText("Planned area").length).toBeGreaterThan(0);
 
+    expect(playlistWidget).toHaveBeenCalledWith({ discordId: "d-1" }, undefined);
     expect(onlineUsersCard).toHaveBeenCalledWith(
       {
         currentUser: {

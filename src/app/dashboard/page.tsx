@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { WorkspaceShell } from "@/components/layout/workspace-shell";
 import { LiveTimeWeather } from "./_components/live-time-weather";
 import { OnlineUsersCard } from "./_components/online-users-card";
+import { PlaylistWidget } from "./_components/playlist-widget";
 
 type DashboardBadgeVariant = "default" | "secondary" | "destructive" | "outline" | "ghost" | "link";
 
@@ -147,6 +148,7 @@ export default async function DashboardPage() {
               avatarUrl: user.avatarUrl,
             }}
           />
+          <PlaylistWidget discordId={user.discordId} />
         </div>
       </div>
     </WorkspaceShell>
