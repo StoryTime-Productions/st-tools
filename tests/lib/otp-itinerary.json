@@ -1,0 +1,131 @@
+{
+  "data": {
+    "plan": {
+      "itineraries": [
+        {
+          "start": "2026-10-14T07:40:41-04:00",
+          "end": "2026-10-14T09:00:00-04:00",
+          "duration": 4759,
+          "legs": [
+            {
+              "mode": "WALK",
+              "from": {
+                "name": "Origin",
+                "lat": 45.5003,
+                "lon": -73.5683
+              },
+              "to": {
+                "name": "Destination",
+                "lat": 45.493,
+                "lon": -73.629
+              },
+              "start": {
+                "scheduledTime": "2026-10-14T07:40:41-04:00"
+              },
+              "end": {
+                "scheduledTime": "2026-10-14T09:00:00-04:00"
+              },
+              "duration": 4759,
+              "agency": null,
+              "route": null,
+              "legGeometry": {
+                "points": "ixutGbx_`MQT?fAM\\ABKXIPg@pAc@hAr@p@BBEJADFHc@fACB?BITEJA?A@?Dg@pASd@?@A@?BJJHFINEL?BD?`A~@`@b@DA@@BDDD??@JtBrBa@fAABHHDZABGNEJEJwArDAB?@?@@@n@r@DDBDVXTVBB?D@@FFDF@@?@CDEJEJAB?B@??@rBpB@A@BDDHH@@?D@???TTd@b@BBBBz@x@@A@@FDFF@@?DA??@A@kB`FADCDc@hA?@?@HHl@j@x@x@BF?BBBBBB?BBNLHJDBFFBB~@|@BB@@BDDB@@@BFD\\\\PNNNr@p@@BFHHF@?@@@@t@t@PNfAfA@DRP@?@@?B?@?X?Z?BA@?@?B@BB|@@b@@F?T@ZB`@?H?PBp@@L?JBt@@VLANAD`A?F?F@N?F@N?R@T?H@H@^?F?L@LBdA@`@?B?@@@A@@P@N@@A@?B?@Br@DpA?D?D@X@H@FBJ@HBHBHBDBHDDBFHLd@t@HLFLBHHNDNFNZ`APp@BB@BBB@LBHDZBDBFAD?B?B?FBN?F@FBTBR@J@HBR?H@H?BA?IDKBAAA@A?A@C@A?A?A@A@GHIDA@BDDJDLDN@D@HBJBP@JBL@R?J@T@P?N?R?N?P?F?VAP?BABAB@B?@?^?J?D?BAF?JAB???@?B?@?PEvAAx@?VAXAVARC`@A^ARCPC`@?DGp@KdAEn@CVAL?NAR?d@@V?^?F?j@@h@AV?LAVAd@Aj@Cx@?H?JEtA?B?B?FAP?F?B?BEtAA^?H?FAL?H?HA@?HAF?B?B@DAh@CrA?lAApAAB?@@@AL?JJDHBB@H?J??F?TAP?F@D?R?R@L?B?D@R?LBRBXD\\@HBLBRFXH\\Pz@Lp@BJ?BBJBL@BBLDTDP@NBNBRBPBP@P@R@R?T@P?TAV?RARAPAPCPCRAPCLAJAJERAJELIl@Kj@Ih@Op@Kn@ADAFGZ?@AFABOx@?@AB?@ADCLCL?BA@A@AJAFADADGZADADEVAHCJKh@GZCP?@CN?DCNAVAJ?T?T?L@`@@P?LBT@P@J@JBT?D@D?HBJ@D@B?@DT@L@B@@A@?B?B?B?BJ|@@F@FBTBT@NDj@@B?B?DH~@?B@FDr@@N@P@P@D?D?D@N?P@\\@F?D@x@?D?F?V?T@P?jA?f@@r@?^@~@?~@@^@T?J@J?J@V@F?H@P?LBh@@N@R@NBVD^Hn@@J@D@D@B@@?@@N@L@BDZBL@F@@?@?B?@BNDTBZBP@T@P?T?@@B?V?JDLBLB@Ol@ADAF?BAB@BC?CDCJGRGP@DA@A@A@q@zBCDCJCDAB??ADABA@EPq@nBmAjDHF~@v@DDJHBBh@d@|@t@BBBBl@f@BBDBHHbCvBCPETA@?b@]jACHMb@ADk@|AIVIFGd@AJHHJJB?tJlI@DJHHHCBaAtC?BCJIRC@m@hB",
+                "length": 635
+              }
+            }
+          ]
+        },
+        {
+          "start": "2026-10-14T08:26:57-04:00",
+          "end": "2026-10-14T08:58:49-04:00",
+          "duration": 1912,
+          "legs": [
+            {
+              "mode": "WALK",
+              "from": {
+                "name": "Origin",
+                "lat": 45.5003,
+                "lon": -73.5683
+              },
+              "to": {
+                "name": "Station Bonaventure",
+                "lat": 45.49813,
+                "lon": -73.567293
+              },
+              "start": {
+                "scheduledTime": "2026-10-14T08:26:57-04:00"
+              },
+              "end": {
+                "scheduledTime": "2026-10-14T08:37:00-04:00"
+              },
+              "duration": 603,
+              "agency": null,
+              "route": null,
+              "legGeometry": {
+                "points": "ixutGbx_`MQT?fAM\\ABKXIPp@r@B@BIDILOBA@@LJFF@@?@@?fB~A@BHFFF@@@?LGVOJE@CBAAA@C?CZw@h@wATk@HUXs@p@eBFMNa@BGHSIGDMA?",
+                "length": 46
+              }
+            },
+            {
+              "mode": "SUBWAY",
+              "from": {
+                "name": "Station Bonaventure",
+                "lat": 45.49813,
+                "lon": -73.567293
+              },
+              "to": {
+                "name": "Station Côte-Sainte-Catherine",
+                "lat": 45.492344,
+                "lon": -73.633104
+              },
+              "start": {
+                "scheduledTime": "2026-10-14T08:37:00-04:00"
+              },
+              "end": {
+                "scheduledTime": "2026-10-14T08:50:00-04:00"
+              },
+              "duration": 780,
+              "agency": {
+                "name": "Société de transport de Montréal"
+              },
+              "route": {
+                "shortName": "2",
+                "longName": "Line 2 - Orange"
+              },
+              "legGeometry": {
+                "points": "ajutGdr_`M@@zS~V??pb@bb@^^|f@vSj_@hg@bSviB_b@pcB?Dyb@jp@s@h@qh@f_@",
+                "length": 14
+              }
+            },
+            {
+              "mode": "WALK",
+              "from": {
+                "name": "Station Côte-Sainte-Catherine",
+                "lat": 45.492344,
+                "lon": -73.633104
+              },
+              "to": {
+                "name": "Destination",
+                "lat": 45.493,
+                "lon": -73.629
+              },
+              "start": {
+                "scheduledTime": "2026-10-14T08:50:00-04:00"
+              },
+              "end": {
+                "scheduledTime": "2026-10-14T08:58:49-04:00"
+              },
+              "duration": 529,
+              "agency": null,
+              "route": null,
+              "legGeometry": {
+                "points": "cfttG|ml`M??FQKI??AA????A??AA?SQEECCGEGEg@e@i@c@GGGEg@c@i@g@GEEEg@c@i@e@GECC_@[AAAAAC?A?C?CpAwD@CBAAEGGDGBIBMjAgDDIFHDMFM?EPe@",
+                "length": 50
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
