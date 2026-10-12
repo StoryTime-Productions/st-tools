@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   arrowsAlong,
   buildCommuteMap,
+  toMapCar,
+  toMapTransit,
   CAR_COLORS,
   type MapCar,
+  type MapPassenger,
   type MapStop,
 } from "@/lib/commute-map";
 
@@ -20,15 +23,25 @@ const person = (name: string, lat: number | null = null, lon: number | null = nu
   homeLon: lon,
 });
 
+const home = (name: string, position: [number, number] | null): MapPassenger => ({
+  name,
+  position,
+  kind: "home",
+});
+const common = (name: string, position: [number, number] | null): MapPassenger => ({
+  name,
+  position,
+  kind: "common",
+});
+
 const car = (overrides: Partial<MapCar> = {}): MapCar => ({
   id: "c1",
   startLat: null,
   startLon: null,
-  commonLat: null,
-  commonLon: null,
   schedule: null,
   driver: person("Alice", 1, 1),
-  riders: [],
+  pickups: [],
+  dropoffs: [],
   ...overrides,
 });
 
@@ -70,13 +83,14 @@ describe("buildCommuteMap", () => {
     expect(mapCar.trips).toEqual(["there", "back"]);
   });
 
-  it("draws manual, failed, unrouted and pre-geometry cars dashed through their points", () => {
+  it("draws manual, failed, unrouted and pre-geometry cars dashed through each phase's own list (AC 8)", () => {
     const stops = [stop("Park", 5, 5), stop("Gap", null, null), stop("Bar", 6, 6)];
-    const riders = [
-      { ...person("Bob", 4, 4), atCommonPoint: false },
-      { ...person("Cara"), atCommonPoint: true },
-    ];
-    const base = car({ startLat: 2, startLon: 2, commonLat: 3, commonLon: 3, riders });
+    const base = car({
+      startLat: 2,
+      startLon: 2,
+      pickups: [home("Bob", [4, 4]), common("Cara", [3, 3])],
+      dropoffs: [home("Bob", [4, 4]), home("Dan", [7, 7])],
+    });
     const expected = [
       [
         [2, 2],
@@ -87,7 +101,7 @@ describe("buildCommuteMap", () => {
       [
         [6, 6],
         [4, 4],
-        [3, 3],
+        [7, 7],
         [2, 2],
       ],
     ];
@@ -104,24 +118,62 @@ describe("buildCommuteMap", () => {
     }
   });
 
-  it("starts at the driver's home, pins riders' exact homes, and cycles colors by car order", () => {
+  it("draws no line for a phase with nobody on its list (AC 9)", () => {
+    const stops = [stop("Park", 5, 5)];
+    const thereOnly = car({ pickups: [home("Bob", [4, 4])] });
+    expect(buildCommuteMap(stops, [thereOnly]).cars[0].trips).toEqual(["there"]);
+    expect(buildCommuteMap(stops, [car()]).cars[0]).toMatchObject({ lines: [], trips: [] });
+    // A routed car with only a Getting home trip draws only that road.
+    const routedBack = car({
+      dropoffs: [home("Bob", [4, 4])],
+      schedule: {
+        back: trip([
+          [5, 5],
+          [1, 1],
+        ]),
+      },
+    });
+    expect(buildCommuteMap(stops, [routedBack]).cars[0]).toMatchObject({
+      dashed: false,
+      trips: ["back"],
+    });
+  });
+
+  it("starts at the driver's home, pins each phase's exact points, and cycles colors by car order", () => {
     const cars = Array.from({ length: CAR_COLORS.length + 1 }, (_, i) =>
-      car({ id: `c${i}`, riders: [{ ...person("Bob", 4, 4), atCommonPoint: false }] })
+      car({ id: `c${i}`, pickups: [home("Bob", [4, 4])], dropoffs: [home("Cara", [8, 8])] })
     );
     const built = buildCommuteMap([stop("Park", 5, 5)], cars).cars;
     expect(built[0].lines[0][0]).toEqual([1, 1]);
-    expect(built[0].homes).toEqual([{ name: "Bob", position: [4, 4] }]);
+    expect(built[0].pins).toEqual([
+      { trip: "there", name: "Bob", position: [4, 4], kind: "home" },
+      { trip: "back", name: "Cara", position: [8, 8], kind: "home" },
+    ]);
     expect(built[CAR_COLORS.length].color).toBe(CAR_COLORS[0]);
   });
 
-  it("keeps a car with no usable points in the legend without lines or homes", () => {
+  it("shares one pin between riders at the same place and keeps common points distinct", () => {
+    const [mapCar] = buildCommuteMap(
+      [],
+      [car({ pickups: [common("Bob", [3, 3]), common("Cara", [3, 3]), home("Dan", [4, 4])] })]
+    ).cars;
+    expect(mapCar.pins).toEqual([
+      { trip: "there", name: "Bob, Cara", position: [3, 3], kind: "common" },
+      { trip: "there", name: "Dan", position: [4, 4], kind: "home" },
+    ]);
+  });
+
+  it("keeps a car with no usable points in the legend without lines or pins", () => {
     const [mapCar] = buildCommuteMap([], [car({ driver: person("Alice") })]).cars;
-    expect(mapCar).toMatchObject({ driver: "Alice", lines: [], homes: [], needsStart: true });
+    expect(mapCar).toMatchObject({ driver: "Alice", lines: [], pins: [], needsStart: true });
   });
 
   it("draws no line for a car with no start or home, even with riders, stops or a stored route (AC4)", () => {
-    const riders = [{ ...person("Bob", 4, 4), atCommonPoint: false }];
-    const noOrigin = car({ driver: person("Alice"), riders });
+    const noOrigin = car({
+      driver: person("Alice"),
+      pickups: [home("Bob", [4, 4])],
+      dropoffs: [home("Bob", [4, 4])],
+    });
     const routed = {
       there: trip([
         [1, 1],
@@ -135,35 +187,29 @@ describe("buildCommuteMap", () => {
     for (const schedule of [null, { error: "no start" }, routed]) {
       const [mapCar] = buildCommuteMap([stop("Park", 5, 5)], [{ ...noOrigin, schedule }]).cars;
       expect(mapCar).toMatchObject({ lines: [], trips: [], needsStart: true });
-      expect(mapCar.homes).toEqual([{ name: "Bob", position: [4, 4] }]);
+      expect(mapCar.pins).toHaveLength(2);
     }
   });
 
   it("does not ask for a start when the car has one or the driver has a home (AC5)", () => {
     const stops = [stop("Park", 5, 5)];
-    expect(buildCommuteMap(stops, [car()]).cars[0]).toMatchObject({
+    const riders = { pickups: [home("Bob", [4, 4])], dropoffs: [home("Bob", [4, 4])] };
+    expect(buildCommuteMap(stops, [car(riders)]).cars[0]).toMatchObject({
       needsStart: false,
       dashed: true,
     });
-    const withStart = car({ driver: person("Alice"), startLat: 2, startLon: 2 });
+    const withStart = car({ ...riders, driver: person("Alice"), startLat: 2, startLon: 2 });
     const [mapCar] = buildCommuteMap(stops, [withStart]).cars;
     expect(mapCar.needsStart).toBe(false);
     expect(mapCar.lines).toHaveLength(2);
   });
 
-  it("skips riders with no home coordinates and common-point riders when there is no common point", () => {
+  it("skips passengers that aren't on the map but still draws the phase", () => {
     const [mapCar] = buildCommuteMap(
       [stop("Park", 5, 5)],
-      [
-        car({
-          riders: [
-            { ...person("Bob"), atCommonPoint: false },
-            { ...person("Cara"), atCommonPoint: true },
-          ],
-        }),
-      ]
+      [car({ pickups: [home("Bob", null)], dropoffs: [common("Cara", null)] })]
     ).cars;
-    expect(mapCar.homes).toEqual([]);
+    expect(mapCar.pins).toEqual([]);
     expect(mapCar.lines).toEqual([
       [
         [1, 1],
@@ -175,6 +221,94 @@ describe("buildCommuteMap", () => {
       ],
     ]);
     expect(mapCar.trips).toEqual(["there", "back"]);
+  });
+
+  describe("public transit (AC 8)", () => {
+    it("passes transit pins through with trip planner links, and none without transit", () => {
+      const rider = { name: "Eve", trip: "there" as const, position: [9, 9] as [number, number] };
+      const withTransit = buildCommuteMap([], [], null, [rider]);
+      expect(withTransit.transit).toEqual([rider]);
+      expect(withTransit.planners.map((p) => p.label)).toEqual(["STM", "exo"]);
+      expect(buildCommuteMap([], []).planners).toEqual([]);
+    });
+
+    it("maps transit rows to the matching phase at their start", () => {
+      const row = {
+        userId: "e",
+        name: "Eve",
+        startAddress: "x",
+        startLat: 9,
+        startLon: 8,
+        destAddress: null,
+        destLat: null,
+        destLon: null,
+      };
+      expect(
+        toMapTransit([
+          { ...row, direction: "PICKUP" },
+          { ...row, direction: "DROPOFF" },
+        ])
+      ).toEqual([
+        { name: "Eve", trip: "there", position: [9, 8] },
+        { name: "Eve", trip: "back", position: [9, 8] },
+      ]);
+    });
+  });
+
+  describe("toMapCar", () => {
+    const passenger = (overrides: Record<string, unknown>) => ({
+      userId: "b",
+      name: "Bob",
+      homeAddress: null,
+      homeLat: 4,
+      homeLon: 4,
+      pointKind: "HOME",
+      viaUserId: null,
+      commonLabel: null,
+      commonLat: null,
+      commonLon: null,
+      ...overrides,
+    });
+    const item = (pickups: ReturnType<typeof passenger>[]) =>
+      ({
+        id: "c1",
+        startLat: 2,
+        startLon: 2,
+        schedule: null,
+        driver: { userId: "a", name: "Alice", homeAddress: null, homeLat: 1, homeLon: 1 },
+        pickups,
+        dropoffs: [],
+      }) as unknown as Parameters<typeof toMapCar>[0];
+
+    it("resolves a home, another rider's home and a common point to coordinates", () => {
+      const mapCar = toMapCar(
+        item([
+          passenger({}),
+          passenger({ name: "Dan", pointKind: "RIDER_HOME", viaUserId: "c" }),
+          passenger({ name: "Cara", pointKind: "COMMON", commonLat: 3, commonLon: 3 }),
+        ]),
+        (userId) => (userId === "c" ? [7, 7] : null)
+      );
+      expect(mapCar.driver).toEqual(person("Alice", 1, 1));
+      expect(mapCar.pickups).toEqual([
+        home("Bob", [4, 4]),
+        home("Dan", [7, 7]),
+        common("Cara", [3, 3]),
+      ]);
+    });
+
+    it("leaves a point null when it can't be placed", () => {
+      const mapCar = toMapCar(
+        item([
+          passenger({ homeLat: null }),
+          passenger({ pointKind: "RIDER_HOME", viaUserId: null }),
+          passenger({ pointKind: "RIDER_HOME", viaUserId: "gone" }),
+          passenger({ pointKind: "COMMON" }),
+        ]),
+        () => null
+      );
+      expect(mapCar.pickups.map((p) => p.position)).toEqual([null, null, null, null]);
+    });
   });
 });
 

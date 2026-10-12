@@ -38,6 +38,7 @@ const HANGOUT = {
   startSlot: null as string | null,
   attendees: [],
   stops: [] as { id: string }[],
+  transit: [],
   cars: [] as { id: string }[],
   costs: [] as { id: string }[],
 };

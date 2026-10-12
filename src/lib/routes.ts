@@ -1,4 +1,4 @@
-import { HangoutStatus, Prisma } from "@prisma/client";
+import { HangoutStatus, PassengerPointKind, Prisma, RideDirection } from "@prisma/client";
 import { addDays, torontoToUtc } from "@/lib/calendar";
 import { scheduleStops } from "@/lib/itinerary";
 import { prisma } from "@/lib/prisma";
@@ -17,8 +17,11 @@ export interface Trip {
   reason?: string;
 }
 
-/** `manual` is only on schedules typed in before times became computed; they are treated as uncomputed. */
-export type CarSchedule = { there: Trip; back: Trip; manual?: true } | { error: string };
+/**
+ * A direction is absent when nobody is on that car's list for it. `manual` is only on schedules
+ * typed in before times became computed; they are treated as uncomputed.
+ */
+export type CarSchedule = { there?: Trip; back?: Trip; manual?: true } | { error: string };
 
 /**
  * Stretch a routed trip by the weather (T3/T4). The arrival of a trip there stays put, so it
@@ -53,6 +56,8 @@ export function withWeatherDelay(
     : { ...delayed, end: iso(end + extra) };
 }
 
+const PERSON = { name: true, email: true, homeLat: true, homeLon: true } as const;
+
 const located = (lat: number | null, lon: number | null): Point | null =>
   lat === null || lon === null ? null : { lat, lon };
 
@@ -77,11 +82,15 @@ export async function recomputeRoutes(hangoutId: string) {
           commonLat: true,
           commonLon: true,
           driver: { select: { homeLat: true, homeLon: true } },
-          riders: {
+          passengers: {
             select: {
               userId: true,
-              atCommonPoint: true,
-              user: { select: { name: true, email: true, homeLat: true, homeLon: true } },
+              direction: true,
+              pointKind: true,
+              commonLat: true,
+              commonLon: true,
+              user: { select: PERSON },
+              viaUser: { select: PERSON },
             },
           },
         },
@@ -118,8 +127,12 @@ export async function recomputeRoutes(hangoutId: string) {
       "error" in routed
         ? routed
         : {
-            there: withWeatherDelay(routed.there, "there", weatherDelay(thereWeather)),
-            back: withWeatherDelay(routed.back, "back", weatherDelay(backWeather)),
+            ...(routed.there && {
+              there: withWeatherDelay(routed.there, "there", weatherDelay(thereWeather)),
+            }),
+            ...(routed.back && {
+              back: withWeatherDelay(routed.back, "back", weatherDelay(backWeather)),
+            }),
           };
     await prisma.hangoutCar.update({
       where: { id: car.id },
@@ -170,19 +183,63 @@ async function routeStops(
   });
 }
 
+type RoutablePerson = {
+  name: string | null;
+  email: string;
+  homeLat: number | null;
+  homeLon: number | null;
+};
+
 type RoutableCar = {
   schedule?: unknown;
   startLat: number | null;
   startLon: number | null;
-  commonLat: number | null;
-  commonLon: number | null;
   driver: { homeLat: number | null; homeLon: number | null };
-  riders: {
+  passengers: {
     userId: string;
-    atCommonPoint: boolean;
-    user: { name: string | null; email: string; homeLat: number | null; homeLon: number | null };
+    direction: RideDirection;
+    pointKind: PassengerPointKind;
+    commonLat: number | null;
+    commonLon: number | null;
+    user: RoutablePerson;
+    viaUser: RoutablePerson | null;
   }[];
 };
+
+/** Where the driver meets one passenger, or why that can't be mapped. */
+function passengerPoint(passenger: RoutableCar["passengers"][number]): Point | { error: string } {
+  const who = (person: RoutablePerson) => person.name ?? person.email;
+  if (passenger.pointKind === PassengerPointKind.COMMON) {
+    return (
+      located(passenger.commonLat, passenger.commonLon) ?? {
+        error: `${who(passenger.user)}'s meeting point isn't on the map`,
+      }
+    );
+  }
+  const owner = passenger.pointKind === PassengerPointKind.RIDER_HOME ? passenger.viaUser : null;
+  const person = owner ?? passenger.user;
+  return (
+    located(person.homeLat, person.homeLon) ?? {
+      error: `${who(person)} has no home address on the map`,
+    }
+  );
+}
+
+/** One waypoint per distinct place; passengers who share a place share the arrival time. */
+function waypointsFor(
+  passengers: RoutableCar["passengers"]
+): { point: Point; riders: string[] }[] | { error: string } {
+  const waypoints = new Map<string, { point: Point; riders: string[] }>();
+  for (const passenger of passengers) {
+    const point = passengerPoint(passenger);
+    if ("error" in point) return point;
+    const key = `${point.lat},${point.lon}`;
+    const shared = waypoints.get(key);
+    if (shared) shared.riders.push(passenger.userId);
+    else waypoints.set(key, { point, riders: [passenger.userId] });
+  }
+  return [...waypoints.values()];
+}
 
 async function routeCar(
   car: RoutableCar,
@@ -195,40 +252,41 @@ async function routeCar(
     located(car.startLat, car.startLon) ?? located(car.driver.homeLat, car.driver.homeLon);
   if (!origin) return { error: "The car has no start or home address on the map" };
 
-  const common = located(car.commonLat, car.commonLon);
-  const waypoints: { point: Point; riders: string[] }[] = [];
-  for (const rider of car.riders) {
-    if (rider.atCommonPoint && common) {
-      const shared = waypoints.find((w) => w.point === common);
-      if (shared) shared.riders.push(rider.userId);
-      else waypoints.push({ point: common, riders: [rider.userId] });
-      continue;
-    }
-    const home = located(rider.user.homeLat, rider.user.homeLon);
-    if (!home)
-      return { error: `${rider.user.name ?? rider.user.email} has no home address on the map` };
-    waypoints.push({ point: home, riders: [rider.userId] });
-  }
+  const pickups = waypointsFor(car.passengers.filter((p) => p.direction === RideDirection.PICKUP));
+  if ("error" in pickups) return pickups;
+  const dropoffs = waypointsFor(
+    car.passengers.filter((p) => p.direction === RideDirection.DROPOFF)
+  );
+  if ("error" in dropoffs) return dropoffs;
 
-  const points = waypoints.map((w) => w.point);
+  const trip = (
+    waypoints: { point: Point; riders: string[] }[],
+    route: (points: Point[]) => ReturnType<typeof routeVia>
+  ) => (waypoints.length ? route(waypoints.map((w) => w.point)) : Promise.resolve(null));
   const [there, back] = await Promise.all([
-    routeVia(origin, points, first.point, { arriveAt: instant(first.at) }),
-    routeVia(last.point, points, origin, { departAt: instant(last.end) }),
+    trip(pickups, (points) =>
+      routeVia(origin, points, first.point, { arriveAt: instant(first.at) })
+    ),
+    trip(dropoffs, (points) =>
+      routeVia(last.point, points, origin, { departAt: instant(last.end) })
+    ),
   ]);
-  if ("error" in there) return there;
-  if ("error" in back) return back;
+  if (there && "error" in there) return there;
+  if (back && "error" in back) return back;
 
-  const byRider = (arrivals: string[]) =>
-    Object.fromEntries(
-      waypoints.flatMap((w, index) => w.riders.map((userId) => [userId, arrivals[index]]))
-    );
+  const toTrip = (
+    waypoints: { riders: string[] }[],
+    route: NonNullable<typeof there> & { depart: string }
+  ): Trip => ({
+    start: route.depart,
+    end: route.arrive,
+    stops: Object.fromEntries(
+      waypoints.flatMap((w, index) => w.riders.map((userId) => [userId, route.waypoints[index]]))
+    ),
+    path: route.path,
+  });
   return {
-    there: {
-      start: there.depart,
-      end: there.arrive,
-      stops: byRider(there.waypoints),
-      path: there.path,
-    },
-    back: { start: back.depart, end: back.arrive, stops: byRider(back.waypoints), path: back.path },
+    ...(there && { there: toTrip(pickups, there) }),
+    ...(back && { back: toTrip(dropoffs, back) }),
   };
 }

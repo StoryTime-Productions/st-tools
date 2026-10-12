@@ -56,6 +56,9 @@ model User {
   hangoutCostShares            HangoutCostShare[]
   hangoutCostParticipants      HangoutCostParticipant[]
   hangoutRides                 HangoutRider[]
+  hangoutPassengers            HangoutPassenger[]            @relation("PassengerUser")
+  hangoutPassengerVias         HangoutPassenger[]            @relation("PassengerVia")
+  hangoutTransit               HangoutTransit[]
 
   @@map("users")
 }
@@ -263,6 +266,17 @@ enum AttendanceStatus {
   NOT_GOING
 }
 
+enum RideDirection {
+  PICKUP
+  DROPOFF
+}
+
+enum PassengerPointKind {
+  HOME
+  RIDER_HOME
+  COMMON
+}
+
 enum PaymentStatus {
   UNPAID
   SENT
@@ -305,6 +319,8 @@ model Hangout {
   stops          HangoutStop[]
   cars           HangoutCar[]
   riders         HangoutRider[]
+  passengers     HangoutPassenger[]
+  transit        HangoutTransit[]
   costs          HangoutCost[]
   notifications  HangoutNotification[]
   pendingUpdates HangoutPendingUpdate[]
@@ -531,7 +547,8 @@ model HangoutCar {
   driverId String
   driver   User   @relation(fields: [driverId], references: [id], onDelete: Cascade)
 
-  riders HangoutRider[]
+  riders     HangoutRider[]
+  passengers HangoutPassenger[]
 
   @@unique([hangoutId, driverId])
   @@map("hangout_cars")
@@ -552,6 +569,54 @@ model HangoutRider {
   @@id([hangoutId, userId])
   @@index([carId])
   @@map("hangout_riders")
+}
+
+model HangoutPassenger {
+  id          String             @id @default(uuid())
+  direction   RideDirection
+  pointKind   PassengerPointKind
+  commonLabel String?
+  commonLat   Float?
+  commonLon   Float?
+  createdAt   DateTime           @default(now())
+
+  hangoutId String
+  hangout   Hangout @relation(fields: [hangoutId], references: [id], onDelete: Cascade)
+
+  carId String
+  car   HangoutCar @relation(fields: [carId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation("PassengerUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  viaUserId String?
+  viaUser   User?   @relation("PassengerVia", fields: [viaUserId], references: [id], onDelete: Cascade)
+
+  @@unique([hangoutId, userId, direction])
+  @@index([carId])
+  @@map("hangout_passengers")
+}
+
+model HangoutTransit {
+  id           String        @id @default(uuid())
+  direction    RideDirection
+  startAddress String
+  startLat     Float
+  startLon     Float
+  destAddress  String?
+  destLat      Float?
+  destLon      Float?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  hangoutId String
+  hangout   Hangout @relation(fields: [hangoutId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([hangoutId, userId, direction])
+  @@map("hangout_transit")
 }
 
 model HangoutCost {
@@ -577,7 +642,9 @@ model HangoutCost {
   @@map("hangout_costs")
 }
 
-/** Who an item is split between; only participants who are Going get a share. */
+/**
+ * Who an item is split between; only participants who are Going get a share.
+ */
 model HangoutCostParticipant {
   costId String
   cost   HangoutCost @relation(fields: [costId], references: [id], onDelete: Cascade)

@@ -102,6 +102,20 @@ describe("hangout data loaders", () => {
         attendees: [
           { userId: "a", status: "GOING", user: { name: "Alice", email: "a@x.gg" } },
           { userId: "b", status: "MAYBE", user: { name: null, email: "b@x.gg" } },
+          { userId: "c", status: "GOING", user: { name: "Cara", email: "c@x.gg" } },
+          { userId: "d", status: "GOING", user: { name: "Dan", email: "d@x.gg" } },
+        ],
+        transit: [
+          {
+            direction: "DROPOFF",
+            startAddress: "Fun Place",
+            startLat: 1,
+            startLon: 2,
+            destAddress: "3 Oak St",
+            destLat: 3,
+            destLon: 4,
+            user: { id: "c", name: "Cara", email: "c@x.gg" },
+          },
         ],
         cars: [
           {
@@ -117,6 +131,24 @@ describe("hangout data loaders", () => {
               homeLat: 43.6,
               homeLon: -79.4,
             },
+            passengers: [
+              {
+                direction: "PICKUP",
+                pointKind: "COMMON",
+                viaUserId: null,
+                commonLabel: "Union Station",
+                commonLat: 43.5,
+                commonLon: -79.3,
+                user: {
+                  id: "b",
+                  name: null,
+                  email: "b@x.gg",
+                  homeAddress: null,
+                  homeLat: null,
+                  homeLon: null,
+                },
+              },
+            ],
             riders: [
               {
                 atCommonPoint: true,
@@ -157,6 +189,7 @@ describe("hangout data loaders", () => {
         stopRoute: null,
         idea: null,
         attendees: [],
+        transit: [],
         cars: [],
         costs: [],
       });
@@ -183,8 +216,37 @@ describe("hangout data loaders", () => {
       unpaid: 1,
       proposerName: "sam#1",
       attendees: [
-        { userId: "a", status: "GOING", name: "Alice" },
-        { userId: "b", status: "MAYBE", name: "b@x.gg" },
+        // the driver needs no ride
+        {
+          userId: "a",
+          status: "GOING",
+          name: "Alice",
+          needsRide: { pickup: false, dropoff: false },
+        },
+        // not Going, so never "needs a ride"
+        {
+          userId: "b",
+          status: "MAYBE",
+          name: "b@x.gg",
+          needsRide: { pickup: false, dropoff: false },
+        },
+        // transit for getting home only: still needs a pick-up
+        { userId: "c", status: "GOING", name: "Cara", needsRide: { pickup: true, dropoff: false } },
+        // nothing set at all
+        { userId: "d", status: "GOING", name: "Dan", needsRide: { pickup: true, dropoff: true } },
+      ],
+      transit: [
+        {
+          userId: "c",
+          name: "Cara",
+          direction: "DROPOFF",
+          startAddress: "Fun Place",
+          startLat: 1,
+          startLon: 2,
+          destAddress: "3 Oak St",
+          destLat: 3,
+          destLon: 4,
+        },
       ],
       cars: [
         {
@@ -209,6 +271,21 @@ describe("hangout data loaders", () => {
               atCommonPoint: true,
             },
           ],
+          pickups: [
+            {
+              userId: "b",
+              name: "b@x.gg",
+              homeAddress: null,
+              homeLat: null,
+              homeLon: null,
+              pointKind: "COMMON",
+              viaUserId: null,
+              commonLabel: "Union Station",
+              commonLat: 43.5,
+              commonLon: -79.3,
+            },
+          ],
+          dropoffs: [],
         },
       ],
       costs: [
@@ -238,6 +315,7 @@ describe("hangout data loaders", () => {
       unpaid: 0,
       proposerName: null,
       attendees: [],
+      transit: [],
       cars: [],
       costs: [],
     });

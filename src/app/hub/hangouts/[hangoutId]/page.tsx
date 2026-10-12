@@ -18,7 +18,7 @@ import { rankRuns } from "@/lib/availability";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { getAvailabilityResponses, getHangoutDetail, getMemberOptions } from "@/lib/hangouts";
 import { HANGOUT_STATUS_LABEL } from "@/lib/hub-format";
-import { buildCommuteMap } from "@/lib/commute-map";
+import { buildCommuteMap, toMapCar, toMapTransit } from "@/lib/commute-map";
 import { scheduleStops, timeText } from "@/lib/itinerary";
 import { getStopWeather } from "@/lib/weather";
 
@@ -44,6 +44,18 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
   const members = canEdit ? await getMemberOptions() : [];
   const startSlot = hangout.status === "SCHEDULED" ? hangout.startSlot : null;
   const { times } = scheduleStops(startSlot, hangout.stops);
+  // Homes of everyone on a car, so "another rider's home" points can be placed on the map.
+  const homes = new Map(
+    hangout.cars.flatMap((car) =>
+      [car.driver, ...car.pickups, ...car.dropoffs].map((person) => [
+        person.userId,
+        person.homeLat !== null && person.homeLon !== null
+          ? ([person.homeLat, person.homeLon] as [number, number])
+          : null,
+      ])
+    )
+  );
+  const homeOf = (userId: string) => homes.get(userId) ?? null;
   const weather =
     startSlot && hangout.stops.length > 0
       ? await getStopWeather(
@@ -240,8 +252,9 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
                   lon: stop.lon,
                   time: timeText(times[index], startSlot?.slice(0, 10) ?? null),
                 })),
-                hangout.cars,
-                hangout.stopRoute
+                hangout.cars.map((car) => toMapCar(car, homeOf)),
+                hangout.stopRoute,
+                toMapTransit(hangout.transit)
               )}
             />
           </CardContent>
@@ -258,6 +271,8 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
               <Carpools
                 hangoutId={hangout.id}
                 cars={hangout.cars}
+                attendees={hangout.attendees}
+                transit={hangout.transit}
                 weather={{ warnings, checked: weather.length > 0 }}
                 viewer={{
                   id: user.id,

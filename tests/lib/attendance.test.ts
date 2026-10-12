@@ -7,7 +7,8 @@ async function load() {
   const prisma = {
     hangout: { findUnique: vi.fn().mockResolvedValue({ status: "SCHEDULED" }) },
     hangoutAttendee: { upsert: vi.fn() },
-    hangoutRider: { deleteMany: vi.fn() },
+    hangoutPassenger: { deleteMany: vi.fn() },
+    hangoutTransit: { deleteMany: vi.fn() },
     hangoutCar: { deleteMany: vi.fn() },
     $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
   };
@@ -34,17 +35,21 @@ describe("applyAttendance", () => {
       create: { ...KEY, status: "GOING" },
       update: { status: "GOING" },
     });
-    expect(mod.prisma.hangoutRider.deleteMany).not.toHaveBeenCalled();
+    expect(mod.prisma.hangoutPassenger.deleteMany).not.toHaveBeenCalled();
+    expect(mod.prisma.hangoutTransit.deleteMany).not.toHaveBeenCalled();
     expect(mod.recomputeRoutes).not.toHaveBeenCalled();
     expect(mod.resplitCosts).toHaveBeenCalledWith(HANGOUT_ID);
   });
 
-  it("drops the ride and car and reroutes when leaving Going", async () => {
+  it("drops rides, transit and car and reroutes when leaving Going", async () => {
     const mod = await load();
 
     await mod.applyAttendance(HANGOUT_ID, "u1", "MAYBE");
 
-    expect(mod.prisma.hangoutRider.deleteMany).toHaveBeenCalledWith({ where: KEY });
+    expect(mod.prisma.hangoutPassenger.deleteMany).toHaveBeenCalledWith({
+      where: { hangoutId: HANGOUT_ID, OR: [{ userId: "u1" }, { viaUserId: "u1" }] },
+    });
+    expect(mod.prisma.hangoutTransit.deleteMany).toHaveBeenCalledWith({ where: KEY });
     expect(mod.prisma.hangoutCar.deleteMany).toHaveBeenCalledWith({
       where: { hangoutId: HANGOUT_ID, driverId: "u1" },
     });

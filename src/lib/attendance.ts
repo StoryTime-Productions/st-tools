@@ -2,14 +2,15 @@ import { AttendanceStatus, HangoutStatus } from "@prisma/client";
 import { resplitCosts } from "@/lib/cost-shares";
 import { hangoutEnded } from "@/lib/hangouts";
 import { prisma } from "@/lib/prisma";
+import { clearFromRides } from "@/lib/rides";
 import { recomputeRoutes } from "@/lib/routes";
 
 export const ENDED = "This hangout has already ended";
 export const NOT_SCHEDULED = "Hangout is not scheduled";
 
 /**
- * Sets one member's attendance (Scheduled and not ended only). Leaving Going drops their ride and
- * car, then routes and cost shares are recomputed. Returns an error message or null.
+ * Sets one member's attendance (Scheduled and not ended only). Leaving Going drops their rides, transit
+ * choice and car, then routes and cost shares are recomputed. Returns an error message or null.
  */
 export async function applyAttendance(
   hangoutId: string,
@@ -33,7 +34,8 @@ export async function applyAttendance(
     ...(status === AttendanceStatus.GOING
       ? []
       : [
-          prisma.hangoutRider.deleteMany({ where: key }),
+          clearFromRides(hangoutId, userId),
+          prisma.hangoutTransit.deleteMany({ where: key }),
           prisma.hangoutCar.deleteMany({ where: { hangoutId, driverId: userId } }),
         ]),
   ]);

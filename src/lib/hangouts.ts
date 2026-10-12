@@ -1,8 +1,10 @@
 import type {
   AttendanceStatus,
   HangoutStatus,
+  PassengerPointKind,
   PaymentMethod,
   PaymentStatus,
+  RideDirection,
   StopType,
 } from "@prisma/client";
 import type { AvailabilityResponse } from "@/lib/availability";
@@ -29,11 +31,32 @@ export interface HangoutDetail extends HangoutSummary {
   windowStartHour: number;
   windowEndHour: number;
   availabilityDeadline: Date | null;
-  attendees: { userId: string; name: string; status: AttendanceStatus }[];
+  attendees: HangoutAttendeeItem[];
+  transit: HangoutTransitItem[];
   stops: HangoutStopItem[];
   cars: HangoutCarItem[];
   costs: HangoutCostItem[];
   stopRoute: StopRoute | null;
+}
+
+export interface HangoutAttendeeItem {
+  userId: string;
+  name: string;
+  status: AttendanceStatus;
+  /** Going with no car list entry and no transit choice for that direction (R6); drivers excluded. */
+  needsRide: { pickup: boolean; dropoff: boolean };
+}
+
+export interface HangoutTransitItem {
+  userId: string;
+  name: string;
+  direction: RideDirection;
+  startAddress: string;
+  startLat: number;
+  startLon: number;
+  destAddress: string | null;
+  destLat: number | null;
+  destLon: number | null;
 }
 
 export interface HangoutCostItem {
@@ -62,6 +85,15 @@ interface Person {
   homeLon: number | null;
 }
 
+export interface CarPassenger extends Person {
+  pointKind: PassengerPointKind;
+  /** Whose home when pointKind is RIDER_HOME. */
+  viaUserId: string | null;
+  commonLabel: string | null;
+  commonLat: number | null;
+  commonLon: number | null;
+}
+
 export interface HangoutCarItem {
   id: string;
   seats: number;
@@ -74,6 +106,8 @@ export interface HangoutCarItem {
   schedule: CarSchedule | null;
   driver: Person;
   riders: (Person & { atCommonPoint: boolean })[];
+  pickups: CarPassenger[];
+  dropoffs: CarPassenger[];
 }
 
 const PERSON_SELECT = {
@@ -200,6 +234,19 @@ export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail
         select: { userId: true, status: true, user: { select: { name: true, email: true } } },
         orderBy: { user: { name: "asc" } },
       },
+      transit: {
+        select: {
+          direction: true,
+          startAddress: true,
+          startLat: true,
+          startLon: true,
+          destAddress: true,
+          destLat: true,
+          destLon: true,
+          user: { select: { id: true, name: true, email: true } },
+        },
+        orderBy: { user: { name: "asc" } },
+      },
       stops: { select: STOP_SELECT, orderBy: { position: "asc" } },
       cars: {
         select: {
@@ -215,6 +262,18 @@ export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail
           driver: { select: PERSON_SELECT },
           riders: {
             select: { atCommonPoint: true, user: { select: PERSON_SELECT } },
+            orderBy: { user: { name: "asc" } },
+          },
+          passengers: {
+            select: {
+              direction: true,
+              pointKind: true,
+              viaUserId: true,
+              commonLabel: true,
+              commonLat: true,
+              commonLon: true,
+              user: { select: PERSON_SELECT },
+            },
             orderBy: { user: { name: "asc" } },
           },
         },
@@ -247,7 +306,7 @@ export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail
     },
   });
   if (!hangout) return null;
-  const { idea, attendees, cars, costs, stopRoute, ...detail } = hangout;
+  const { idea, attendees, transit, cars, costs, stopRoute, ...detail } = hangout;
   const unpaid = unpaidCount(costs.flatMap((cost) => cost.shares));
   return {
     ...detail,
@@ -268,17 +327,49 @@ export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail
         name: user.name ?? user.email,
       })),
     })),
-    cars: cars.map(({ driver, riders, schedule, ...car }) => ({
-      ...car,
-      schedule: schedule as CarSchedule | null,
-      driver: person(driver),
-      riders: riders.map(({ atCommonPoint, user }) => ({ ...person(user), atCommonPoint })),
-    })),
-    attendees: attendees.map(({ userId, status, user }) => ({
-      userId,
-      status,
+    cars: cars.map(({ driver, riders, passengers, schedule, ...car }) => {
+      const listed = (direction: RideDirection): CarPassenger[] =>
+        passengers
+          .filter((passenger) => passenger.direction === direction)
+          .map((passenger) => ({
+            ...person(passenger.user),
+            pointKind: passenger.pointKind,
+            viaUserId: passenger.viaUserId,
+            commonLabel: passenger.commonLabel,
+            commonLat: passenger.commonLat,
+            commonLon: passenger.commonLon,
+          }));
+      return {
+        ...car,
+        schedule: schedule as CarSchedule | null,
+        driver: person(driver),
+        riders: riders.map(({ atCommonPoint, user }) => ({ ...person(user), atCommonPoint })),
+        pickups: listed("PICKUP"),
+        dropoffs: listed("DROPOFF"),
+      };
+    }),
+    transit: transit.map(({ user, ...row }) => ({
+      ...row,
+      userId: user.id,
       name: user.name ?? user.email,
     })),
+    attendees: attendees.map(({ userId, status, user }) => {
+      const covered = (direction: RideDirection) =>
+        cars.some(
+          (car) =>
+            car.driver.id === userId ||
+            car.passengers.some((p) => p.direction === direction && p.user.id === userId)
+        ) || transit.some((t) => t.direction === direction && t.user.id === userId);
+      return {
+        userId,
+        status,
+        name: user.name ?? user.email,
+        needsRide: {
+          pickup: status === "GOING" && !covered("PICKUP"),
+          dropoff: status === "GOING" && !covered("DROPOFF"),
+        },
+      };
+    }),
   };
 }
 
