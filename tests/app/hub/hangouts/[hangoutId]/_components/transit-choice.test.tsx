@@ -77,6 +77,64 @@ describe("TransitChoice", () => {
     expect(screen.queryByRole("form")).not.toBeInTheDocument();
   });
 
+  describe("route text (AC 2, AC 4)", () => {
+    const place = { name: "p", lat: 0, lon: 0 };
+    const plan = (legs: { mode: string; agency?: string; line?: string }[]) => ({
+      start: "2026-10-15T17:20:00-04:00",
+      end: "2026-10-15T17:51:00-04:00",
+      minutes: 31,
+      computedAt: "t",
+      legs: legs.map((leg) => ({ ...leg, from: place, to: place, path: [] as [number, number][] })),
+    });
+    // the card list is split per trip (getting there, then getting home), in that order
+    const itemText = () =>
+      screen
+        .getAllByRole("list", { name: /^Taking public transit/ })
+        .flatMap((list) => within(list).getAllByRole("listitem"))
+        .map((item) => item.textContent);
+
+    it("says when to leave and which lines to catch, never a metro departure time", () => {
+      renderChoice(
+        [
+          row({
+            route: plan([
+              { mode: "WALK" },
+              { mode: "SUBWAY", agency: "STM", line: "2" },
+              { mode: "BUS", agency: "STM", line: "80" },
+              { mode: "WALK" },
+            ]),
+          }),
+          row({ userId: "f", name: "Finn", direction: "DROPOFF", route: plan([{ mode: "WALK" }]) }),
+          row({ userId: "g", name: "Gus", route: plan([{ mode: "RAIL" }]) }),
+        ],
+        { ...me, going: false }
+      );
+
+      const [eve, gus, finn] = itemText();
+      expect(eve).toContain("Leave 5:20 PM · take STM 2, then STM 80 · 31 min");
+      expect(eve).not.toMatch(/5:51/);
+      expect(finn).toContain("Leave 5:20 PM · walk · 31 min");
+      expect(gus).toContain("take rail");
+      expect(screen.queryByRole("link", { name: "STM" })).not.toBeInTheDocument();
+    });
+
+    it("says the route could not be computed and links the trip planners", () => {
+      renderChoice(
+        [
+          row({ route: { error: "unreachable", computedAt: "t" } }),
+          row({ userId: "f", name: "Finn", route: null }),
+        ],
+        { ...me, going: false }
+      );
+
+      expect(itemText().every((text) => text?.includes("Route could not be computed"))).toBe(true);
+      const links = screen.getAllByRole("link", { name: "STM" });
+      expect(links).toHaveLength(2);
+      expect(links[0]).toHaveAttribute("href", "https://www.stm.info/en");
+      expect(screen.getAllByRole("link", { name: "exo" })[0]).toHaveAttribute("target", "_blank");
+    });
+  });
+
   it("renders nothing for someone who can't choose when nobody takes transit", () => {
     const { container } = renderChoice([], { ...me, going: false });
     expect(container).toBeEmptyDOMElement();

@@ -1,5 +1,6 @@
 import type { CarPassenger, HangoutCarItem, HangoutTransitItem } from "@/lib/hangouts";
 import type { CarSchedule, StopRoute } from "@/lib/routes";
+import { lineName } from "@/lib/transit-names";
 
 export type LatLon = [number, number];
 
@@ -123,8 +124,7 @@ export function toMapCar(car: HangoutCarItem, homeOf: (userId: string) => LatLon
 /** Leg label for the hover: "Eve · STM 2", or "Eve · walk" for a walking leg. */
 function legLabel(name: string, leg: { mode: string; agency?: string; line?: string }) {
   if (leg.mode === "WALK") return `${name} · walk`;
-  const what = [leg.agency, leg.line].filter(Boolean).join(" ");
-  return `${name} · ${what || leg.mode.toLowerCase()}`;
+  return `${name} · ${lineName(leg)}`;
 }
 
 /** Each rider keeps one colour for both of their trips. */
