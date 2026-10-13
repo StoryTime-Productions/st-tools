@@ -34,14 +34,27 @@ export interface MapCar {
   dropoffs: MapPassenger[];
 }
 
-/** Someone travelling by public transit; `trip` says which phase their start pin belongs to. */
+/** One leg of a planned transit trip; `label` is what the hover shows, `walk` legs are drawn dashed. */
+export interface MapTransitLeg {
+  label: string;
+  walk: boolean;
+  path: LatLon[];
+}
+
+/**
+ * Someone travelling by public transit; `trip` says which phase their start pin and lines belong to.
+ * `legs` is empty when no route is stored or it could not be planned (the trip planner links cover that).
+ */
 export interface MapTransit {
+  userId: string;
   name: string;
   trip: "there" | "back";
   position: LatLon;
+  color: string;
+  legs: MapTransitLeg[];
 }
 
-/** Until transit routing exists the map links out to the regional trip planners. */
+/** Links shown for a transit rider whose route isn't drawn. */
 export const TRIP_PLANNERS = [
   { label: "STM", url: "https://www.stm.info/en" },
   { label: "exo", url: "https://exo.quebec/en" },
@@ -72,6 +85,9 @@ export function arrowsAlong(path: LatLon[], count = 4) {
 
 export const CAR_COLORS = ["#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2"];
 
+/** Distinct from the car colours so a rider's line is never mistaken for a car's. */
+export const TRANSIT_COLORS = ["#be185d", "#a16207", "#4d7c0f", "#475569", "#7c2d12", "#1e3a8a"];
+
 const at = (lat: number | null, lon: number | null): LatLon | null =>
   lat === null || lon === null ? null : [lat, lon];
 
@@ -100,11 +116,30 @@ export function toMapCar(car: HangoutCarItem, homeOf: (userId: string) => LatLon
   };
 }
 
+/** Leg label for the hover: "Eve · STM 2", or "Eve · walk" for a walking leg. */
+function legLabel(name: string, leg: { mode: string; agency?: string; line?: string }) {
+  if (leg.mode === "WALK") return `${name} · walk`;
+  const what = [leg.agency, leg.line].filter(Boolean).join(" ");
+  return `${name} · ${what || leg.mode.toLowerCase()}`;
+}
+
+/** Each rider keeps one colour for both of their trips. */
 export function toMapTransit(rows: HangoutTransitItem[]): MapTransit[] {
+  const order = [...new Set(rows.map((row) => row.userId))];
   return rows.map((row) => ({
+    userId: row.userId,
     name: row.name,
     trip: row.direction === "PICKUP" ? "there" : "back",
     position: [row.startLat, row.startLon],
+    color: TRANSIT_COLORS[order.indexOf(row.userId) % TRANSIT_COLORS.length],
+    legs:
+      row.route && !("error" in row.route)
+        ? row.route.legs.map((leg) => ({
+            label: legLabel(row.name, leg),
+            walk: leg.mode === "WALK",
+            path: leg.path,
+          }))
+        : [],
   }));
 }
 
@@ -139,8 +174,8 @@ export function buildCommuteMap(
     notOnMap,
     between,
     transit,
-    /** Shown in a phase that has transit people, since no transit line is drawn yet (AC 8). */
-    planners: transit.length > 0 ? TRIP_PLANNERS : [],
+    /** Offered when a transit rider has no drawn route (AC 4, AC 8). */
+    planners: transit.some((rider) => rider.legs.length === 0) ? TRIP_PLANNERS : [],
     cars: cars.map((car, index) => {
       // One pin per distinct place and phase; people who share a place share a pin.
       const pins = (["there", "back"] as const).flatMap((trip) => {

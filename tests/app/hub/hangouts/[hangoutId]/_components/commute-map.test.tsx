@@ -278,8 +278,8 @@ describe("CommuteMap", () => {
     const data: MapData = {
       ...DATA,
       transit: [
-        { name: "Eve", trip: "there", position: [9, 9] },
-        { name: "Finn", trip: "back", position: [7, 7] },
+        { userId: "e", name: "Eve", trip: "there", position: [9, 9], color: "#be185d", legs: [] },
+        { userId: "f", name: "Finn", trip: "back", position: [7, 7], color: "#a16207", legs: [] },
       ],
       planners: [
         { label: "STM", url: "https://www.stm.info/en" },

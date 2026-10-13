@@ -24,6 +24,7 @@ const row = (overrides: Partial<HangoutTransitItem> = {}): HangoutTransitItem =>
   destAddress: null,
   destLat: null,
   destLon: null,
+  route: null,
   ...overrides,
 });
 
