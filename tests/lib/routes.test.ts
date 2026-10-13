@@ -16,16 +16,25 @@ const BACK_PATH: [number, number][] = [
   [6, 6],
   [2, 2],
 ];
+const PLAN = {
+  start: "2026-10-03T23:40:00.000Z",
+  end: "2026-10-04T00:00:00.000Z",
+  minutes: 20,
+  legs: [],
+};
 
 type RouteVia = typeof import("@/lib/tomtom").routeVia;
 type RouteLegs = typeof import("@/lib/tomtom").routeLegs;
+type PlanTransit = typeof import("@/lib/otp").planTransit;
 type StopWeather = import("@/lib/weather").StopWeather;
 
 async function loadModule() {
   const prisma = {
     hangout: { findUnique: vi.fn(), update: vi.fn() },
     hangoutCar: { update: vi.fn() },
+    hangoutTransit: { update: vi.fn() },
   };
+  const planTransit = vi.fn<PlanTransit>(async () => PLAN);
   const routeVia = vi.fn<RouteVia>(async (_origin, waypoints, _dest, time) =>
     "arriveAt" in time
       ? {
@@ -49,12 +58,13 @@ async function loadModule() {
   );
   vi.doMock("@/lib/prisma", () => ({ prisma }));
   vi.doMock("@/lib/tomtom", () => ({ routeVia, routeLegs }));
+  vi.doMock("@/lib/otp", () => ({ planTransit }));
   vi.doMock("@/lib/weather", async () => ({
     ...(await vi.importActual<typeof import("@/lib/weather")>("@/lib/weather")),
     getStopWeather,
   }));
   const lib = await import("@/lib/routes");
-  return { ...lib, prisma, routeVia, routeLegs, getStopWeather };
+  return { ...lib, prisma, routeVia, routeLegs, getStopWeather, planTransit };
 }
 
 type Kind = "HOME" | "RIDER_HOME" | "COMMON";
@@ -118,6 +128,7 @@ function hangout(overrides = {}) {
       { ...BAR, durationMinutes: 120, arriveBy: "1T23:00" },
     ],
     cars: [car()],
+    transit: [],
     ...overrides,
   };
 }
@@ -458,5 +469,119 @@ describe("recomputeRoutes", () => {
 
       expect(prisma.hangout.update).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("recomputeTransit", () => {
+  const row = (overrides = {}) => ({
+    id: "t1",
+    direction: "PICKUP",
+    startLat: START.lat,
+    startLon: START.lon,
+    destLat: null,
+    destLon: null,
+    ...overrides,
+  });
+  const stored = (prisma: { hangoutTransit: { update: ReturnType<typeof vi.fn> } }) =>
+    Object.fromEntries(
+      prisma.hangoutTransit.update.mock.calls.map(([call]) => [call.where.id, call.data.route])
+    );
+
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("arrives at the first located stop going there and leaves the last stop's end going home", async () => {
+    const { recomputeTransit, prisma, planTransit } = await loadModule();
+    prisma.hangout.findUnique.mockResolvedValue(
+      hangout({
+        transit: [
+          row(),
+          row({
+            id: "t2",
+            direction: "DROPOFF",
+            startLat: BAR.lat,
+            startLon: BAR.lon,
+            destLat: HOME.lat,
+            destLon: HOME.lon,
+          }),
+        ],
+      })
+    );
+
+    await recomputeTransit("h1");
+
+    expect(planTransit).toHaveBeenCalledWith({
+      from: START,
+      to: CAFE,
+      arriveAt: new Date("2026-10-04T00:00:00Z"),
+    });
+    expect(planTransit).toHaveBeenCalledWith({
+      from: BAR,
+      to: HOME,
+      departAt: new Date("2026-10-04T05:00:00Z"),
+    });
+    expect(stored(prisma)).toEqual({
+      t1: { ...PLAN, computedAt: expect.any(String) },
+      t2: { ...PLAN, computedAt: expect.any(String) },
+    });
+    expect(prisma.hangoutCar.update).not.toHaveBeenCalled();
+  });
+
+  it("stores why a rider has no route instead of a plan (AC4)", async () => {
+    const { recomputeTransit, prisma, planTransit } = await loadModule();
+    planTransit.mockResolvedValueOnce({ error: "off" });
+    prisma.hangout.findUnique.mockResolvedValue(
+      hangout({ transit: [row(), row({ id: "t2", direction: "DROPOFF" })] })
+    );
+
+    await recomputeTransit("h1");
+
+    expect(stored(prisma)).toEqual({
+      t1: { error: "off", computedAt: expect.any(String) },
+      t2: { error: "No destination on the map", computedAt: expect.any(String) },
+    });
+    expect(planTransit).toHaveBeenCalledTimes(1);
+  });
+
+  it("stores an error when no stop is on the map", async () => {
+    const { recomputeTransit, prisma, planTransit } = await loadModule();
+    const stops = [{ lat: null, lon: null, durationMinutes: 30, arriveBy: null }];
+    prisma.hangout.findUnique.mockResolvedValue(hangout({ stops, transit: [row()] }));
+
+    await recomputeTransit("h1");
+
+    expect(planTransit).not.toHaveBeenCalled();
+    expect(stored(prisma).t1).toEqual({
+      error: "No stop has an address on the map",
+      computedAt: expect.any(String),
+    });
+  });
+
+  it("does nothing for a hangout that isn't scheduled", async () => {
+    const { recomputeTransit, prisma, planTransit } = await loadModule();
+    prisma.hangout.findUnique.mockResolvedValue(hangout({ status: "PLANNING", transit: [row()] }));
+    await recomputeTransit("h1");
+    prisma.hangout.findUnique.mockResolvedValue(hangout({ startSlot: null, transit: [row()] }));
+    await recomputeTransit("h1");
+    prisma.hangout.findUnique.mockResolvedValue(null);
+    await recomputeTransit("h1");
+
+    expect(planTransit).not.toHaveBeenCalled();
+    expect(prisma.hangoutTransit.update).not.toHaveBeenCalled();
+  });
+
+  it("is also run by recomputeRoutes, with the same times", async () => {
+    const { recomputeRoutes, prisma, planTransit } = await loadModule();
+    prisma.hangout.findUnique.mockResolvedValue(hangout({ transit: [row()] }));
+
+    await recomputeRoutes("h1");
+
+    expect(planTransit).toHaveBeenCalledWith({
+      from: START,
+      to: CAFE,
+      arriveAt: new Date("2026-10-04T00:00:00Z"),
+    });
+    expect(prisma.hangoutTransit.update).toHaveBeenCalledTimes(1);
   });
 });
