@@ -477,6 +477,17 @@ describe("arrowsAlong", () => {
     expect(Math.round(south[0].bearing)).toBe(180);
   });
 
+  it("drops arrows from a short path so none overlap, and keeps all on a long one", () => {
+    const path = (length: number): [number, number][] => [
+      [0, 0],
+      [0, length],
+    ];
+    expect(arrowsAlong(path(0.025), 4, 0.01)).toHaveLength(2);
+    expect(arrowsAlong(path(0.005), 4, 0.01)).toEqual([]);
+    expect(arrowsAlong(path(1), 4, 0.01)).toHaveLength(4);
+    expect(arrowsAlong(path(0.005), 4)).toHaveLength(4);
+  });
+
   it("follows a bend and gives nothing for an empty path", () => {
     const [arrow] = arrowsAlong(
       [

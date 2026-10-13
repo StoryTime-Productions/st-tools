@@ -16,6 +16,9 @@ const PHASES: { id: Phase; label: string }[] = [
   { id: "home", label: "Getting home" },
 ];
 
+/** About 1 km: the least room an arrow needs on a transit leg. */
+const TRANSIT_ARROW_GAP = 0.01;
+
 const arrow = (position: [number, number], bearing: number, L: typeof import("leaflet")) =>
   L.marker(position, {
     interactive: false,
@@ -38,6 +41,10 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
   const transitNow = data.transit.filter(
     (rider) => (rider.trip === "back" ? "home" : "there") === active
   );
+  const transitLegible = [
+    ...new Map(data.transit.filter((r) => r.legs.length > 0).map((r) => [r.userId, r])).values(),
+  ];
+  const showTransitCredit = transitNow.some((rider) => rider.legs.some((leg) => !leg.walk));
 
   useEffect(() => {
     if (!hasKey || !container.current) return;
@@ -108,12 +115,28 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
           "flex size-[22px] items-center justify-center rounded-md border-2 border-white text-xs text-white shadow",
           "🚌",
           rider.position,
-          "#475569"
+          rider.color
         ).bindTooltip(text(`${rider.name} (public transit)`), {
           direction: "top",
           offset: [0, -6],
         });
         points.push(rider.position);
+        for (const leg of rider.legs) {
+          L.polyline(leg.path, {
+            color: rider.color,
+            weight: 5,
+            dashArray: leg.walk ? "1 10" : undefined,
+            lineCap: leg.walk ? "round" : undefined,
+          })
+            .bindTooltip(text(leg.label), { sticky: true })
+            .addTo(map);
+          if (!leg.walk) {
+            for (const { position, bearing } of arrowsAlong(leg.path, 4, TRANSIT_ARROW_GAP)) {
+              arrow(position, bearing, L).addTo(map);
+            }
+          }
+          points.push(...leg.path);
+        }
       }
       if (active === "between" && data.between) {
         const { legs, dashed, guide } = data.between;
@@ -171,7 +194,9 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
         role="group"
         aria-label="Map of the hangout's stops and carpool routes. The itinerary lists the same stops."
       />
-      <p className="text-muted-foreground text-xs">© TomTom</p>
+      <p className="text-muted-foreground text-xs">
+        © TomTom{showTransitCredit ? " · Transit data: STM, exo" : ""}
+      </p>
       {data.cars.length > 0 ? (
         <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
           {data.cars.map((car) => (
@@ -186,7 +211,22 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
           ))}
         </ul>
       ) : null}
+      {transitLegible.length > 0 ? (
+        <ul aria-label="Public transit riders" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+          {transitLegible.map((rider) => (
+            <li key={rider.userId} className="flex items-center gap-2">
+              <span
+                aria-hidden
+                className="inline-block h-0 w-6 border-t-4"
+                style={{ borderColor: rider.color }}
+              />
+              {rider.name} (public transit)
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {data.cars.some((car) => !car.dashed && car.lines.length > 0) ||
+      transitNow.some((rider) => rider.legs.some((leg) => !leg.walk)) ||
       (data.between && !data.between.dashed) ? (
         <p className="text-muted-foreground text-xs">Arrows show the direction of travel.</p>
       ) : null}
@@ -202,8 +242,8 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
       {transitNow.length > 0 ? (
         <p className="text-sm">
           <span className="text-muted-foreground">
-            By public transit: {transitNow.map((rider) => rider.name).join(", ")}. Plan the
-            trip:{" "}
+            By public transit: {transitNow.map((rider) => rider.name).join(", ")}.
+            {data.planners.length > 0 ? " Plan the trip: " : ""}
           </span>
           {data.planners.map((planner, index) => (
             <span key={planner.url}>

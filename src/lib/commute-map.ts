@@ -62,15 +62,19 @@ export const TRIP_PLANNERS = [
 
 export type Trip = "there" | "back";
 
-/** Direction arrows spaced evenly by distance along a path; `bearing` is degrees clockwise from north. */
-export function arrowsAlong(path: LatLon[], count = 4) {
+/**
+ * Direction arrows spaced evenly by distance along a path; `bearing` is degrees clockwise from north.
+ * `minGap` (in degrees, about 111 km each) drops arrows from a short path so they never overlap.
+ */
+export function arrowsAlong(path: LatLon[], count = 4, minGap = 0) {
   const km = (a: LatLon, b: LatLon) =>
     Math.hypot((b[1] - a[1]) * Math.cos(((a[0] + b[0]) / 2) * (Math.PI / 180)), b[0] - a[0]);
   const lengths = path.slice(1).map((point, i) => km(path[i], point));
   const total = lengths.reduce((sum, length) => sum + length, 0);
   if (total === 0) return [];
-  return Array.from({ length: count }, (_, n) => {
-    let left = (total * (n + 1)) / (count + 1);
+  const shown = minGap > 0 ? Math.min(count, Math.floor(total / minGap)) : count;
+  return Array.from({ length: shown }, (_, n) => {
+    let left = (total * (n + 1)) / (shown + 1);
     let i = 0;
     while (i < lengths.length - 1 && left > lengths[i]) left -= lengths[i++];
     const [from, to] = [path[i], path[i + 1]];
