@@ -39,7 +39,7 @@ export async function PlaylistWidget({ discordId }: { discordId: string | null }
       : `Playlist · Week ${data.weekNumber}${data.timeLeft ? ` · ${data.timeLeft}` : ""}`;
 
   return (
-    <Card className="border-border/70 bg-background/80 rounded-3xl shadow-none">
+    <Card className="border-border/70 bg-background/80 gap-4 rounded-3xl shadow-none">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Music className="size-4" aria-hidden />
