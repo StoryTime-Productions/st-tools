@@ -104,26 +104,29 @@ GitHub Actions workflows (`.github/workflows/`):
 
 - `validate.yml`, `quality.yml`, `test.yml`: run on pull requests (linting, formatting, type checks, tests)
 - `deploy.yml`: deploys to production on push to `master`/`main`
-- `preview-deploy.yml`: deploys preview environments for pull requests
+- `develop-deploy.yml`: deploys the `develop` environment on push to `develop`
 
-Two separate Supabase projects are used to isolate production from preview:
+Flow: feature branches open PRs into `develop` (squash-merge). Each merge deploys the develop environment. When develop is ready for a minor version, bump `version` in `package.json` on develop, then open a `develop` → `master` PR and merge it with a **merge commit** (not squash, so the branches don't diverge). That push deploys production, and `deploy.yml` tags `v<version>` and creates a GitHub release.
 
-| Environment    | Trigger                     | Database                    |
-| -------------- | --------------------------- | --------------------------- |
-| **Production** | Push to `master`/`main`     | Production Supabase project |
-| **Preview**    | Pull request opened/updated | Preview Supabase project    |
+Two separate Supabase projects are used to isolate production from develop:
+
+| Environment    | Trigger                 | Database                    |
+| -------------- | ----------------------- | --------------------------- |
+| **Production** | Push to `master`/`main` | Production Supabase project |
+| **Develop**    | Push to `develop`       | Develop Supabase project    |
 
 Migrations run automatically via GitHub Actions before each deploy.
 
 ### Required external setup
 
-1. Create two Supabase projects: one for production, one for preview.
+1. Create two Supabase projects: one for production, one for develop.
 2. Add production credentials as Vercel **Production** environment variables and as GitHub Actions secrets (`DATABASE_URL`, `DIRECT_URL`).
-3. Add preview credentials as Vercel **Preview** environment variables using the same names as production (`DATABASE_URL`, `DIRECT_URL`).
+3. Add develop credentials as Vercel **Preview** environment variables using the same names as production (`DATABASE_URL`, `DIRECT_URL`).
    Add the same preview values as GitHub Actions secrets (`PREVIEW_DATABASE_URL`, `PREVIEW_DIRECT_URL`) for the migration workflow.
 4. Add `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` as GitHub Actions secrets.
-5. Add allowed redirect URLs for each Supabase project (production URL and Vercel preview URL pattern).
-6. Enable Google under Supabase Auth > Providers for both production and preview projects.
+5. Add allowed redirect URLs for each Supabase project (production URL and the develop URL).
+6. Enable Google under Supabase Auth > Providers for both production and develop projects.
+7. Optional: set the `DEVELOP_ALIAS` GitHub Actions variable (e.g. `st-tools-develop.vercel.app`) for a stable develop URL.
 
 ## Contributing
 

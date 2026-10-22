@@ -18,8 +18,8 @@ jobs:
         run: |
           BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
           echo "Branch: $BRANCH"
-          # Allow main and release branches through without pattern enforcement
-          if [[ "$BRANCH" == "main" || "$BRANCH" =~ ^release/ ]]; then
+          # Allow main, develop and release branches through without pattern enforcement
+          if [[ "$BRANCH" == "main" || "$BRANCH" == "develop" || "$BRANCH" =~ ^release/ ]]; then
             echo "Protected branch — skipping pattern check."
             exit 0
           fi
