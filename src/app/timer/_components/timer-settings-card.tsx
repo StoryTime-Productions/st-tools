@@ -19,6 +19,7 @@ export interface TimerPrefs {
   autoStartBreaks: boolean;
   autoStartFocus: boolean;
   soundEnabled: boolean;
+  notificationsEnabled: boolean;
 }
 
 interface TimerSettingsCardProps {
@@ -38,7 +39,7 @@ const DURATION_FIELDS: { field: DurationField; label: string; id: string }[] = [
 ];
 
 const BEHAVIOR_TOGGLES: {
-  key: "autoStartBreaks" | "autoStartFocus" | "soundEnabled";
+  key: "autoStartBreaks" | "autoStartFocus" | "soundEnabled" | "notificationsEnabled";
   label: string;
   hint: string;
 }[] = [
@@ -53,6 +54,11 @@ const BEHAVIOR_TOGGLES: {
     hint: "Jump back into focus after a break",
   },
   { key: "soundEnabled", label: "Sound cues", hint: "Play a chime when the phase changes" },
+  {
+    key: "notificationsEnabled",
+    label: "Browser notifications",
+    hint: "Show a notification when the phase changes, even without sound",
+  },
 ];
 
 const COLOR_FIELDS: { id: string; label: string; key: "focusColor" | "breakColor" }[] = [

@@ -11,6 +11,7 @@ export const DEFAULT_TIMER_PREFS: TimerPrefs = {
   autoStartBreaks: false,
   autoStartFocus: false,
   soundEnabled: true,
+  notificationsEnabled: false,
 };
 
 const listeners = new Set<() => void>();
@@ -27,6 +28,7 @@ function parse(raw: string | null): TimerPrefs {
       autoStartBreaks: stored.autoStartBreaks === true,
       autoStartFocus: stored.autoStartFocus === true,
       soundEnabled: stored.soundEnabled !== false,
+      notificationsEnabled: stored.notificationsEnabled === true,
     };
   } catch {
     return DEFAULT_TIMER_PREFS;

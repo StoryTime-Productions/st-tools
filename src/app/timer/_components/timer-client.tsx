@@ -29,7 +29,8 @@ import {
   toRgba,
 } from "./timer-utils";
 import { playCompletionTone, playUiCue } from "./timer-audio";
-import { useTimerPrefs, writeTimerPrefs } from "./timer-prefs";
+import { notifyPhaseComplete, requestNotificationPermission } from "./timer-notify";
+import { readTimerPrefs, useTimerPrefs, writeTimerPrefs } from "./timer-prefs";
 import { FocusTimerCard } from "./focus-timer-card";
 import { SessionCollaborationCard } from "./session-collaboration-card";
 import { SessionStatsCard } from "./session-stats-card";
@@ -403,6 +404,12 @@ export function TimerClient({
     });
 
     void playCompletionTone();
+    notifyPhaseComplete(
+      `${phaseLabel(lastCompletedPhase)} complete`,
+      lastCompletedPhase === "work"
+        ? "Great work. Time for a break."
+        : "Break finished. Time to focus again."
+    );
 
     if (lastCompletedPhase === "work" && lastCompletedDurationMin) {
       startPersistingSession(async () => {
@@ -472,6 +479,12 @@ export function TimerClient({
       });
 
       void playCompletionTone();
+      notifyPhaseComplete(
+        `${phaseLabel(completedPhase)} complete`,
+        completedPhase === "work"
+          ? "Great work. Time for a break."
+          : "Break finished. Time to focus again."
+      );
 
       if (completedPhase === "work") {
         const durationMin = sharedTimer.lastCompletedDurationMin ?? sharedTimer.workMinutes;
@@ -547,6 +560,17 @@ export function TimerClient({
   }
 
   function onTimerPrefsChange(patch: Partial<TimerPrefs>) {
+    if (patch.notificationsEnabled) {
+      void requestNotificationPermission().then((granted) => {
+        if (!granted) {
+          toast.error("Notifications are blocked", {
+            description: "Allow notifications for this site in your browser settings.",
+          });
+        }
+        writeTimerPrefs({ ...readTimerPrefs(), ...patch, notificationsEnabled: granted });
+      });
+      return;
+    }
     writeTimerPrefs({ ...timerPrefs, ...patch });
   }
 

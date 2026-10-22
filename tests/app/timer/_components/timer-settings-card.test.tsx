@@ -14,6 +14,7 @@ const prefs: TimerPrefs = {
   autoStartBreaks: false,
   autoStartFocus: false,
   soundEnabled: true,
+  notificationsEnabled: false,
 };
 
 function renderCard(overrides?: { draft?: Durations; isSaving?: boolean }) {
