@@ -11,7 +11,7 @@ vi.mock("sonner", () => ({ toast: toastMocks }));
 const setup = { dates: ["2026-10-03", "2026-10-04"], startHour: 10, endHour: 11 };
 const responses = [
   { userId: "me", name: "Me", slots: ["2026-10-03T10:00"] },
-  { userId: "u2", name: "Bo", slots: ["2026-10-03T10:00", "2026-10-04T10:15"] },
+  { userId: "u2", name: "Bo", slots: ["2026-10-03T10:00", "2026-10-04T10:30"] },
 ];
 
 function renderGrid(editable = true) {
@@ -36,25 +36,19 @@ describe("AvailabilityGrid", () => {
 
   it("paints a rectangle of slots by dragging and autosaves on release", async () => {
     renderGrid();
-    const from = mine("Sat, Oct 3, 10:15 AM");
+    const from = mine("Sat, Oct 3, 10:30 AM");
     const to = mine("Sun, Oct 4, 10:30 AM");
     document.elementFromPoint = vi.fn(() => to);
 
     fireEvent.pointerDown(from, { pointerId: 1 });
     fireEvent.pointerMove(from.parentElement!, { clientX: 1, clientY: 1 });
-    expect(mine("Sun, Oct 4, 10:15 AM")).toHaveAttribute("aria-pressed", "true");
+    expect(mine("Sun, Oct 4, 10:30 AM")).toHaveAttribute("aria-pressed", "true");
     fireEvent.pointerUp(window);
 
     await waitFor(() =>
       expect(actionMocks.saveAvailabilityAction).toHaveBeenCalledWith({
         hangoutId: "h1",
-        slots: [
-          "2026-10-03T10:00",
-          "2026-10-03T10:15",
-          "2026-10-03T10:30",
-          "2026-10-04T10:15",
-          "2026-10-04T10:30",
-        ],
+        slots: ["2026-10-03T10:00", "2026-10-03T10:30", "2026-10-04T10:30"],
       })
     );
 
@@ -89,12 +83,12 @@ describe("AvailabilityGrid", () => {
     const panel = screen.getByRole("complementary");
     expect(within(panel).getByText("Bo, Me")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Sun, Oct 4, 10:15 AM: 1 of 2 free" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sun, Oct 4, 10:30 AM: 1 of 2 free" }));
     expect(within(panel).getByText("1 of 2 free")).toBeInTheDocument();
     expect(within(panel).getByText("Bo")).toBeInTheDocument();
     expect(within(panel).getByText("Me")).toBeInTheDocument();
 
-    fireEvent.focus(screen.getByRole("button", { name: "Sat, Oct 3, 10:45 AM: 0 of 2 free" }));
+    fireEvent.focus(screen.getByRole("button", { name: "Sat, Oct 3, 10:30 AM: 0 of 2 free" }));
     expect(within(panel).getByText("No one")).toBeInTheDocument();
   });
 
