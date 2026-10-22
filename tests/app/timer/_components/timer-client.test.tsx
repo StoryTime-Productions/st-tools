@@ -203,6 +203,45 @@ describe("TimerClient", () => {
     expect(toastMocks.success).toHaveBeenCalledWith("Timer settings updated");
   });
 
+  it("turns browser notifications on only when permission is granted", async () => {
+    window.localStorage.clear();
+    const requestPermission = vi.fn().mockResolvedValue("granted");
+    vi.stubGlobal(
+      "Notification",
+      Object.assign(vi.fn(), { permission: "default", requestPermission })
+    );
+
+    render(<TimerClient {...makeProps()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Timer settings/ }));
+    fireEvent.click(screen.getByLabelText("Browser notifications"));
+
+    await waitFor(() => expect(screen.getByLabelText("Browser notifications")).toBeChecked());
+    expect(requestPermission).toHaveBeenCalled();
+    expect(toastMocks.error).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByLabelText("Browser notifications"));
+    await waitFor(() => expect(screen.getByLabelText("Browser notifications")).not.toBeChecked());
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps browser notifications off and explains when permission is blocked", async () => {
+    window.localStorage.clear();
+    vi.stubGlobal(
+      "Notification",
+      Object.assign(vi.fn(), { permission: "denied", requestPermission: vi.fn() })
+    );
+
+    render(<TimerClient {...makeProps()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Timer settings/ }));
+    fireEvent.click(screen.getByLabelText("Browser notifications"));
+
+    await waitFor(() =>
+      expect(toastMocks.error).toHaveBeenCalledWith("Notifications are blocked", expect.anything())
+    );
+    expect(screen.getByLabelText("Browser notifications")).not.toBeChecked();
+    vi.unstubAllGlobals();
+  });
+
   it("shows an error toast when timer settings save fails", async () => {
     actionMocks.updatePomodoroPreferencesAction.mockResolvedValueOnce({
       error: "Unable to save timer settings",
