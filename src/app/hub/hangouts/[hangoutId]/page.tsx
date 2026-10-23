@@ -13,7 +13,7 @@ import { Itinerary } from "@/app/hub/hangouts/[hangoutId]/_components/itinerary"
 import { LockedIn, RankedSlots } from "@/app/hub/hangouts/[hangoutId]/_components/lock-in";
 import { LiveRefresh } from "@/app/hub/hangouts/[hangoutId]/_components/live-refresh";
 import { CancelHangoutButton, HangoutDialog } from "@/app/hub/_components/hangout-dialog";
-import { dayLabel, hourLabel, todayKey, torontoInputValue } from "@/lib/calendar";
+import { hourLabel, todayKey, torontoInputValue } from "@/lib/calendar";
 import { rankRuns } from "@/lib/availability";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { getAvailabilityResponses, getHangoutDetail, getMemberOptions } from "@/lib/hangouts";
@@ -141,12 +141,12 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
       {collecting || hasDates ? (
         <Card
           id="availability"
-          className="border-border/70 bg-background/85 rounded-3xl shadow-none"
+          className="border-border/70 bg-background/85 gap-4 rounded-3xl shadow-none"
         >
           <CardHeader>
             <CardTitle className="text-base">Availability</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-5">
+          <CardContent className="space-y-4">
             {hangout.status === "SCHEDULED" && hangout.startSlot ? (
               <fieldset disabled={ended} className="min-w-0">
                 <LockedIn
@@ -176,27 +176,29 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
                 The admins haven&apos;t picked dates yet.
               </p>
             ) : (
-              <div className="space-y-1 text-sm">
-                <p>
-                  {hangout.availabilityDates
-                    .map((day) =>
-                      dayLabel(day, { weekday: "short", month: "short", day: "numeric" })
-                    )
-                    .join(", ")}
-                </p>
-                <p className="text-muted-foreground">
-                  {hourLabel(hangout.windowStartHour)} – {hourLabel(hangout.windowEndHour)} EST
-                  {hangout.availabilityDeadline
-                    ? ` · Fill in by ${hangout.availabilityDeadline.toLocaleString("en-US", {
+              <p className="text-muted-foreground flex flex-col text-sm sm:flex-row sm:gap-x-2">
+                <span className="whitespace-nowrap">
+                  Window: {hourLabel(hangout.windowStartHour)} – {hourLabel(hangout.windowEndHour)}{" "}
+                  EST
+                </span>
+                {hangout.availabilityDeadline ? (
+                  <>
+                    <span aria-hidden="true" className="hidden sm:inline">
+                      ·
+                    </span>
+                    <span className="whitespace-nowrap">
+                      Fill in by{" "}
+                      {hangout.availabilityDeadline.toLocaleString("en-US", {
                         timeZone: "America/Toronto",
                         month: "short",
                         day: "numeric",
                         hour: "numeric",
                         minute: "2-digit",
-                      })}`
-                    : ""}
-                </p>
-              </div>
+                      })}
+                    </span>
+                  </>
+                ) : null}
+              </p>
             )}
             {hasDates ? (
               <AvailabilityGrid

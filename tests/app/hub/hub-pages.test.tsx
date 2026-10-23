@@ -571,8 +571,9 @@ describe("hub pages", () => {
 
     hangouts.getHangoutDetail.mockResolvedValueOnce(setUp);
     const summary = render(await HangoutPage(params()));
-    expect(screen.getByText("Fri, Oct 2, Sat, Oct 3")).toBeInTheDocument();
-    expect(screen.getByText("6 PM – 10 PM EST · Fill in by Oct 1, 6:00 PM")).toBeInTheDocument();
+    expect(screen.queryByText("Fri, Oct 2, Sat, Oct 3")).toBeNull();
+    expect(screen.getByText("Window: 6 PM – 10 PM EST")).toBeInTheDocument();
+    expect(screen.getByText("Fill in by Oct 1, 6:00 PM")).toBeInTheDocument();
     expect(screen.getByTestId("availability-grid")).toHaveTextContent("m@storytime.gg 1 editable");
     expect(screen.getByTestId("ranked-slots")).toHaveTextContent("1 view-only");
     expect(hangouts.getAvailabilityResponses).toHaveBeenCalledWith("h1");
@@ -580,7 +581,7 @@ describe("hub pages", () => {
 
     hangouts.getHangoutDetail.mockResolvedValueOnce({ ...setUp, availabilityDeadline: null });
     const noDeadline = render(await HangoutPage(params()));
-    expect(screen.getByText("6 PM – 10 PM EST")).toBeInTheDocument();
+    expect(screen.getByText("Window: 6 PM – 10 PM EST")).toBeInTheDocument();
     noDeadline.unmount();
 
     getCurrentUser.mockResolvedValue(admin);
