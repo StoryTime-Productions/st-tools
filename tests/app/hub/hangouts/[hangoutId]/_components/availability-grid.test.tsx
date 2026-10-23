@@ -155,6 +155,27 @@ describe("AvailabilityGrid", () => {
     expect(screen.queryByRole("complementary")).toBeNull();
   });
 
+  it("adds the year to day headers only when the dates cross a year boundary", () => {
+    const view = (dates: string[]) =>
+      render(
+        <AvailabilityGrid
+          hangoutId="h1"
+          setup={{ dates, startHour: 10, endHour: 11 }}
+          user={{ id: "me", name: "Me" }}
+          responses={[]}
+          editable
+        />
+      );
+    const same = view(["2026-10-03", "2026-10-04"]);
+    expect(screen.getByText("Oct 3")).toBeInTheDocument();
+    expect(screen.queryByText(/2026/)).toBeNull();
+    same.unmount();
+
+    view(["2026-12-31", "2027-01-01"]);
+    expect(screen.getByText("Dec 31, 2026")).toBeInTheDocument();
+    expect(screen.getByText("Jan 1, 2027")).toBeInTheDocument();
+  });
+
   describe("group range", () => {
     const rangeResponses = [
       { userId: "me", name: "Me", slots: ["2026-10-03T10:00", "2026-10-03T10:30"] },

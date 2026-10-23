@@ -62,8 +62,12 @@ function weekGroups(dates: string[]) {
   return groups;
 }
 
-function weekLabel(first: string, last: string) {
-  const format = { month: "short", day: "numeric" } as const;
+function weekLabel(first: string, last: string, year = false) {
+  const format = {
+    month: "short",
+    day: "numeric",
+    ...(year && { year: "numeric" as const }),
+  } as const;
   return first === last
     ? dayLabel(first, format)
     : `${dayLabel(first, format)} – ${dayLabel(last, format)}`;
@@ -87,6 +91,7 @@ export function AvailabilityGrid({
   editable: boolean;
 }) {
   const times = slotTimes(startHour, endHour);
+  const multiYear = dates[0]?.slice(0, 4) !== dates[dates.length - 1]?.slice(0, 4);
   const key = ([day, row]: Cell) => `${dates[day]}T${times[row]}`;
 
   const [mine, setMine] = useState(
@@ -271,7 +276,11 @@ export function AvailabilityGrid({
               <span className="text-muted-foreground block">
                 {dayLabel(dates[index], { weekday: "short" })}
               </span>
-              {dayLabel(dates[index], { month: "short", day: "numeric" })}
+              {dayLabel(dates[index], {
+                month: "short",
+                day: "numeric",
+                ...(multiYear && { year: "numeric" as const }),
+              })}
             </span>
           ))}
           {times.flatMap((time, row) => [
@@ -374,7 +383,7 @@ export function AvailabilityGrid({
               <ChevronLeft className="size-4" aria-hidden="true" />
             </Button>
             <p className="min-w-24 text-center text-sm font-medium sm:min-w-40" aria-live="polite">
-              {weekLabel(dates[visible[0]], dates[visible[visible.length - 1]])}
+              {weekLabel(dates[visible[0]], dates[visible[visible.length - 1]], multiYear)}
             </p>
             <Button
               type="button"
