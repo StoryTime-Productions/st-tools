@@ -11,10 +11,11 @@ function makeStats(counts: number[], overrides?: Partial<Stats>): Stats {
     todayCount: counts[6],
     weekCount: counts.reduce((sum, count) => sum + count, 0),
     totalCount: 20,
-    last7Days: counts.map((count, index) => ({
+    weekDays: counts.map((count, index) => ({
       dateKey: `2026-03-${15 + index}`,
       label: labels[index],
       count,
+      isToday: index === counts.length - 1,
     })),
     ...overrides,
   };
@@ -39,11 +40,13 @@ describe("SessionStatsCard", () => {
     expect(screen.getByTitle("Mon: 1 session")).toBeInTheDocument();
   });
 
-  it("labels only today's bar with its count", () => {
+  it("labels every day's bar with its count and leaves empty days blank", () => {
     render(<SessionStatsCard stats={makeStats([0, 1, 2, 1, 1, 0, 3])} />);
 
     expect(screen.getByTitle("Sat: 3 sessions")).toHaveTextContent("3");
-    expect(screen.getByTitle("Tue: 2 sessions")).not.toHaveTextContent("2");
+    expect(screen.getByTitle("Tue: 2 sessions")).toHaveTextContent("2");
+    expect(screen.getAllByTitle(/: 0 sessions/)[0]).not.toHaveTextContent(/\d/);
+    expect(screen.getByRole("img")).toHaveAccessibleName(/Tue 2/);
   });
 
   it("shows an empty state instead of a chart when there are no sessions", () => {

@@ -115,9 +115,9 @@ describe("incrementStats", () => {
     todayCount: 2,
     weekCount: 6,
     totalCount: 11,
-    last7Days: [
-      { dateKey: "2026-03-20", label: "Fri", count: 0 },
-      { dateKey: "2026-03-21", label: "Sat", count: 2 },
+    weekDays: [
+      { dateKey: "2026-03-20", label: "Fri", count: 0, isToday: false },
+      { dateKey: "2026-03-21", label: "Sat", count: 2, isToday: true },
     ],
   };
 
@@ -126,9 +126,9 @@ describe("incrementStats", () => {
       todayCount: 3,
       weekCount: 7,
       totalCount: 12,
-      last7Days: [
-        { dateKey: "2026-03-20", label: "Fri", count: 0 },
-        { dateKey: "2026-03-21", label: "Sat", count: 3 },
+      weekDays: [
+        { dateKey: "2026-03-20", label: "Fri", count: 0, isToday: false },
+        { dateKey: "2026-03-21", label: "Sat", count: 3, isToday: true },
       ],
     });
   });
@@ -137,11 +137,11 @@ describe("incrementStats", () => {
     incrementStats(stats);
 
     expect(stats.todayCount).toBe(2);
-    expect(stats.last7Days[1].count).toBe(2);
+    expect(stats.weekDays[1].count).toBe(2);
   });
 
   it("handles an empty 7-day series", () => {
-    expect(incrementStats({ ...stats, last7Days: [] }).last7Days).toEqual([]);
+    expect(incrementStats({ ...stats, weekDays: [] }).weekDays).toEqual([]);
   });
 });
 
