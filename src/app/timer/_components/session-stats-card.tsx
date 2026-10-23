@@ -16,15 +16,20 @@ export function SessionStatsCard({ stats }: SessionStatsCardProps) {
   const todayIndex = stats.last7Days.length - 1;
 
   return (
-    <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
-      <CardHeader>
+    <Card className="border-border/70 bg-background/85 gap-4 rounded-3xl shadow-none">
+      <CardHeader className="gap-0">
         <CardTitle className="text-base">Session stats</CardTitle>
       </CardHeader>
       <CardContent className="space-y-5">
         <dl className="grid grid-cols-3 gap-2">
           {tiles.map((tile) => (
             <div key={tile.label} className="rounded-2xl border p-3">
-              <dt className="text-muted-foreground text-xs">{tile.label}</dt>
+              <dt
+                className="text-muted-foreground text-xs"
+                title={tile.label === "This week" ? "Monday to Sunday" : undefined}
+              >
+                {tile.label}
+              </dt>
               <dd className="text-2xl font-semibold">{tile.value}</dd>
             </div>
           ))}
@@ -37,9 +42,10 @@ export function SessionStatsCard({ stats }: SessionStatsCardProps) {
         ) : (
           <div
             role="img"
-            aria-label={`Sessions per day for the last 7 days, ${stats.weekCount} this week`}
+            aria-label={`Sessions per day for the last 7 days: ${stats.last7Days
+              .map((day) => `${day.label} ${day.count}`)
+              .join(", ")}`}
           >
-            <p className="text-muted-foreground mb-2 text-xs">Last 7 days</p>
             <div className="flex h-28 gap-2">
               {stats.last7Days.map((day, index) => {
                 const isToday = index === todayIndex;
@@ -50,14 +56,19 @@ export function SessionStatsCard({ stats }: SessionStatsCardProps) {
                     title={`${day.label}: ${day.count} session${day.count === 1 ? "" : "s"}`}
                     className="flex h-full flex-1 flex-col items-center gap-1"
                   >
-                    <span className="h-4 text-xs font-medium tabular-nums">
-                      {isToday && day.count > 0 ? day.count : ""}
+                    <span
+                      className={cn(
+                        "h-4 text-xs tabular-nums",
+                        isToday ? "font-bold" : "font-medium"
+                      )}
+                    >
+                      {day.count > 0 ? day.count : ""}
                     </span>
-                    <div className="flex min-h-0 w-full flex-1 items-end justify-center">
+                    <div className="border-border flex min-h-0 w-full flex-1 items-end justify-center border-b">
                       <div
                         className={cn(
                           "w-full max-w-7 rounded-t-sm",
-                          isToday ? "bg-primary" : "bg-muted-foreground"
+                          isToday ? "bg-primary" : "bg-foreground/50"
                         )}
                         style={{
                           height: day.count === 0 ? "1px" : `${(day.count / maxCount) * 100}%`,
@@ -84,23 +95,25 @@ export function SessionStatsCard({ stats }: SessionStatsCardProps) {
           </div>
         )}
 
-        <table className="sr-only">
-          <caption>Sessions per day</caption>
-          <thead>
-            <tr>
-              <th scope="col">Day</th>
-              <th scope="col">Sessions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {stats.last7Days.map((day) => (
-              <tr key={day.dateKey}>
-                <th scope="row">{day.label}</th>
-                <td>{day.count}</td>
+        <div className="sr-only">
+          <table>
+            <caption>Sessions per day</caption>
+            <thead>
+              <tr>
+                <th scope="col">Day</th>
+                <th scope="col">Sessions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {stats.last7Days.map((day) => (
+                <tr key={day.dateKey}>
+                  <th scope="row">{day.label}</th>
+                  <td>{day.count}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </CardContent>
     </Card>
   );
