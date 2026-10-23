@@ -522,7 +522,7 @@ export function AvailabilityGrid({
       {view === "group" ? (
         <aside
           aria-label="Who is free"
-          className="bg-background sticky bottom-0 z-20 max-h-[30vh] overflow-y-auto border-t py-3 text-sm lg:top-4 lg:bottom-auto lg:z-auto lg:max-h-none lg:self-start lg:overflow-visible lg:border-t-0 lg:bg-transparent lg:p-0"
+          className="bg-background border-t-foreground/30 sticky bottom-0 z-20 max-h-[30vh] overflow-y-auto border-t py-3 text-sm shadow-[0_-6px_12px_-6px_rgb(0_0_0/0.25)] lg:top-4 lg:bottom-auto lg:z-auto lg:max-h-none lg:self-start lg:overflow-visible lg:border-t-0 lg:bg-transparent lg:p-0 lg:shadow-none"
         >
           {box ? (
             <>
