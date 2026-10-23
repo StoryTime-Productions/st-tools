@@ -8,7 +8,7 @@ import {
   type PointerEvent,
   type ReactNode,
 } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { saveAvailabilityAction } from "@/app/actions/hangouts";
@@ -349,7 +349,7 @@ export function AvailabilityGrid({
     <div
       className={cn(
         "grid gap-4 lg:gap-6",
-        view === "group" && "pb-40 lg:grid-cols-[1fr_13rem] lg:pb-0"
+        view === "group" && "pb-[30vh] lg:grid-cols-[1fr_13rem] lg:pb-0"
       )}
     >
       <div className="flex items-center justify-between gap-2 lg:col-span-full">
@@ -365,6 +365,9 @@ export function AvailabilityGrid({
                 view === option ? "bg-primary text-primary-foreground" : "text-foreground"
               )}
             >
+              {view === option ? (
+                <Check className="mr-1.5 inline size-3.5" aria-hidden="true" />
+              ) : null}
               {option === "mine" ? "Mine" : "Group"}
             </button>
           ))}
@@ -405,7 +408,7 @@ export function AvailabilityGrid({
           <div>
             <h3 className="text-sm font-medium">Your availability</h3>
             <p className="text-muted-foreground text-xs">
-              {editable ? "Click and drag to mark when you're free." : "Availability is closed."}
+              {editable ? "Tap or drag to mark when you're free." : "Availability is closed."}
             </p>
           </div>
           {grid(
@@ -448,7 +451,7 @@ export function AvailabilityGrid({
             <p className="text-muted-foreground text-xs">
               {people.length === 0
                 ? "No one has filled this in yet."
-                : `Darker = more of the ${people.length} ${people.length === 1 ? "person" : "people"} who filled in are free. Tap a slot, or drag across slots to see who is free for the whole range.`}
+                : `Darker = more of the ${people.length} ${people.length === 1 ? "person" : "people"} who filled in are free.`}
             </p>
             <p
               className={cn(
@@ -457,16 +460,14 @@ export function AvailabilityGrid({
               )}
             >
               Fewer free
-              {[20, 35, 50].map((level) => (
-                <span
-                  key={level}
-                  aria-hidden="true"
-                  className="h-2.5 w-3.5 rounded-sm border"
-                  style={{
-                    backgroundColor: `color-mix(in oklab, var(--avail) ${level}%, transparent)`,
-                  }}
-                />
-              ))}
+              <span
+                aria-hidden="true"
+                className="h-2.5 w-12 rounded-sm border"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(to right, color-mix(in oklab, var(--avail) 20%, transparent), color-mix(in oklab, var(--avail) 50%, transparent))",
+                }}
+              />
               Everyone free
             </p>
           </div>
@@ -507,7 +508,7 @@ export function AvailabilityGrid({
       {view === "group" ? (
         <aside
           aria-label="Who is free"
-          className="bg-background fixed inset-x-0 bottom-0 z-20 max-h-[30vh] overflow-y-auto border-t px-4 py-3 text-sm shadow-[0_-4px_16px_rgb(0_0_0/0.12)] lg:sticky lg:inset-x-auto lg:top-4 lg:bottom-auto lg:z-auto lg:max-h-none lg:self-start lg:overflow-visible lg:border-t-0 lg:bg-transparent lg:p-0 lg:shadow-none"
+          className="bg-background fixed inset-x-0 bottom-0 z-20 max-h-[30vh] overflow-y-auto border-t py-3 pr-16 pl-4 text-sm shadow-[0_-4px_16px_rgb(0_0_0/0.12)] lg:sticky lg:inset-x-auto lg:top-4 lg:bottom-auto lg:z-auto lg:max-h-none lg:self-start lg:overflow-visible lg:border-t-0 lg:bg-transparent lg:p-0 lg:shadow-none"
         >
           {box ? (
             <>
@@ -530,7 +531,10 @@ export function AvailabilityGrid({
               </div>
             </>
           ) : (
-            <p className="text-muted-foreground">Hover or tap a group slot to see who is free.</p>
+            <p className="text-muted-foreground">
+              Hover or tap a slot, or drag across slots (press and hold first on touch), to see who
+              is free.
+            </p>
           )}
         </aside>
       ) : null}

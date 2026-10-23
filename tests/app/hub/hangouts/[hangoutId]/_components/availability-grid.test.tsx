@@ -78,7 +78,11 @@ describe("AvailabilityGrid", () => {
     expect(screen.getByText("Availability is closed.")).toBeInTheDocument();
     expect(mine("Sat, Oct 3, 10:00 AM")).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Group" }));
-    expect(screen.getByText("Hover or tap a group slot to see who is free.")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Hover or tap a slot, or drag across slots (press and hold first on touch), to see who is free."
+      )
+    ).toBeInTheDocument();
 
     fireEvent.pointerEnter(
       screen.getByRole("button", { name: "Sat, Oct 3, 10:00 AM: 2 of 2 free" })
@@ -258,7 +262,9 @@ describe("AvailabilityGrid", () => {
           vi.advanceTimersByTime(300);
         });
         expect(
-          screen.getByText("Hover or tap a group slot to see who is free.")
+          screen.getByText(
+            "Hover or tap a slot, or drag across slots (press and hold first on touch), to see who is free."
+          )
         ).toBeInTheDocument();
 
         fireEvent.pointerDown(from, { pointerId: 1, pointerType: "touch" });
