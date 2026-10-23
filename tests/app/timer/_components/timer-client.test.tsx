@@ -117,14 +117,14 @@ function makeProps(): TimerClientTestProps {
       todayCount: 2,
       weekCount: 6,
       totalCount: 11,
-      last7Days: [
-        { dateKey: "2026-03-15", label: "Sun", count: 0 },
-        { dateKey: "2026-03-16", label: "Mon", count: 1 },
-        { dateKey: "2026-03-17", label: "Tue", count: 2 },
-        { dateKey: "2026-03-18", label: "Wed", count: 1 },
-        { dateKey: "2026-03-19", label: "Thu", count: 1 },
-        { dateKey: "2026-03-20", label: "Fri", count: 0 },
-        { dateKey: "2026-03-21", label: "Sat", count: 1 },
+      weekDays: [
+        { dateKey: "2026-03-15", label: "Sun", count: 0, isToday: false },
+        { dateKey: "2026-03-16", label: "Mon", count: 1, isToday: false },
+        { dateKey: "2026-03-17", label: "Tue", count: 2, isToday: false },
+        { dateKey: "2026-03-18", label: "Wed", count: 1, isToday: false },
+        { dateKey: "2026-03-19", label: "Thu", count: 1, isToday: false },
+        { dateKey: "2026-03-20", label: "Fri", count: 0, isToday: false },
+        { dateKey: "2026-03-21", label: "Sat", count: 1, isToday: true },
       ],
     },
     initialCollaboration: {

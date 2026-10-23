@@ -11,10 +11,11 @@ function makeStats(counts: number[], overrides?: Partial<Stats>): Stats {
     todayCount: counts[6],
     weekCount: counts.reduce((sum, count) => sum + count, 0),
     totalCount: 20,
-    last7Days: counts.map((count, index) => ({
+    weekDays: counts.map((count, index) => ({
       dateKey: `2026-03-${15 + index}`,
       label: labels[index],
       count,
+      isToday: index === counts.length - 1,
     })),
     ...overrides,
   };

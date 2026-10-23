@@ -5,6 +5,7 @@ export type PomodoroDailyStat = {
   dateKey: string;
   label: string;
   count: number;
+  isToday: boolean;
 };
 
 type UserSummary = {
@@ -18,7 +19,7 @@ export type PomodoroStatsSnapshot = {
   todayCount: number;
   weekCount: number;
   totalCount: number;
-  last7Days: PomodoroDailyStat[];
+  weekDays: PomodoroDailyStat[];
 };
 
 export type FocusSessionMemberSnapshot = {
@@ -304,7 +305,7 @@ export async function getPomodoroStatsSnapshot(
   const daysSinceMonday = (new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7;
   const todayStart = torontoToUtc(today, 0);
   const weekStart = torontoToUtc(addDays(today, -daysSinceMonday), 0);
-  const sevenDayStart = torontoToUtc(addDays(today, -6), 0);
+  const weekKey = addDays(today, -daysSinceMonday);
 
   const [todayCount, weekCount, totalCount, sessionsForChart] = await Promise.all([
     prisma.pomodoroSession.count({
@@ -332,7 +333,7 @@ export async function getPomodoroStatsSnapshot(
       where: {
         userId,
         completedAt: {
-          gte: sevenDayStart,
+          gte: weekStart,
         },
       },
       select: {
@@ -348,13 +349,14 @@ export async function getPomodoroStatsSnapshot(
     countsByDay.set(key, (countsByDay.get(key) ?? 0) + 1);
   }
 
-  const last7Days: PomodoroDailyStat[] = [];
+  const weekDays: PomodoroDailyStat[] = [];
   for (let offset = 0; offset < 7; offset += 1) {
-    const key = addDays(addDays(today, -6), offset);
-    last7Days.push({
+    const key = addDays(weekKey, offset);
+    weekDays.push({
       dateKey: key,
       label: dayLabel(key, { weekday: "short" }),
       count: countsByDay.get(key) ?? 0,
+      isToday: key === today,
     });
   }
 
@@ -362,7 +364,7 @@ export async function getPomodoroStatsSnapshot(
     todayCount,
     weekCount,
     totalCount,
-    last7Days,
+    weekDays,
   };
 }
 

@@ -12,8 +12,7 @@ export function SessionStatsCard({ stats }: SessionStatsCardProps) {
     { label: "This week", value: stats.weekCount },
     { label: "All time", value: stats.totalCount },
   ];
-  const maxCount = Math.max(1, ...stats.last7Days.map((day) => day.count));
-  const todayIndex = stats.last7Days.length - 1;
+  const maxCount = Math.max(1, ...stats.weekDays.map((day) => day.count));
 
   return (
     <Card className="border-border/70 bg-background/85 gap-4 rounded-3xl shadow-none">
@@ -42,13 +41,13 @@ export function SessionStatsCard({ stats }: SessionStatsCardProps) {
         ) : (
           <div
             role="img"
-            aria-label={`Sessions per day for the last 7 days: ${stats.last7Days
+            aria-label={`Sessions per day this week: ${stats.weekDays
               .map((day) => `${day.label} ${day.count}`)
               .join(", ")}`}
           >
             <div className="flex h-28 gap-2">
-              {stats.last7Days.map((day, index) => {
-                const isToday = index === todayIndex;
+              {stats.weekDays.map((day) => {
+                const isToday = day.isToday;
 
                 return (
                   <div
@@ -80,13 +79,10 @@ export function SessionStatsCard({ stats }: SessionStatsCardProps) {
               })}
             </div>
             <div className="text-muted-foreground mt-1 flex gap-2 text-xs">
-              {stats.last7Days.map((day, index) => (
+              {stats.weekDays.map((day) => (
                 <span
                   key={day.dateKey}
-                  className={cn(
-                    "flex-1 text-center",
-                    index === todayIndex && "text-foreground font-medium"
-                  )}
+                  className={cn("flex-1 text-center", day.isToday && "text-foreground font-medium")}
                 >
                   {day.label}
                 </span>
@@ -105,7 +101,7 @@ export function SessionStatsCard({ stats }: SessionStatsCardProps) {
               </tr>
             </thead>
             <tbody>
-              {stats.last7Days.map((day) => (
+              {stats.weekDays.map((day) => (
                 <tr key={day.dateKey}>
                   <th scope="row">{day.label}</th>
                   <td>{day.count}</td>
