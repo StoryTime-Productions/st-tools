@@ -141,12 +141,12 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
       {collecting || hasDates ? (
         <Card
           id="availability"
-          className="border-border/70 bg-background/85 rounded-3xl shadow-none"
+          className="border-border/70 bg-background/85 gap-4 rounded-3xl shadow-none"
         >
           <CardHeader>
             <CardTitle className="text-base">Availability</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-5">
+          <CardContent className="space-y-4">
             {hangout.status === "SCHEDULED" && hangout.startSlot ? (
               <fieldset disabled={ended} className="min-w-0">
                 <LockedIn
@@ -178,7 +178,8 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
             ) : (
               <div className="space-y-1 text-sm">
                 <p className="text-muted-foreground">
-                  {hourLabel(hangout.windowStartHour)} – {hourLabel(hangout.windowEndHour)} EST
+                  Window: {hourLabel(hangout.windowStartHour)} – {hourLabel(hangout.windowEndHour)}{" "}
+                  EST
                   {hangout.availabilityDeadline
                     ? ` · Fill in by ${hangout.availabilityDeadline.toLocaleString("en-US", {
                         timeZone: "America/Toronto",
