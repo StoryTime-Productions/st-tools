@@ -188,27 +188,6 @@ describe("AvailabilityGrid", () => {
     expect(screen.queryByText("Switch to Group to see who else is free.")).toBeNull();
   });
 
-  it("tracks the pinned panel height so the page leaves room for it", () => {
-    const observe = vi.fn();
-    const disconnect = vi.fn();
-    vi.stubGlobal(
-      "ResizeObserver",
-      class {
-        observe = observe;
-        disconnect = disconnect;
-      }
-    );
-    try {
-      renderGrid();
-      fireEvent.click(screen.getByRole("button", { name: "Group" }));
-      expect(observe).toHaveBeenCalledWith(screen.getByRole("complementary"));
-      fireEvent.click(screen.getByRole("button", { name: "Mine" }));
-      expect(disconnect).toHaveBeenCalled();
-    } finally {
-      vi.unstubAllGlobals();
-    }
-  });
-
   describe("group range", () => {
     const rangeResponses = [
       { userId: "me", name: "Me", slots: ["2026-10-03T10:00", "2026-10-03T10:30"] },

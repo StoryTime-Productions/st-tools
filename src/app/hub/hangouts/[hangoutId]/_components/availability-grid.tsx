@@ -5,7 +5,6 @@ import {
   useRef,
   useState,
   useTransition,
-  type CSSProperties,
   type PointerEvent,
   type ReactNode,
 } from "react";
@@ -110,8 +109,6 @@ export function AvailabilityGrid({
   const [pinned, setPinned] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const bar = useRef<HTMLElement>(null);
-  const [barHeight, setBarHeight] = useState(0);
   const [, startTransition] = useTransition();
 
   function save(next: Set<string>) {
@@ -202,17 +199,6 @@ export function AvailabilityGrid({
     if (holdTimer.current) clearTimeout(holdTimer.current);
     holdTimer.current = null;
   }
-
-  useEffect(() => {
-    const element = bar.current;
-    if (view !== "group" || !element) return;
-    const measure = () => setBarHeight(element.offsetHeight);
-    measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [view]);
 
   function switchView(next: View) {
     clearHold();
@@ -360,14 +346,7 @@ export function AvailabilityGrid({
   }
 
   return (
-    <div
-      className={cn(
-        "grid gap-4 lg:gap-6",
-        "lg:grid-cols-[1fr_13rem]",
-        view === "group" && "pb-[var(--bar)] lg:pb-0"
-      )}
-      style={{ "--bar": `${barHeight}px` } as CSSProperties}
-    >
+    <div className="space-y-4 lg:grid lg:grid-cols-[1fr_13rem] lg:gap-6 lg:space-y-0">
       <div className="flex flex-wrap items-center justify-between gap-2 lg:col-span-full">
         <div
           role="group"
@@ -542,9 +521,8 @@ export function AvailabilityGrid({
 
       {view === "group" ? (
         <aside
-          ref={bar}
           aria-label="Who is free"
-          className="bg-background fixed inset-x-0 bottom-0 z-20 max-h-[30vh] overflow-y-auto border-t py-3 pr-16 pl-4 text-sm shadow-[0_-4px_16px_rgb(0_0_0/0.12)] lg:sticky lg:inset-x-auto lg:top-4 lg:bottom-auto lg:z-auto lg:max-h-none lg:self-start lg:overflow-visible lg:border-t-0 lg:bg-transparent lg:p-0 lg:shadow-none"
+          className="bg-background sticky bottom-0 z-20 max-h-[30vh] overflow-y-auto border-t py-3 pr-16 text-sm lg:top-4 lg:bottom-auto lg:z-auto lg:max-h-none lg:self-start lg:overflow-visible lg:border-t-0 lg:bg-transparent lg:p-0"
         >
           {box ? (
             <>
