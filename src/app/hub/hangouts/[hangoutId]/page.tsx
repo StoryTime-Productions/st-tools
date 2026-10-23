@@ -13,7 +13,7 @@ import { Itinerary } from "@/app/hub/hangouts/[hangoutId]/_components/itinerary"
 import { LockedIn, RankedSlots } from "@/app/hub/hangouts/[hangoutId]/_components/lock-in";
 import { LiveRefresh } from "@/app/hub/hangouts/[hangoutId]/_components/live-refresh";
 import { CancelHangoutButton, HangoutDialog } from "@/app/hub/_components/hangout-dialog";
-import { dayLabel, hourLabel, todayKey, torontoInputValue } from "@/lib/calendar";
+import { hourLabel, todayKey, torontoInputValue } from "@/lib/calendar";
 import { rankRuns } from "@/lib/availability";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { getAvailabilityResponses, getHangoutDetail, getMemberOptions } from "@/lib/hangouts";
@@ -177,13 +177,6 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
               </p>
             ) : (
               <div className="space-y-1 text-sm">
-                <p>
-                  {hangout.availabilityDates
-                    .map((day) =>
-                      dayLabel(day, { weekday: "short", month: "short", day: "numeric" })
-                    )
-                    .join(", ")}
-                </p>
                 <p className="text-muted-foreground">
                   {hourLabel(hangout.windowStartHour)} – {hourLabel(hangout.windowEndHour)} EST
                   {hangout.availabilityDeadline
