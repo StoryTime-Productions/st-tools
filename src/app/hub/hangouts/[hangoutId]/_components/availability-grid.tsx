@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   useTransition,
+  type CSSProperties,
   type PointerEvent,
   type ReactNode,
 } from "react";
@@ -109,6 +110,8 @@ export function AvailabilityGrid({
   const [pinned, setPinned] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bar = useRef<HTMLElement>(null);
+  const [barHeight, setBarHeight] = useState(0);
   const [, startTransition] = useTransition();
 
   function save(next: Set<string>) {
@@ -199,6 +202,17 @@ export function AvailabilityGrid({
     if (holdTimer.current) clearTimeout(holdTimer.current);
     holdTimer.current = null;
   }
+
+  useEffect(() => {
+    const element = bar.current;
+    if (view !== "group" || !element) return;
+    const measure = () => setBarHeight(element.offsetHeight);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [view]);
 
   function switchView(next: View) {
     clearHold();
@@ -349,8 +363,10 @@ export function AvailabilityGrid({
     <div
       className={cn(
         "grid gap-4 lg:gap-6",
-        view === "group" && "pb-[30vh] lg:grid-cols-[1fr_13rem] lg:pb-0"
+        "lg:grid-cols-[1fr_13rem]",
+        view === "group" && "pb-[var(--bar)] lg:pb-0"
       )}
+      style={{ "--bar": `${barHeight}px` } as CSSProperties}
     >
       <div className="flex items-center justify-between gap-2 lg:col-span-full">
         <div role="group" aria-label="View" className="inline-flex rounded-xl border p-0.5">
@@ -409,6 +425,21 @@ export function AvailabilityGrid({
             <h3 className="text-sm font-medium">Your availability</h3>
             <p className="text-muted-foreground text-xs">
               {editable ? "Tap or drag to mark when you're free." : "Availability is closed."}
+            </p>
+            <p
+              className={cn(
+                green,
+                "text-muted-foreground mt-1.5 flex items-center gap-1.5 text-xs"
+              )}
+            >
+              <span aria-hidden="true" className="bg-muted/40 h-2.5 w-3.5 rounded-sm border" />
+              Not free
+              <span
+                aria-hidden="true"
+                className="h-2.5 w-3.5 rounded-sm border"
+                style={{ backgroundColor: "color-mix(in oklab, var(--avail) 35%, transparent)" }}
+              />
+              Free
             </p>
           </div>
           {grid(
@@ -507,6 +538,7 @@ export function AvailabilityGrid({
 
       {view === "group" ? (
         <aside
+          ref={bar}
           aria-label="Who is free"
           className="bg-background fixed inset-x-0 bottom-0 z-20 max-h-[30vh] overflow-y-auto border-t py-3 pr-16 pl-4 text-sm shadow-[0_-4px_16px_rgb(0_0_0/0.12)] lg:sticky lg:inset-x-auto lg:top-4 lg:bottom-auto lg:z-auto lg:max-h-none lg:self-start lg:overflow-visible lg:border-t-0 lg:bg-transparent lg:p-0 lg:shadow-none"
         >
@@ -537,7 +569,11 @@ export function AvailabilityGrid({
             </p>
           )}
         </aside>
-      ) : null}
+      ) : (
+        <p className="text-muted-foreground hidden self-start text-sm lg:block">
+          Switch to Group to see who else is free.
+        </p>
+      )}
       <p className="sr-only" aria-live="polite">
         {announcement}
       </p>
