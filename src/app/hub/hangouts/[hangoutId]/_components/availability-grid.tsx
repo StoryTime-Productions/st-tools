@@ -522,7 +522,7 @@ export function AvailabilityGrid({
       {view === "group" ? (
         <aside
           aria-label="Who is free"
-          className="bg-background sticky bottom-0 z-20 max-h-[30vh] overflow-y-auto border-t py-3 pr-16 text-sm lg:top-4 lg:bottom-auto lg:z-auto lg:max-h-none lg:self-start lg:overflow-visible lg:border-t-0 lg:bg-transparent lg:p-0"
+          className="bg-background sticky bottom-0 z-20 max-h-[30vh] overflow-y-auto border-t py-3 text-sm lg:top-4 lg:bottom-auto lg:z-auto lg:max-h-none lg:self-start lg:overflow-visible lg:border-t-0 lg:bg-transparent lg:p-0"
         >
           {box ? (
             <>
@@ -533,7 +533,7 @@ export function AvailabilityGrid({
                   {isRange ? " for the whole range" : ""}
                 </span>
               </p>
-              <div className="mt-2 grid grid-cols-2 gap-3 lg:grid-cols-1">
+              <div className="mt-2 grid grid-cols-2 gap-3 pr-16 lg:grid-cols-1 lg:pr-0">
                 <div>
                   <p className="text-muted-foreground text-xs font-medium uppercase">Free</p>
                   <p>{names(true)}</p>
@@ -545,7 +545,7 @@ export function AvailabilityGrid({
               </div>
             </>
           ) : (
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground pr-16 lg:pr-0">
               Hover or tap a slot, or drag across slots (press and hold first on touch), to see who
               is free.
             </p>
