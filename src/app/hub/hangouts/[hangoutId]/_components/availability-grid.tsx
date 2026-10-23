@@ -368,8 +368,12 @@ export function AvailabilityGrid({
       )}
       style={{ "--bar": `${barHeight}px` } as CSSProperties}
     >
-      <div className="flex items-center justify-between gap-2 lg:col-span-full">
-        <div role="group" aria-label="View" className="inline-flex rounded-xl border p-0.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 lg:col-span-full">
+        <div
+          role="group"
+          aria-label="View"
+          className="inline-flex shrink-0 rounded-xl border p-0.5"
+        >
           {(["mine", "group"] as const).map((option) => (
             <button
               key={option}
@@ -377,7 +381,7 @@ export function AvailabilityGrid({
               aria-pressed={view === option}
               onClick={() => switchView(option)}
               className={cn(
-                "focus-visible:ring-ring min-h-11 rounded-[10px] px-4 text-sm font-medium focus-visible:ring-2 focus-visible:outline-none",
+                "focus-visible:ring-ring inline-flex min-h-11 items-center rounded-[10px] px-4 text-sm font-medium whitespace-nowrap focus-visible:ring-2 focus-visible:outline-none",
                 view === option ? "bg-primary text-primary-foreground" : "text-foreground"
               )}
             >
@@ -389,7 +393,7 @@ export function AvailabilityGrid({
           ))}
         </div>
         {paged ? (
-          <div className="flex items-center gap-1">
+          <div className="ml-auto flex items-center gap-1">
             <Button
               type="button"
               variant="outline"
