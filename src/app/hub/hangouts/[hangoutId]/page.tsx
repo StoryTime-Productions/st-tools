@@ -176,21 +176,29 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
                 The admins haven&apos;t picked dates yet.
               </p>
             ) : (
-              <div className="space-y-1 text-sm">
-                <p className="text-muted-foreground">
+              <p className="text-muted-foreground flex flex-col text-sm sm:flex-row sm:gap-x-2">
+                <span className="whitespace-nowrap">
                   Window: {hourLabel(hangout.windowStartHour)} – {hourLabel(hangout.windowEndHour)}{" "}
                   EST
-                  {hangout.availabilityDeadline
-                    ? ` · Fill in by ${hangout.availabilityDeadline.toLocaleString("en-US", {
+                </span>
+                {hangout.availabilityDeadline ? (
+                  <>
+                    <span aria-hidden="true" className="hidden sm:inline">
+                      ·
+                    </span>
+                    <span className="whitespace-nowrap">
+                      Fill in by{" "}
+                      {hangout.availabilityDeadline.toLocaleString("en-US", {
                         timeZone: "America/Toronto",
                         month: "short",
                         day: "numeric",
                         hour: "numeric",
                         minute: "2-digit",
-                      })}`
-                    : ""}
-                </p>
-              </div>
+                      })}
+                    </span>
+                  </>
+                ) : null}
+              </p>
             )}
             {hasDates ? (
               <AvailabilityGrid
