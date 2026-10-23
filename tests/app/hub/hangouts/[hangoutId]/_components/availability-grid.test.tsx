@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AvailabilityGrid } from "@/app/hub/hangouts/[hangoutId]/_components/availability-grid";
 
 const actionMocks = vi.hoisted(() => ({ saveAvailabilityAction: vi.fn() }));
@@ -73,8 +73,11 @@ describe("AvailabilityGrid", () => {
 
   it("shows who is free for a hovered or tapped group slot", () => {
     renderGrid(false);
+    expect(screen.getByRole("button", { name: "Group" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Mine" }));
     expect(screen.getByText("Availability is closed.")).toBeInTheDocument();
     expect(mine("Sat, Oct 3, 10:00 AM")).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Group" }));
     expect(screen.getByText("Hover or tap a group slot to see who is free.")).toBeInTheDocument();
 
     fireEvent.pointerEnter(
@@ -89,7 +92,7 @@ describe("AvailabilityGrid", () => {
     expect(within(panel).getByText("Me")).toBeInTheDocument();
 
     fireEvent.focus(screen.getByRole("button", { name: "Sat, Oct 3, 10:30 AM: 0 of 2 free" }));
-    expect(within(panel).getByText("No one")).toBeInTheDocument();
+    expect(within(panel).getByText("Nobody")).toBeInTheDocument();
   });
 
   it("pages one calendar week at a time when more than five days are set", () => {
@@ -106,13 +109,13 @@ describe("AvailabilityGrid", () => {
       />
     );
     expect(screen.getByText("Oct 5 – Oct 11")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /^Mon, Oct 5, 10:00 AM/ })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /^Mon, Oct 5, 10:00 AM/ })).toHaveLength(1);
     expect(screen.queryByRole("button", { name: /Oct 12/ })).toBeNull();
     expect(screen.getByRole("button", { name: "Previous week" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Next week" }));
     expect(screen.getByText("Oct 12", { selector: "p" })).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /^Mon, Oct 12, 10:00 AM/ })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /^Mon, Oct 12, 10:00 AM/ })).toHaveLength(1);
     expect(screen.queryByRole("button", { name: /Oct 5/ })).toBeNull();
     expect(screen.getByRole("button", { name: "Next week" })).toBeDisabled();
   });
@@ -132,6 +135,132 @@ describe("AvailabilityGrid", () => {
         editable
       />
     );
+    fireEvent.click(screen.getByRole("button", { name: "Group" }));
     expect(screen.getByText("No one has filled this in yet.")).toBeInTheDocument();
+  });
+
+  it("starts in Mine while editable and in Group when closed, and the toggle swaps the grid", () => {
+    renderGrid();
+    expect(screen.getByRole("button", { name: "Mine" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("Your availability")).toBeInTheDocument();
+    expect(screen.queryByRole("complementary")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Group" }));
+    expect(screen.getByRole("button", { name: "Group" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("Group availability")).toBeInTheDocument();
+    expect(screen.queryByText("Your availability")).toBeNull();
+    expect(screen.getByRole("complementary")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Mine" }));
+    expect(screen.queryByRole("complementary")).toBeNull();
+  });
+
+  describe("group range", () => {
+    const rangeResponses = [
+      { userId: "me", name: "Me", slots: ["2026-10-03T10:00", "2026-10-03T10:30"] },
+      {
+        userId: "u2",
+        name: "Bo",
+        slots: ["2026-10-03T10:00", "2026-10-03T10:30", "2026-10-04T10:30"],
+      },
+    ];
+
+    function renderGroup() {
+      render(
+        <AvailabilityGrid
+          hangoutId="h1"
+          setup={setup}
+          user={{ id: "me", name: "Me" }}
+          responses={rangeResponses}
+          editable
+        />
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Group" }));
+    }
+
+    const group = (label: string) => screen.getByRole("button", { name: label });
+
+    it("shows who is free for the whole range after a drag and keeps it on hover", () => {
+      renderGroup();
+      const from = group("Sat, Oct 3, 10:00 AM: 2 of 2 free");
+      const to = group("Sat, Oct 3, 10:30 AM: 2 of 2 free");
+      document.elementFromPoint = vi.fn(() => to);
+
+      fireEvent.pointerDown(from, { pointerId: 1 });
+      fireEvent.pointerMove(from.parentElement!, { clientX: 1, clientY: 1 });
+      fireEvent.pointerUp(window);
+
+      const panel = screen.getByRole("complementary");
+      expect(
+        within(panel).getByText("Sat, Oct 3, 10:00 AM–11:00 AM (2 slots)", { exact: false })
+      ).toBeInTheDocument();
+      expect(within(panel).getByText("2 of 2 free for the whole range")).toBeInTheDocument();
+      expect(within(panel).getByText("Bo, Me")).toBeInTheDocument();
+      expect(
+        screen.getByText("Sat, Oct 3, 10:00 AM–11:00 AM (2 slots): 2 of 2 free for the whole range")
+      ).toBeInTheDocument();
+
+      fireEvent.pointerEnter(group("Sun, Oct 4, 10:00 AM: 0 of 2 free"));
+      expect(within(panel).getByText("2 of 2 free for the whole range")).toBeInTheDocument();
+    });
+
+    it("lists nobody when someone misses a slot in a multi-day range", () => {
+      renderGroup();
+      const from = group("Sat, Oct 3, 10:00 AM: 2 of 2 free");
+      const to = group("Sun, Oct 4, 10:30 AM: 1 of 2 free");
+      document.elementFromPoint = vi.fn(() => to);
+
+      fireEvent.pointerDown(from, { pointerId: 1 });
+      fireEvent.pointerMove(from.parentElement!, { clientX: 1, clientY: 1 });
+      fireEvent.pointerUp(window);
+
+      const panel = screen.getByRole("complementary");
+      expect(
+        within(panel).getByText("Sat, Oct 3 – Sun, Oct 4, 10:00 AM–11:00 AM (4 slots)", {
+          exact: false,
+        })
+      ).toBeInTheDocument();
+      expect(within(panel).getByText("0 of 2 free for the whole range")).toBeInTheDocument();
+      expect(within(panel).getByText("Nobody")).toBeInTheDocument();
+      expect(within(panel).getByText("Bo, Me")).toBeInTheDocument();
+    });
+
+    it("needs a short hold before a touch starts a range, so swipes can scroll", () => {
+      vi.useFakeTimers();
+      try {
+        renderGroup();
+        const from = group("Sat, Oct 3, 10:00 AM: 2 of 2 free");
+
+        fireEvent.pointerDown(from, { pointerId: 1, pointerType: "touch" });
+        fireEvent.pointerCancel(window);
+        act(() => {
+          vi.advanceTimersByTime(300);
+        });
+        expect(
+          screen.getByText("Hover or tap a group slot to see who is free.")
+        ).toBeInTheDocument();
+
+        fireEvent.pointerDown(from, { pointerId: 1, pointerType: "touch" });
+        act(() => {
+          vi.advanceTimersByTime(300);
+        });
+        expect(
+          within(screen.getByRole("complementary")).getByText("Sat, Oct 3, 10:00 AM")
+        ).toBeInTheDocument();
+        fireEvent.pointerUp(window);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("selects one slot on tap and announces it", () => {
+      renderGroup();
+      fireEvent.click(group("Sun, Oct 4, 10:30 AM: 1 of 2 free"));
+      expect(screen.getByText("Sun, Oct 4, 10:30 AM")).toBeInTheDocument();
+      fireEvent.focus(group("Sat, Oct 3, 10:00 AM: 2 of 2 free"));
+      expect(
+        screen.getByText("Sat, Oct 3, 10:00 AM: 2 of 2 free", { selector: "p" })
+      ).toBeInTheDocument();
+    });
   });
 });
