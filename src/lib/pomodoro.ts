@@ -1,3 +1,4 @@
+import { addDays, dayLabel, todayKey, torontoToUtc } from "@/lib/calendar";
 import { prisma } from "@/lib/prisma";
 
 export type PomodoroDailyStat = {
@@ -85,37 +86,6 @@ export type PomodoroCollaborationSnapshot = {
   outgoingRequests: FocusSessionRequestSnapshot[];
   incomingRequests: FocusSessionRequestSnapshot[];
 };
-
-function startOfDay(value: Date): Date {
-  const result = new Date(value);
-  result.setHours(0, 0, 0, 0);
-  return result;
-}
-
-function startOfWeek(value: Date): Date {
-  const result = startOfDay(value);
-  const day = result.getDay();
-  const daysSinceMonday = (day + 6) % 7;
-  result.setDate(result.getDate() - daysSinceMonday);
-  return result;
-}
-
-function addDays(value: Date, days: number): Date {
-  const result = new Date(value);
-  result.setDate(result.getDate() + days);
-  return result;
-}
-
-function toDateKey(value: Date): string {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function toDayLabel(value: Date): string {
-  return value.toLocaleDateString("en-US", { weekday: "short" });
-}
 
 function getDisplayName(user: Pick<UserSummary, "name" | "email">): string {
   return user.name?.trim() || user.email;
@@ -330,9 +300,11 @@ export async function getPomodoroStatsSnapshot(
   userId: string,
   now = new Date()
 ): Promise<PomodoroStatsSnapshot> {
-  const todayStart = startOfDay(now);
-  const weekStart = startOfWeek(now);
-  const sevenDayStart = addDays(todayStart, -6);
+  const today = todayKey(now);
+  const daysSinceMonday = (new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7;
+  const todayStart = torontoToUtc(today, 0);
+  const weekStart = torontoToUtc(addDays(today, -daysSinceMonday), 0);
+  const sevenDayStart = torontoToUtc(addDays(today, -6), 0);
 
   const [todayCount, weekCount, totalCount, sessionsForChart] = await Promise.all([
     prisma.pomodoroSession.count({
@@ -372,17 +344,16 @@ export async function getPomodoroStatsSnapshot(
   const countsByDay = new Map<string, number>();
 
   for (const session of sessionsForChart) {
-    const key = toDateKey(session.completedAt);
+    const key = todayKey(session.completedAt);
     countsByDay.set(key, (countsByDay.get(key) ?? 0) + 1);
   }
 
   const last7Days: PomodoroDailyStat[] = [];
   for (let offset = 0; offset < 7; offset += 1) {
-    const date = addDays(sevenDayStart, offset);
-    const key = toDateKey(date);
+    const key = addDays(addDays(today, -6), offset);
     last7Days.push({
       dateKey: key,
-      label: toDayLabel(date),
+      label: dayLabel(key, { weekday: "short" }),
       count: countsByDay.get(key) ?? 0,
     });
   }

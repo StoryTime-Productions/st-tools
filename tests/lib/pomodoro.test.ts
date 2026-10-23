@@ -71,6 +71,94 @@ describe("pomodoro library", () => {
     expect(snapshot.last7Days.find((day) => day.dateKey === "2026-03-20")?.count).toBe(1);
   });
 
+  describe("stats use Toronto days", () => {
+    const userId = "11111111-1111-4111-8111-111111111111";
+
+    async function statsAt(now: string, sessions: string[]) {
+      prismaMocks.pomodoroSessionCount.mockResolvedValue(0);
+      prismaMocks.pomodoroSessionFindMany.mockResolvedValueOnce(
+        sessions.map((completedAt) => ({ completedAt: new Date(completedAt) }))
+      );
+      return getPomodoroStatsSnapshot(userId, new Date(now));
+    }
+
+    const boundary = (call: number) =>
+      prismaMocks.pomodoroSessionCount.mock.calls[call][0].where.completedAt.gte as Date;
+
+    it("counts a 9pm Wednesday Toronto session under Wednesday, not Thursday", async () => {
+      // Wed 2026-10-14 21:00 EDT = Thu 01:00 UTC
+      const snapshot = await statsAt("2026-10-15T01:30:00.000Z", ["2026-10-15T01:00:00.000Z"]);
+      const today = snapshot.last7Days[6];
+      expect(today).toEqual({ dateKey: "2026-10-14", label: "Wed", count: 1 });
+      expect(snapshot.last7Days.map((day) => day.label)).toEqual([
+        "Thu",
+        "Fri",
+        "Sat",
+        "Sun",
+        "Mon",
+        "Tue",
+        "Wed",
+      ]);
+      // Today begins 00:00 Toronto (04:00 UTC); the week begins Monday 00:00 Toronto.
+      expect(boundary(0).toISOString()).toBe("2026-10-14T04:00:00.000Z");
+      expect(boundary(1).toISOString()).toBe("2026-10-12T04:00:00.000Z");
+    });
+
+    it("keeps seven distinct consecutive days across the fall DST change", async () => {
+      // DST ends Sun 2026-11-01 at 2am Toronto.
+      const snapshot = await statsAt("2026-11-03T15:00:00.000Z", []);
+      expect(snapshot.last7Days.map((day) => day.dateKey)).toEqual([
+        "2026-10-28",
+        "2026-10-29",
+        "2026-10-30",
+        "2026-10-31",
+        "2026-11-01",
+        "2026-11-02",
+        "2026-11-03",
+      ]);
+      expect(snapshot.last7Days.map((day) => day.label)).toEqual([
+        "Wed",
+        "Thu",
+        "Fri",
+        "Sat",
+        "Sun",
+        "Mon",
+        "Tue",
+      ]);
+      // Week starts Mon Nov 2 00:00 EST (05:00 UTC).
+      expect(boundary(1).toISOString()).toBe("2026-11-02T05:00:00.000Z");
+    });
+
+    it("keeps seven distinct consecutive days across the spring DST change", async () => {
+      // DST starts Sun 2026-03-08 at 2am Toronto.
+      const snapshot = await statsAt("2026-03-10T15:00:00.000Z", []);
+      expect(snapshot.last7Days.map((day) => day.dateKey)).toEqual([
+        "2026-03-04",
+        "2026-03-05",
+        "2026-03-06",
+        "2026-03-07",
+        "2026-03-08",
+        "2026-03-09",
+        "2026-03-10",
+      ]);
+      expect(snapshot.last7Days.map((day) => day.label)).toEqual([
+        "Wed",
+        "Thu",
+        "Fri",
+        "Sat",
+        "Sun",
+        "Mon",
+        "Tue",
+      ]);
+    });
+
+    it("starts the week on the Monday when today is Sunday", async () => {
+      // Sun 2026-10-18 23:30 EDT = Mon 03:30 UTC
+      await statsAt("2026-10-19T03:30:00.000Z", []);
+      expect(boundary(1).toISOString()).toBe("2026-10-12T04:00:00.000Z");
+    });
+  });
+
   it("returns collaboration snapshot without current session", async () => {
     prismaMocks.focusSessionMemberFindMany.mockResolvedValueOnce([]);
     prismaMocks.focusSessionMemberFindFirst.mockResolvedValueOnce(null);
