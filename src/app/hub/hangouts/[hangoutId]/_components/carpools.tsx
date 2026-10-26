@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Trash2, X } from "lucide-react";
+import { Pencil, Plus, Trash2, TriangleAlert, X } from "lucide-react";
 import type { RideDirection } from "@prisma/client";
 import {
   offerCarAction,
@@ -47,6 +47,68 @@ const clock = (iso: string) =>
 const delayNote = (trip: Trip) =>
   trip.delayMinutes ? ` (+${trip.delayMinutes} min for ${trip.reason})` : "";
 
+const WHERE = (rider: CarPassenger) =>
+  rider.pointKind === "COMMON"
+    ? (rider.commonLabel ?? "common point")
+    : rider.pointKind === "RIDER_HOME"
+      ? "another rider's home"
+      : (rider.homeAddress ?? "no home address");
+
+interface StopGroup {
+  key: string;
+  where: string;
+  time: string | null;
+  riders: CarPassenger[];
+}
+
+/** Riders in route order; riders met at the same place and time share one stop. */
+function groupStops(people: CarPassenger[], times: Record<string, string> | undefined) {
+  const ordered = [...people].sort((a, b) =>
+    times?.[a.userId] && times?.[b.userId] ? times[a.userId].localeCompare(times[b.userId]) : 0
+  );
+  const groups: StopGroup[] = [];
+  for (const rider of ordered) {
+    const where = WHERE(rider);
+    const time = times?.[rider.userId] ?? null;
+    const shared =
+      rider.pointKind === "COMMON"
+        ? groups.find((group) => group.where === where && group.time === time)
+        : undefined;
+    if (shared) shared.riders.push(rider);
+    else groups.push({ key: rider.userId, where, time, riders: [rider] });
+  }
+  return groups;
+}
+
+/** One row of a car's vertical timeline; `filled` marks the hangout itself. */
+function TimelineRow({ filled, children }: { filled?: boolean; children: React.ReactNode }) {
+  return (
+    <li className="relative min-w-0 pb-3 pl-6 last:pb-0">
+      <span
+        aria-hidden="true"
+        className={`absolute top-1 left-0 size-3.5 rounded-full border-2 ${
+          filled ? "border-foreground bg-foreground" : "border-muted-foreground bg-background"
+        }`}
+      />
+      {children}
+    </li>
+  );
+}
+
+export function RecomputeRoutes({ hangoutId }: { hangoutId: string }) {
+  const [isPending, run] = useRun();
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={isPending}
+      onClick={() => run(() => recomputeRoutesAction(hangoutId), "Routes recomputed")}
+    >
+      Recompute routes
+    </Button>
+  );
+}
+
 export interface CarpoolWeather {
   /** Distinct warnings across the stops. */
   warnings: string[];
@@ -83,31 +145,40 @@ export function Carpools({
   return (
     <div className="space-y-4 text-sm">
       {weather.warnings.length > 0 ? (
-        <p role="status" className="text-destructive rounded-2xl border px-4 py-3">
-          Weather warning: {weather.warnings.join(", ")}. Drive times include extra time for the
-          conditions.
+        <p
+          role="status"
+          className="border-destructive/30 bg-destructive/10 text-destructive flex items-start gap-2 rounded-2xl border px-4 py-3"
+        >
+          <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <span>
+            Weather warning: {weather.warnings.join(", ")}. Drive times include extra time for the
+            conditions.
+          </span>
         </p>
       ) : null}
       {cars.length === 0 ? <p className="text-muted-foreground">No cars yet.</p> : null}
-      {showNeeds
-        ? (
+      {showNeeds && (waiting("pickup").length > 0 || waiting("dropoff").length > 0) ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border px-4 py-3">
+          <span className="font-medium">Needs a ride</span>
+          {(
             [
-              ["Getting there", waiting("pickup")],
-              ["Getting home", waiting("dropoff")],
+              ["there", waiting("pickup")],
+              ["home", waiting("dropoff")],
             ] as const
           ).map(([label, people]) =>
             people.length > 0 ? (
-              <p key={label} className="flex flex-wrap items-center gap-2">
-                <span className="text-muted-foreground">Needs a ride, {label.toLowerCase()}:</span>
+              <span key={label} className="flex flex-wrap items-center gap-1.5">
+                <Badge variant="secondary">{label}</Badge>
                 {people.map((person) => (
                   <Badge key={person.userId} variant="outline">
                     {person.name}
                   </Badge>
                 ))}
-              </p>
+              </span>
             ) : null
-          )
-        : null}
+          )}
+        </div>
+      ) : null}
       <ul className="space-y-3">
         {cars.map((car) => {
           const canManage = car.driver.userId === viewer.id || viewer.isAdmin;
@@ -116,60 +187,104 @@ export function Carpools({
             car.schedule && !("error" in car.schedule) && !car.schedule.manual
               ? car.schedule
               : null;
+          const there = schedule?.there;
+          const back = schedule?.back;
           const lists: { direction: RideDirection; title: string; people: typeof car.pickups }[] = [
             { direction: "PICKUP", title: "Pick up", people: car.pickups },
             { direction: "DROPOFF", title: "Drop off", people: car.dropoffs },
           ];
+          const stopList = ({ direction, title, people }: (typeof lists)[number]) => {
+            const times = (direction === "PICKUP" ? there : back)?.stops;
+            return (
+              <>
+                {people.length > 0 ? (
+                  <li className="list-none">
+                    <ul aria-label={title} className="m-0 list-none p-0">
+                      {groupStops(people, times).map((stop) => (
+                        <TimelineRow key={stop.key}>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            {stop.riders.map((rider) => (
+                              <span key={rider.userId} className="inline-flex items-center gap-1">
+                                <span className="font-medium">{rider.name}</span>
+                                {canManage ? (
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="size-6"
+                                    aria-label={`Remove ${rider.name} from ${title.toLowerCase()}`}
+                                    disabled={isPending}
+                                    onClick={() =>
+                                      run(
+                                        () =>
+                                          unassignPassengerAction(car.id, rider.userId, direction),
+                                        "Removed"
+                                      )
+                                    }
+                                  >
+                                    <X />
+                                  </Button>
+                                ) : null}
+                              </span>
+                            ))}
+                          </div>
+                          <p className="text-muted-foreground break-words">
+                            {stop.where}
+                            {stop.time ? ` · ${clock(stop.time)}` : null}
+                          </p>
+                        </TimelineRow>
+                      ))}
+                    </ul>
+                  </li>
+                ) : (
+                  <TimelineRow>
+                    <p className="text-muted-foreground">No one assigned</p>
+                  </TimelineRow>
+                )}
+                {canManage ? (
+                  <li className="list-none pb-3 pl-6">
+                    <AddPassenger
+                      carId={car.id}
+                      direction={direction}
+                      title={title}
+                      people={people}
+                      candidates={attendees.filter(
+                        (attendee) =>
+                          attendee.needsRide[direction === "PICKUP" ? "pickup" : "dropoff"]
+                      )}
+                      seatsFull={people.length >= car.seats}
+                    />
+                  </li>
+                ) : null}
+              </>
+            );
+          };
           return (
             <li
               key={car.id}
               aria-label={`${car.driver.name}'s car`}
-              className="space-y-2 rounded-2xl border px-4 py-3"
+              className="space-y-3 rounded-2xl border px-4 py-3"
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="space-y-1">
-                  <p className="font-medium">
-                    {car.driver.name}&apos;s car
-                    <span className="text-muted-foreground">
-                      {" "}
-                      · {seatsUsed}/{car.seats} seats
-                    </span>
-                  </p>
-                  <p>
-                    <span className="text-muted-foreground">Starts from:</span>{" "}
-                    {car.startAddress ??
-                      (car.driver.homeAddress
-                        ? `${car.driver.homeAddress} (home)`
-                        : "no address yet")}
-                  </p>
-                  {schedule && !schedule.there && !schedule.back ? null : schedule ? (
-                    <p>
-                      <span className="text-muted-foreground">Drive:</span>
-                      {schedule.there ? (
-                        <>
-                          {" "}
-                          leaves {clock(schedule.there.start)}
-                          {delayNote(schedule.there)}, arrives {clock(schedule.there.end)}
-                        </>
-                      ) : null}
-                      {schedule.there && schedule.back ? " ·" : null}
-                      {schedule.back ? (
-                        <>
-                          {" "}
-                          back {clock(schedule.back.start)} – {clock(schedule.back.end)}
-                          {delayNote(schedule.back)}
-                        </>
-                      ) : null}
-                    </p>
-                  ) : car.schedule ? (
-                    <p className="text-muted-foreground">
-                      Routes could not be computed:{" "}
-                      {"error" in car.schedule
-                        ? car.schedule.error
-                        : "these times were typed in before they were computed"}
-                      . {viewer.isAdmin ? "Try Recompute routes." : "Ask an admin to recompute."}
-                    </p>
-                  ) : null}
+                <div className="space-y-2">
+                  <p className="font-medium">{car.driver.name}&apos;s car</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Badge variant="outline">
+                      {seatsUsed}/{car.seats} seats
+                    </Badge>
+                    {there ? (
+                      <Badge variant="outline">
+                        Leaves {clock(there.start)}
+                        {delayNote(there)}
+                      </Badge>
+                    ) : null}
+                    {there ? <Badge variant="outline">Arrives {clock(there.end)}</Badge> : null}
+                    {back ? (
+                      <Badge variant="outline">
+                        Back {clock(back.start)} – {clock(back.end)}
+                        {delayNote(back)}
+                      </Badge>
+                    ) : null}
+                  </div>
                 </div>
                 {canManage ? (
                   <div className="flex gap-1">
@@ -189,69 +304,39 @@ export function Carpools({
                   </div>
                 ) : null}
               </div>
-              {lists.map(({ direction, title, people }) => (
-                <div key={direction} className="space-y-1">
-                  {people.length > 0 ? (
-                    <ul aria-label={title} className="space-y-1">
-                      {people.map((rider) => {
-                        const at =
-                          schedule?.[direction === "PICKUP" ? "there" : "back"]?.stops[
-                            rider.userId
-                          ];
-                        return (
-                          <li
-                            key={rider.userId}
-                            className="flex items-center justify-between gap-2"
-                          >
-                            <span>
-                              <span className="text-muted-foreground">{title}: </span>
-                              {rider.name}
-                              <span className="text-muted-foreground"> · </span>
-                              {rider.pointKind === "COMMON"
-                                ? (rider.commonLabel ?? "common point")
-                                : rider.pointKind === "RIDER_HOME"
-                                  ? "another rider's home"
-                                  : (rider.homeAddress ?? "no home address")}
-                              {at ? (
-                                <span className="text-muted-foreground"> · {clock(at)}</span>
-                              ) : null}
-                            </span>
-                            {canManage ? (
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                aria-label={`Remove ${rider.name} from ${title.toLowerCase()}`}
-                                disabled={isPending}
-                                onClick={() =>
-                                  run(
-                                    () => unassignPassengerAction(car.id, rider.userId, direction),
-                                    "Removed"
-                                  )
-                                }
-                              >
-                                <X />
-                              </Button>
-                            ) : null}
-                          </li>
-                        );
-                      })}
-                    </ul>
+              <ol className="before:bg-border relative m-0 list-none p-0 before:absolute before:top-2 before:bottom-2 before:left-[6px] before:w-px">
+                <TimelineRow>
+                  <p>
+                    <span className="text-muted-foreground">Start: </span>
+                    {car.startAddress ??
+                      (car.driver.homeAddress
+                        ? `${car.driver.homeAddress} (home)`
+                        : "no address yet")}
+                  </p>
+                  {!schedule && (car.pickups.length > 0 || car.dropoffs.length > 0) ? (
+                    <p className="text-muted-foreground">
+                      Route not computed
+                      {car.schedule && "error" in car.schedule
+                        ? `: ${car.schedule.error}`
+                        : ""}.{" "}
+                      {viewer.isAdmin ? "Try Recompute routes." : "Ask an admin to recompute."}
+                    </p>
                   ) : null}
-                  {canManage ? (
-                    <AddPassenger
-                      carId={car.id}
-                      direction={direction}
-                      title={title}
-                      people={people}
-                      candidates={attendees.filter(
-                        (attendee) =>
-                          attendee.needsRide[direction === "PICKUP" ? "pickup" : "dropoff"]
-                      )}
-                      seatsFull={people.length >= car.seats}
-                    />
-                  ) : null}
-                </div>
-              ))}
+                </TimelineRow>
+                {stopList(lists[0])}
+                <TimelineRow filled>
+                  <p className="font-medium">
+                    Hangout
+                    {there ? (
+                      <span className="text-muted-foreground font-normal">
+                        {" "}
+                        · arrive {clock(there.end)}
+                      </span>
+                    ) : null}
+                  </p>
+                </TimelineRow>
+                {stopList(lists[1])}
+              </ol>
             </li>
           );
         })}
@@ -269,16 +354,6 @@ export function Carpools({
             null,
         }}
       />
-      {viewer.isAdmin && cars.length > 0 ? (
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={isPending}
-          onClick={() => run(() => recomputeRoutesAction(hangoutId), "Routes recomputed")}
-        >
-          Recompute routes
-        </Button>
-      ) : null}
       {weather.checked ? <WeatherCredit /> : null}
       {!viewer.going ? (
         <p className="text-muted-foreground">Mark yourself Going to drive or ride.</p>
@@ -351,12 +426,27 @@ function AddPassenger({
   const [kind, setKind] = useState<PointKind>("HOME");
   const [pickedVia, setPickedVia] = useState("");
   const [address, setAddress] = useState("");
+  const [open, setOpen] = useState(false);
   const id = `${carId}-${direction}`;
   const lower = title.toLowerCase();
+  const noun = direction === "PICKUP" ? "pick-up" : "drop-off";
 
   if (candidates.length === 0) return null;
   if (seatsFull)
-    return <p className="text-muted-foreground text-xs">Full: no seat left to add to {lower}.</p>;
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" variant="ghost" disabled>
+          <Plus /> Add {noun}
+        </Button>
+        <p className="text-muted-foreground text-xs">Full: no seat left to add to {lower}.</p>
+      </div>
+    );
+  if (!open)
+    return (
+      <Button size="sm" variant="ghost" aria-expanded="false" onClick={() => setOpen(true)}>
+        <Plus /> Add {noun}
+      </Button>
+    );
 
   const person = candidates.some((c) => c.userId === pickedPerson)
     ? pickedPerson
@@ -387,6 +477,7 @@ function AddPassenger({
           () => {
             setPickedPerson("");
             setAddress("");
+            setOpen(false);
           }
         );
       }}
@@ -457,6 +548,9 @@ function AddPassenger({
       ) : null}
       <Button type="submit" size="sm" disabled={isPending || !point}>
         Add
+      </Button>
+      <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
+        Cancel
       </Button>
     </form>
   );
