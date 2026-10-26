@@ -10,7 +10,11 @@ import { Costs } from "@/app/hub/hangouts/[hangoutId]/_components/costs";
 import { CommuteMap } from "@/app/hub/hangouts/[hangoutId]/_components/commute-map";
 import { HangoutCover } from "@/app/hub/hangouts/[hangoutId]/_components/hangout-cover";
 import { Itinerary } from "@/app/hub/hangouts/[hangoutId]/_components/itinerary";
-import { LockedIn, RankedSlots } from "@/app/hub/hangouts/[hangoutId]/_components/lock-in";
+import {
+  LockedIn,
+  RankedSlots,
+  ReopenAvailability,
+} from "@/app/hub/hangouts/[hangoutId]/_components/lock-in";
 import { LiveRefresh } from "@/app/hub/hangouts/[hangoutId]/_components/live-refresh";
 import { CancelHangoutButton, HangoutDialog } from "@/app/hub/_components/hangout-dialog";
 import { hourLabel, todayKey, torontoInputValue } from "@/lib/calendar";
@@ -143,8 +147,11 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
           id="availability"
           className="border-border/70 bg-background/85 gap-4 rounded-3xl shadow-none"
         >
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
             <CardTitle className="text-base">Availability</CardTitle>
+            {hangout.status === "SCHEDULED" && user.role === "ADMIN" && !ended ? (
+              <ReopenAvailability hangoutId={hangout.id} />
+            ) : null}
           </CardHeader>
           <CardContent className="space-y-4">
             {hangout.status === "SCHEDULED" && hangout.startSlot ? (
@@ -154,7 +161,6 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
                   startSlot={hangout.startSlot}
                   attendees={hangout.attendees}
                   userId={user.id}
-                  canReopen={user.role === "ADMIN" && !ended}
                 />
               </fieldset>
             ) : null}
