@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -86,27 +87,8 @@ export function RankedSlots({
   );
 }
 
-export function LockedIn({
-  hangoutId,
-  startSlot,
-  attendees,
-  userId,
-  canReopen,
-}: {
-  hangoutId: string;
-  startSlot: string;
-  attendees: { userId: string; name: string; status: string }[];
-  userId: string;
-  canReopen: boolean;
-}) {
+export function ReopenAvailability({ hangoutId }: { hangoutId: string }) {
   const [isPending, run] = useAction();
-  const [day, time] = startSlot.split("T");
-  const names = (status: string) =>
-    attendees
-      .filter((attendee) => attendee.status === status)
-      .map((attendee) => attendee.name)
-      .join(", ") || "Nobody yet";
-  const mine = attendees.find((attendee) => attendee.userId === userId)?.status;
 
   function reopen() {
     if (!window.confirm("Reopen availability? The locked time and everyone's Going / Maybe reset."))
@@ -115,40 +97,82 @@ export function LockedIn({
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3 text-sm">
-      <div className="space-y-1">
-        <p className="font-medium">
-          {dayLabel(day, DAY)}, {timeLabel(time)} EST
-        </p>
-        <p className="flex flex-wrap gap-x-4 gap-y-1">
+    <Button size="sm" variant="outline" disabled={isPending} onClick={reopen}>
+      Reopen availability
+    </Button>
+  );
+}
+
+export function LockedIn({
+  hangoutId,
+  startSlot,
+  attendees,
+  userId,
+}: {
+  hangoutId: string;
+  startSlot: string;
+  attendees: { userId: string; name: string; status: string }[];
+  userId: string;
+}) {
+  const [isPending, run] = useAction();
+  const [day, time] = startSlot.split("T");
+  const mine = attendees.find((attendee) => attendee.userId === userId)?.status;
+
+  return (
+    <div className="space-y-4 text-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
+          <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+            Locked in
+          </p>
+          <p className="text-lg font-semibold">
+            {dayLabel(day, DAY)} · {timeLabel(time)} EST
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-1 sm:flex" role="group" aria-label="Your attendance">
           {STATUSES.map(([status, label]) => (
-            <span key={status}>
-              <span className="text-muted-foreground">{label}:</span> {names(status)}
-            </span>
+            <Button
+              key={status}
+              size="sm"
+              variant={mine === status ? "default" : "outline"}
+              className="h-11 whitespace-nowrap sm:h-8"
+              aria-pressed={mine === status}
+              disabled={isPending}
+              onClick={() =>
+                run(() => setAttendanceAction({ hangoutId, status }), "Attendance saved")
+              }
+            >
+              {mine === status ? <Check className="size-4" aria-hidden="true" /> : null}
+              {label}
+            </Button>
           ))}
-        </p>
+        </div>
       </div>
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Your attendance">
-        {STATUSES.map(([status, label]) => (
-          <Button
-            key={status}
-            size="sm"
-            variant={mine === status ? "default" : "outline"}
-            aria-pressed={mine === status}
-            disabled={isPending}
-            onClick={() =>
-              run(() => setAttendanceAction({ hangoutId, status }), "Attendance saved")
-            }
-          >
-            {label}
-          </Button>
-        ))}
-        {canReopen ? (
-          <Button size="sm" variant="outline" disabled={isPending} onClick={reopen}>
-            Reopen availability
-          </Button>
-        ) : null}
-      </div>
+      <dl className="space-y-2">
+        {STATUSES.map(([status, label]) => {
+          const people = attendees.filter((attendee) => attendee.status === status);
+          return (
+            <div key={status} className="flex flex-col gap-1 sm:flex-row sm:gap-3">
+              <dt className="w-28 shrink-0 font-medium">
+                {label} ({people.length})
+              </dt>
+              <dd>
+                {people.length === 0 ? (
+                  <span className="text-muted-foreground">Nobody yet</span>
+                ) : (
+                  <ul className="flex flex-wrap gap-1.5">
+                    {people.map((person) => (
+                      <li key={person.userId} className="rounded-full border px-2.5 py-0.5">
+                        {person.name}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
     </div>
   );
 }

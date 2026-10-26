@@ -203,11 +203,8 @@ async function loadHub() {
         {total} {canLock ? "lockable" : "view-only"}
       </p>
     ),
-    LockedIn: ({ startSlot, canReopen }: { startSlot: string; canReopen: boolean }) => (
-      <p data-testid="locked-in">
-        {startSlot} {canReopen ? "reopenable" : "fixed"}
-      </p>
-    ),
+    LockedIn: ({ startSlot }: { startSlot: string }) => <p data-testid="locked-in">{startSlot}</p>,
+    ReopenAvailability: () => <button type="button">Reopen availability</button>,
   }));
   vi.doMock("@/app/hub/ideas/_components/idea-actions", () => ({
     IdeaActions: ({ title }: { title: string }) => <button type="button">Promote {title}</button>,
@@ -611,7 +608,8 @@ describe("hub pages", () => {
     expect(screen.getAllByTestId("availability-setup")).toHaveLength(1);
     expect(screen.getAllByTestId("availability-grid").at(-1)).toHaveTextContent("read-only");
     expect(screen.getAllByTestId("ranked-slots")).toHaveLength(1);
-    expect(screen.getByTestId("locked-in")).toHaveTextContent("2026-10-02T19:00 reopenable");
+    expect(screen.getByTestId("locked-in")).toHaveTextContent("2026-10-02T19:00");
+    expect(screen.getByRole("button", { name: "Reopen availability" })).toBeInTheDocument();
     expect(screen.getByTestId("carpools")).toHaveTextContent("0 not going");
     expect(screen.getByTestId("commute-map")).toHaveTextContent("no key");
     expect(screen.getByText("Commute map")).toBeInTheDocument();
@@ -659,7 +657,7 @@ describe("hub pages", () => {
     expect(screen.getByText("Settling up")).toBeInTheDocument();
     expect(screen.getByText("2 unpaid")).toBeInTheDocument();
     expect(screen.getByTestId("itinerary")).toHaveTextContent("0 read-only");
-    expect(screen.getByTestId("locked-in")).not.toHaveTextContent("reopenable");
+    expect(screen.queryByRole("button", { name: "Reopen availability" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel hangout" })).toBeInTheDocument();
     settling.unmount();
 
