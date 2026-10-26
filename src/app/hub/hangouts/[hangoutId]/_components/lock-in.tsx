@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -134,13 +135,14 @@ export function LockedIn({
               key={status}
               size="sm"
               variant={mine === status ? "default" : "outline"}
-              className="whitespace-nowrap"
+              className="h-11 whitespace-nowrap sm:h-8"
               aria-pressed={mine === status}
               disabled={isPending}
               onClick={() =>
                 run(() => setAttendanceAction({ hangoutId, status }), "Attendance saved")
               }
             >
+              {mine === status ? <Check className="size-4" aria-hidden="true" /> : null}
               {label}
             </Button>
           ))}
@@ -151,7 +153,7 @@ export function LockedIn({
           const people = attendees.filter((attendee) => attendee.status === status);
           return (
             <div key={status} className="flex flex-col gap-1 sm:flex-row sm:gap-3">
-              <dt className="text-muted-foreground w-28 shrink-0">
+              <dt className="w-28 shrink-0 font-medium">
                 {label} ({people.length})
               </dt>
               <dd>
