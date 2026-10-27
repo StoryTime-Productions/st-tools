@@ -29,6 +29,8 @@ import { buildCommuteMap, toMapCar, toMapTransit } from "@/lib/commute-map";
 import { scheduleStops, timeText } from "@/lib/itinerary";
 import { getStopWeather } from "@/lib/weather";
 
+const isPast = (date: Date) => date.getTime() < Date.now();
+
 export default async function HangoutPage({ params }: { params: Promise<{ hangoutId: string }> }) {
   const user = await getCurrentUser();
   if (!user) redirect("/auth/sign-in");
@@ -78,6 +80,17 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
   const warnings = [
     ...new Set(weather.flatMap((stop) => (stop.status === "ok" ? stop.warnings : []))),
   ];
+  const allShares = hangout.costs.flatMap((cost) => cost.shares);
+  const toConfirm = allShares.filter((share) => share.status === "SENT").length;
+  const unpaidText =
+    toConfirm > 0
+      ? `${hangout.unpaid - toConfirm} unpaid · ${toConfirm} to confirm`
+      : `${hangout.unpaid} unpaid`;
+  const owedCents = allShares
+    .filter((share) => share.userId === user.id && share.status === "UNPAID")
+    .reduce((sum, share) => sum + share.amountCents - share.paidCents, 0);
+  const deadlinePassed =
+    hangout.availabilityDeadline !== null && isPast(hangout.availabilityDeadline);
   const setup = {
     dates: hangout.availabilityDates,
     startHour: hangout.windowStartHour,
@@ -95,7 +108,7 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
             ·
           </span>
           <span className="whitespace-nowrap">
-            Fill in by{" "}
+            {deadlinePassed ? "Closed" : "Fill in by"}{" "}
             {hangout.availabilityDeadline.toLocaleString("en-US", {
               timeZone: "America/Toronto",
               month: "short",
@@ -110,12 +123,46 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
   );
   const showItinerary = canEdit || hangout.stops.length > 0;
   const jumps = [
+    ended && showCosts ? ["#costs", "Costs"] : null,
     collecting || hasDates ? ["#availability", "Availability"] : null,
     showItinerary ? ["#itinerary", "Itinerary"] : null,
     ["#commute", "Commute"],
     ["#carpools", "Carpools"],
-    showCosts ? ["#costs", "Costs"] : null,
+    !ended && showCosts ? ["#costs", "Costs"] : null,
   ].filter((jump): jump is string[] => jump !== null);
+
+  const costsCard = showCosts ? (
+    <Card id="costs" className="border-border/70 bg-background/85 rounded-3xl shadow-none">
+      <CardHeader className="flex flex-row items-center justify-between gap-2">
+        <div className="flex flex-wrap items-baseline gap-x-3">
+          <CardTitle className="text-base">Costs</CardTitle>
+          {owedCents > 0 ? (
+            <span className="text-sm font-medium">You owe ${(owedCents / 100).toFixed(2)}</span>
+          ) : null}
+        </div>
+        {canEdit ? (
+          <CostDialog hangoutId={hangout.id} members={members} goingIds={goingIds} />
+        ) : null}
+      </CardHeader>
+      {hangout.costs.length > 0 ? (
+        <CardContent>
+          <Costs
+            items={hangout.costs}
+            members={members}
+            scheduled={scheduled}
+            goingIds={goingIds}
+            canEdit={canEdit}
+            viewer={{
+              id: user.id,
+              isAdmin: user.role === "ADMIN",
+              status:
+                hangout.attendees.find((attendee) => attendee.userId === user.id)?.status ?? null,
+            }}
+          />
+        </CardContent>
+      ) : null}
+    </Card>
+  ) : null;
 
   return (
     <div className="space-y-6 pb-24 lg:pb-0">
@@ -143,7 +190,9 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
                 {HANGOUT_STATUS_LABEL[hangout.phase]}
               </Badge>
               {hangout.phase === "SETTLING_UP" ? (
-                <Badge variant="outline">{hangout.unpaid} unpaid</Badge>
+                <a href="#costs" className="rounded-full">
+                  <Badge variant="outline">{unpaidText}</Badge>
+                </a>
               ) : null}
             </div>
             {hangout.proposerName ? (
@@ -166,6 +215,12 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
         <p className="max-w-3xl text-sm leading-6 whitespace-pre-line">{hangout.description}</p>
       ) : null}
 
+      {hangout.phase === "CANCELLED" ? (
+        <p role="status" className="bg-muted/40 rounded-2xl border px-4 py-3 text-sm">
+          This hangout was cancelled. It stays here as a record.
+        </p>
+      ) : null}
+
       {hangout.discordThreadUrl ? (
         <a
           href={hangout.discordThreadUrl}
@@ -178,10 +233,12 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
         </a>
       ) : null}
 
+      {ended ? costsCard : null}
+
       {scheduled ? (
         <nav
           aria-label="Jump to a section"
-          className="-mx-1 flex gap-2 overflow-x-auto px-1 lg:hidden"
+          className="-mx-1 flex gap-2 overflow-x-auto [mask-image:linear-gradient(to_right,black_88%,transparent)] px-1 lg:hidden lg:[mask-image:none]"
         >
           {jumps.map(([href, label]) => (
             <a
@@ -242,9 +299,10 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
                 />
               </EditableSetup>
             ) : !hasDates ? (
-              <p className="text-muted-foreground text-sm">
-                The admins haven&apos;t picked dates yet.
-              </p>
+              <div className="text-muted-foreground space-y-1 text-sm">
+                <p>The admins haven&apos;t picked dates yet.</p>
+                <p>The availability grid shows up here once they do.</p>
+              </div>
             ) : (
               setupSummary
             )}
@@ -351,6 +409,7 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
                 attendees={hangout.attendees}
                 transit={hangout.transit}
                 weather={{ warnings, checked: weather.length > 0 }}
+                readOnly={ended}
                 stops={hangout.stops.flatMap((stop) =>
                   stop.address ? [{ id: stop.id, title: stop.title, address: stop.address }] : []
                 )}
@@ -368,34 +427,7 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
         </Card>
       ) : null}
 
-      {showCosts ? (
-        <Card id="costs" className="border-border/70 bg-background/85 rounded-3xl shadow-none">
-          <CardHeader className="flex flex-row items-center justify-between gap-2">
-            <CardTitle className="text-base">Costs</CardTitle>
-            {canEdit ? (
-              <CostDialog hangoutId={hangout.id} members={members} goingIds={goingIds} />
-            ) : null}
-          </CardHeader>
-          {hangout.costs.length > 0 ? (
-            <CardContent>
-              <Costs
-                items={hangout.costs}
-                members={members}
-                scheduled={scheduled}
-                goingIds={goingIds}
-                canEdit={canEdit}
-                viewer={{
-                  id: user.id,
-                  isAdmin: user.role === "ADMIN",
-                  status:
-                    hangout.attendees.find((attendee) => attendee.userId === user.id)?.status ??
-                    null,
-                }}
-              />
-            </CardContent>
-          ) : null}
-        </Card>
-      ) : null}
+      {!ended ? costsCard : null}
     </div>
   );
 }

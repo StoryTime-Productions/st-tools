@@ -146,6 +146,7 @@ export function Carpools({
   viewer,
   weather = { warnings: [], checked: false },
   stops = [],
+  readOnly = false,
 }: {
   hangoutId: string;
   cars: HangoutCarItem[];
@@ -156,6 +157,8 @@ export function Carpools({
   weather?: CarpoolWeather;
   /** The hangout's stops that have an address; getting home by transit can start at any of them. */
   stops?: TransitStop[];
+  /** The hangout is over: show who rode with whom, but no forms to join or offer a car. */
+  readOnly?: boolean;
 }) {
   const [isPending, run] = useRun();
   const [confirm, confirmDialog] = useConfirm();
@@ -163,6 +166,11 @@ export function Carpools({
   const [address, setAddress] = useState("");
   const needsAddress = viewer.homeAddress !== undefined && !viewer.homeAddress;
   const driving = cars.some((car) => car.driver.userId === viewer.id);
+  // On a car for either trip, or on transit for either trip.
+  const hasRide =
+    cars.some((car) =>
+      [...car.pickups, ...car.dropoffs].some((person) => person.userId === viewer.id)
+    ) || transit.some((row) => row.userId === viewer.id);
   // Only drivers and admins see who still needs a ride (R6).
   const waiting = (key: "pickup" | "dropoff") =>
     attendees.filter((attendee) => attendee.needsRide[key]);
@@ -383,10 +391,15 @@ export function Carpools({
           );
         })}
       </ul>
+      {!readOnly && viewer.going && !driving && cars.length > 0 && !hasRide ? (
+        <p className="bg-muted/40 rounded-2xl border px-4 py-3">
+          You don&apos;t have a ride yet. Ask a driver to add you, or choose public transit below.
+        </p>
+      ) : null}
       <TransitChoice
         hangoutId={hangoutId}
         transit={transit}
-        viewer={{ ...viewer, driving }}
+        viewer={{ ...viewer, going: viewer.going && !readOnly, driving }}
         stops={stops}
         carsFor={{
           PICKUP:
@@ -397,7 +410,7 @@ export function Carpools({
             null,
         }}
       />
-      {!viewer.going ? (
+      {readOnly ? null : !viewer.going ? (
         <p className="text-muted-foreground">Mark yourself Going to drive or ride.</p>
       ) : !driving ? (
         <div className="space-y-4 rounded-2xl border px-4 py-3">

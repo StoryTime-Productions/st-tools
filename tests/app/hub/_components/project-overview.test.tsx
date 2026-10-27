@@ -189,6 +189,12 @@ describe("ProjectOverview", () => {
         { ...HANGOUTS[0], id: "h6", title: "Picnic", responded: true, availabilityDeadline: null },
         {
           ...HANGOUTS[0],
+          id: "h7",
+          title: "Hike",
+          availabilityDeadline: new Date(Date.now() + 86_400_000).toISOString(),
+        },
+        {
+          ...HANGOUTS[0],
           id: "h3",
           title: "Dinner",
           status: "SCHEDULED",
@@ -199,9 +205,10 @@ describe("ProjectOverview", () => {
     );
 
     expect(screen.getByRole("link", { name: /Beach day/ })).toHaveTextContent(
-      "You haven't responded · fill in by Oct 1, 6:00 PM"
+      "You haven't responded · deadline passed"
     );
     expect(screen.getByRole("link", { name: /Picnic/ })).toHaveTextContent("You've responded");
+    expect(screen.getByRole("link", { name: /Hike/ })).toHaveTextContent(/fill in by/);
     expect(screen.getByRole("link", { name: /Dinner/ })).toHaveTextContent("Fri, Oct 30 · 6:00 PM");
   });
 

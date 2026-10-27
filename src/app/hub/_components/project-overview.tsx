@@ -248,8 +248,11 @@ const DEADLINE = {
 /** The one line that says what a hangout needs from you: when it is, or whether to fill in availability. */
 function hangoutWhen(hangout: HangoutCardInfo) {
   if (hangout.phase === "COLLECTING") {
-    const deadline = hangout.availabilityDeadline
-      ? ` · fill in by ${new Date(hangout.availabilityDeadline).toLocaleString("en-US", DEADLINE)}`
+    const due = hangout.availabilityDeadline ? new Date(hangout.availabilityDeadline) : null;
+    const deadline = due
+      ? due.getTime() < Date.now()
+        ? " · deadline passed"
+        : ` · fill in by ${due.toLocaleString("en-US", DEADLINE)}`
       : "";
     return `${hangout.responded ? "You've responded" : "You haven't responded"}${deadline}`;
   }

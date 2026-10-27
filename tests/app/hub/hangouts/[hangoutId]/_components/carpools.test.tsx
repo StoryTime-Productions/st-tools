@@ -128,6 +128,25 @@ describe("Carpools", () => {
     expect(screen.getByText("No cars yet.")).toBeInTheDocument();
   });
 
+  it("tells a Going rider with no car or transit that they have no ride yet", () => {
+    const { unmount } = renderCarpools([CAR], viewer("c"));
+    expect(screen.getByText(/You don't have a ride yet/)).toBeInTheDocument();
+    unmount();
+
+    // On a car (Bob rides with Alice), driving, or not Going: no nudge.
+    renderCarpools([CAR], viewer("b"));
+    expect(screen.queryByText(/You don't have a ride yet/)).not.toBeInTheDocument();
+  });
+
+  it("shows only who rode with whom, without join forms, once the hangout is over", () => {
+    render(<Carpools hangoutId="h1" cars={[CAR]} transit={[]} viewer={viewer("c")} readOnly />);
+    expect(screen.getByRole("listitem", { name: "Alice's car" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Offer my car" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Mark yourself Going to drive or ride.")).not.toBeInTheDocument();
+    expect(screen.queryByText(/You don't have a ride yet/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: /public transit/ })).not.toBeInTheDocument();
+  });
+
   it("offers a car with a seat count", async () => {
     renderCarpools([]);
 

@@ -423,6 +423,7 @@ export function CostDialog({
                   type="button"
                   size="sm"
                   variant="ghost"
+                  className="max-sm:h-11"
                   onClick={() =>
                     setForm({
                       ...form,
@@ -447,7 +448,7 @@ export function CostDialog({
             <ul className="grid max-h-40 gap-1 overflow-y-auto sm:grid-cols-2">
               {members.map((member) => (
                 <li key={member.id}>
-                  <label className="flex items-center gap-2 py-1">
+                  <label className="flex items-center gap-2 py-1 max-sm:min-h-11">
                     <input
                       type="checkbox"
                       className="size-4"
@@ -467,7 +468,10 @@ export function CostDialog({
             <Label htmlFor={id("notes")}>Notes (optional)</Label>
             <Textarea id={id("notes")} value={form.notes} onChange={set("notes")} rows={3} />
           </div>
-          <DialogFooter showCloseButton>
+          <DialogFooter
+            showCloseButton
+            className="bg-background sticky bottom-0 -mx-6 -mb-6 border-t px-6 py-4"
+          >
             <Button
               type="submit"
               disabled={

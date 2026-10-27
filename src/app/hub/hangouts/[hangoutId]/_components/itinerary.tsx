@@ -403,7 +403,10 @@ export function StopDialog({
             <Label htmlFor={id("notes")}>Notes (optional)</Label>
             <Textarea id={id("notes")} value={form.notes} onChange={set("notes")} rows={3} />
           </div>
-          <DialogFooter showCloseButton>
+          <DialogFooter
+            showCloseButton
+            className="bg-background sticky bottom-0 -mx-6 -mb-6 border-t px-6 py-4"
+          >
             <Button type="submit" disabled={isPending || form.title.trim().length === 0}>
               {isPending ? "Saving..." : stop ? "Save stop" : "Add stop"}
             </Button>

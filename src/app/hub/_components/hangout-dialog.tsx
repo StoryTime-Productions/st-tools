@@ -83,13 +83,13 @@ export function HangoutDialog({ hangout }: { hangout?: EditableHangout }) {
             Edit hangout
           </Button>
         ) : (
-          <Button className="gap-2 max-sm:h-11">
+          <Button className="gap-2 max-sm:h-11 max-sm:w-full">
             <Plus className="size-4" />
             New hangout
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{hangout ? "Edit hangout" : "Create a hangout"}</DialogTitle>
           <DialogDescription>
@@ -134,7 +134,10 @@ export function HangoutDialog({ hangout }: { hangout?: EditableHangout }) {
             />
           </div>
 
-          <DialogFooter showCloseButton>
+          <DialogFooter
+            showCloseButton
+            className="bg-background sticky bottom-0 -mx-6 -mb-6 border-t px-6 py-4"
+          >
             <Button type="submit" disabled={isPending || title.trim().length === 0}>
               {isPending ? "Saving..." : hangout ? "Save changes" : "Create hangout"}
             </Button>

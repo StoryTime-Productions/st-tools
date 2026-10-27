@@ -110,7 +110,6 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
           rider.position,
           "#475569"
         ).bindTooltip(text(`${rider.name} (public transit)`), {
-          permanent: true,
           direction: "top",
           offset: [0, -6],
         });
