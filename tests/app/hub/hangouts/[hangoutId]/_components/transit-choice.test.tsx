@@ -53,13 +53,14 @@ describe("TransitChoice", () => {
       { ...me, going: false }
     );
 
-    const list = screen.getByRole("list", { name: "Taking public transit" });
-    expect(within(list).getAllByRole("listitem")[0]).toHaveTextContent(
-      "Eve · getting there · 5 Rue Start"
-    );
-    expect(within(list).getAllByRole("listitem")[1]).toHaveTextContent(
-      "Finn · getting home · 5 Rue Start → 7 Home Rd"
-    );
+    const there = screen.getByRole("list", { name: "Taking public transit, getting there" });
+    expect(within(there).getByRole("listitem")).toHaveTextContent("Eve");
+    expect(within(there).getByRole("listitem")).toHaveTextContent("From 5 Rue Start");
+    expect(within(there).getByRole("listitem")).not.toHaveTextContent("To ");
+    const home = screen.getByRole("list", { name: "Taking public transit, getting home" });
+    expect(within(home).getByRole("listitem")).toHaveTextContent("Finn");
+    expect(within(home).getByRole("listitem")).toHaveTextContent("From 5 Rue Start");
+    expect(within(home).getByRole("listitem")).toHaveTextContent("To 7 Home Rd");
     // Not going: look, don't touch.
     expect(screen.queryByRole("form")).not.toBeInTheDocument();
   });

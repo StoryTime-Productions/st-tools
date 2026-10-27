@@ -14,9 +14,6 @@ const TRIPS: { direction: RideDirection; title: string; short: string }[] = [
   { direction: "DROPOFF", title: "Getting home", short: "getting home" },
 ];
 
-const describe = (row: HangoutTransitItem) =>
-  row.destAddress ? `${row.startAddress} → ${row.destAddress}` : row.startAddress;
-
 /**
  * Everyone's public transit choices (R5), and for a Going attendee who isn't driving, a form per
  * trip to set or clear their own (R4). Start and destination begin as the profile home.
@@ -40,17 +37,41 @@ export function TransitChoice({
     <section aria-label="Public transit" className="space-y-3">
       <h3 className="font-medium">Public transit</h3>
       {transit.length > 0 ? (
-        <ul aria-label="Taking public transit" className="space-y-1">
-          {transit.map((row) => (
-            <li key={`${row.userId}-${row.direction}`}>
-              {row.name}
-              <span className="text-muted-foreground">
-                {" "}
-                · {TRIPS.find((trip) => trip.direction === row.direction)?.short} · {describe(row)}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <div className="space-y-4">
+          {TRIPS.map((trip) => {
+            const rows = transit.filter((row) => row.direction === trip.direction);
+            return rows.length > 0 ? (
+              <div key={trip.direction} className="space-y-2">
+                <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                  {trip.title}
+                </p>
+                <ul
+                  aria-label={`Taking public transit, ${trip.short}`}
+                  className="m-0 grid list-none gap-2 p-0 sm:grid-cols-2"
+                >
+                  {rows.map((row) => (
+                    <li
+                      key={`${row.userId}-${row.direction}`}
+                      className="bg-muted/40 min-w-0 space-y-1 rounded-xl border px-3 py-2.5"
+                    >
+                      <p className="font-medium">{row.name}</p>
+                      <p className="text-muted-foreground break-words">
+                        <span className="text-xs tracking-wide uppercase">From </span>
+                        {row.startAddress}
+                      </p>
+                      {row.destAddress ? (
+                        <p className="text-muted-foreground break-words">
+                          <span className="text-xs tracking-wide uppercase">To </span>
+                          {row.destAddress}
+                        </p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null;
+          })}
+        </div>
       ) : (
         <p className="text-muted-foreground">Nobody is taking public transit.</p>
       )}

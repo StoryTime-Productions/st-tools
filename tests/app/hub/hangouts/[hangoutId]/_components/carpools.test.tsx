@@ -517,9 +517,10 @@ describe("Carpools", () => {
 
     it("lists everyone's transit choices on the card", () => {
       render(<Carpools hangoutId="h1" cars={[CAR]} transit={[eve]} viewer={viewer("z")} />);
-      expect(screen.getByRole("list", { name: "Taking public transit" })).toHaveTextContent(
-        "Eve · getting home · Bar → 7 Home Rd"
-      );
+      const list = screen.getByRole("list", { name: "Taking public transit, getting home" });
+      expect(list).toHaveTextContent("Eve");
+      expect(list).toHaveTextContent("From Bar");
+      expect(list).toHaveTextContent("To 7 Home Rd");
     });
 
     it("warns a rider that transit takes them off the car for that trip only", () => {
