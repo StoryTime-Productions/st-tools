@@ -32,7 +32,10 @@ import type {
   HangoutTransitItem,
 } from "@/lib/hangouts";
 import type { Trip } from "@/lib/routes";
-import { TransitChoice } from "@/app/hub/hangouts/[hangoutId]/_components/transit-choice";
+import {
+  TransitChoice,
+  type TransitStop,
+} from "@/app/hub/hangouts/[hangoutId]/_components/transit-choice";
 import { useRun } from "@/app/hub/hangouts/[hangoutId]/_components/use-run";
 import { WeatherCredit } from "@/app/hub/hangouts/[hangoutId]/_components/weather";
 
@@ -142,6 +145,7 @@ export function Carpools({
   transit = [],
   viewer,
   weather = { warnings: [], checked: false },
+  stops = [],
 }: {
   hangoutId: string;
   cars: HangoutCarItem[];
@@ -150,6 +154,8 @@ export function Carpools({
   /** `homeAddress` is empty when the viewer has none, so offering a car asks for one (O2). */
   viewer: { id: string; isAdmin: boolean; going: boolean; homeAddress?: string | null };
   weather?: CarpoolWeather;
+  /** The hangout's stops that have an address; getting home by transit can start at any of them. */
+  stops?: TransitStop[];
 }) {
   const [isPending, run] = useRun();
   const [seats, setSeats] = useState("4");
@@ -377,6 +383,7 @@ export function Carpools({
         hangoutId={hangoutId}
         transit={transit}
         viewer={{ ...viewer, driving }}
+        stops={stops}
         carsFor={{
           PICKUP:
             cars.find((car) => car.pickups.some((p) => p.userId === viewer.id))?.driver.name ??

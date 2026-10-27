@@ -9,6 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { HangoutTransitItem } from "@/lib/hangouts";
 
+export interface TransitStop {
+  id: string;
+  title: string;
+  address: string;
+}
+
 const TRIPS: { direction: RideDirection; title: string; short: string }[] = [
   { direction: "PICKUP", title: "Getting there", short: "getting there" },
   { direction: "DROPOFF", title: "Getting home", short: "getting home" },
@@ -23,12 +29,15 @@ export function TransitChoice({
   transit,
   viewer,
   carsFor,
+  stops = [],
 }: {
   hangoutId: string;
   transit: HangoutTransitItem[];
   viewer: { id: string; going: boolean; driving: boolean; homeAddress?: string | null };
   /** Driver names of the cars the viewer is on, per direction, so the form can warn about leaving one. */
   carsFor: Record<RideDirection, string | null>;
+  /** The hangout's stops that have an address, in order: where getting home can start. */
+  stops?: TransitStop[];
 }) {
   const canChoose = viewer.going && !viewer.driving;
   if (transit.length === 0 && !canChoose) return null;
@@ -86,6 +95,7 @@ export function TransitChoice({
               )}
               home={viewer.homeAddress ?? ""}
               leaving={carsFor[trip.direction]}
+              stops={stops}
             />
           ))
         : null}
@@ -99,14 +109,18 @@ function TransitForm({
   mine,
   home,
   leaving,
+  stops,
 }: {
   hangoutId: string;
   trip: { direction: RideDirection; title: string; short: string };
   mine: HangoutTransitItem | undefined;
   home: string;
   leaving: string | null;
+  stops: TransitStop[];
 }) {
   const [isPending, run] = useRun();
+  // Getting home starts at the last stop unless the rider picks an earlier one to leave from.
+  const [stopId, setStopId] = useState(stops.at(-1)?.id ?? "");
   const [start, setStart] = useState(mine?.startAddress ?? home);
   const [destination, setDestination] = useState(mine?.destAddress ?? home);
   const needsDestination = trip.direction === "DROPOFF";
@@ -119,7 +133,12 @@ function TransitForm({
       onSubmit={(event) => {
         event.preventDefault();
         run(
-          () => setTransitAction(hangoutId, trip.direction, { start, destination }),
+          () =>
+            setTransitAction(hangoutId, trip.direction, {
+              start: needsDestination ? undefined : start,
+              startStopId: needsDestination ? stopId : undefined,
+              destination,
+            }),
           mine ? "Transit updated" : "Marked as public transit"
         );
       }}
@@ -136,17 +155,47 @@ function TransitForm({
         </p>
       ) : null}
       <div className="flex flex-wrap items-end gap-2">
-        <div className="flex min-w-44 flex-1 flex-col gap-1">
-          <Label htmlFor={`${id}-start`} className="text-xs">
-            Starting from
-          </Label>
-          <Input
-            id={`${id}-start`}
-            maxLength={300}
-            value={start}
-            onChange={(event) => setStart(event.target.value)}
-          />
-        </div>
+        {needsDestination ? (
+          <div className="flex min-w-44 flex-1 flex-col gap-1">
+            <Label htmlFor={`${id}-start`} className="text-xs">
+              Leaving from
+            </Label>
+            {stops.length > 1 ? (
+              <select
+                id={`${id}-start`}
+                className="border-input bg-background min-h-9 min-w-0 rounded-md border px-3 text-sm max-sm:min-h-11"
+                value={stopId}
+                onChange={(event) => setStopId(event.target.value)}
+              >
+                {stops.map((stop) => (
+                  <option key={stop.id} value={stop.id}>
+                    {stop.title} · {stop.address}
+                  </option>
+                ))}
+              </select>
+            ) : stops.length === 1 ? (
+              <p id={`${id}-start`} className="py-2 text-sm">
+                {stops[0].title} · {stops[0].address}
+              </p>
+            ) : (
+              <p id={`${id}-start`} className="text-muted-foreground py-2 text-sm">
+                Add an address to a stop in the itinerary first.
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="flex min-w-44 flex-1 flex-col gap-1">
+            <Label htmlFor={`${id}-start`} className="text-xs">
+              Starting from
+            </Label>
+            <Input
+              id={`${id}-start`}
+              maxLength={300}
+              value={start}
+              onChange={(event) => setStart(event.target.value)}
+            />
+          </div>
+        )}
         {needsDestination ? (
           <div className="flex min-w-44 flex-1 flex-col gap-1">
             <Label htmlFor={`${id}-destination`} className="text-xs">
@@ -163,7 +212,9 @@ function TransitForm({
         <Button
           type="submit"
           size="sm"
-          disabled={isPending || !start.trim() || (needsDestination && !destination.trim())}
+          disabled={
+            isPending || (needsDestination ? !stopId || !destination.trim() : !start.trim())
+          }
         >
           {mine ? "Update" : "Take public transit"}
         </Button>

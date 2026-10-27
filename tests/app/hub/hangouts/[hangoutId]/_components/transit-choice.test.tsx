@@ -28,16 +28,27 @@ const row = (overrides: Partial<HangoutTransitItem> = {}): HangoutTransitItem =>
 });
 
 const noCars = { PICKUP: null, DROPOFF: null };
+const STOPS = [
+  { id: "s1", title: "Dinner", address: "1 Dinner St" },
+  { id: "s2", title: "Karaoke", address: "2 Karaoke Ave" },
+];
 type Viewer = { id: string; going: boolean; driving: boolean; homeAddress?: string | null };
 const me: Viewer = { id: "m", going: true, driving: false, homeAddress: "1 Main St" };
 
 function renderChoice(
   transit: HangoutTransitItem[],
   viewer: Viewer = me,
-  carsFor: Record<"PICKUP" | "DROPOFF", string | null> = noCars
+  carsFor: Record<"PICKUP" | "DROPOFF", string | null> = noCars,
+  stops = STOPS
 ) {
   return render(
-    <TransitChoice hangoutId="h1" transit={transit} viewer={viewer} carsFor={carsFor} />
+    <TransitChoice
+      hangoutId="h1"
+      transit={transit}
+      viewer={viewer}
+      carsFor={carsFor}
+      stops={stops}
+    />
   );
 }
 
@@ -106,13 +117,18 @@ describe("TransitChoice", () => {
     expect(routerMocks.refresh).toHaveBeenCalled();
 
     const home = screen.getByRole("form", { name: "Getting home by public transit" });
-    expect(within(home).getByLabelText("Starting from")).toHaveValue("1 Main St");
+    // Getting home leaves from the last stop unless the rider picks an earlier one.
+    expect(within(home).queryByLabelText("Starting from")).not.toBeInTheDocument();
+    expect(within(home).getByLabelText("Leaving from")).toHaveDisplayValue(
+      "Karaoke · 2 Karaoke Ave"
+    );
     expect(within(home).getByLabelText("Going to")).toHaveValue("1 Main St");
+    fireEvent.change(within(home).getByLabelText("Leaving from"), { target: { value: "s1" } });
     fireEvent.change(within(home).getByLabelText("Going to"), { target: { value: "9 Elm St" } });
     fireEvent.click(within(home).getByRole("button", { name: "Take public transit" }));
     await waitFor(() =>
       expect(actionMocks.setTransitAction).toHaveBeenCalledWith("h1", "DROPOFF", {
-        start: "1 Main St",
+        startStopId: "s1",
         destination: "9 Elm St",
       })
     );
@@ -124,10 +140,26 @@ describe("TransitChoice", () => {
     const home = screen.getByRole("form", { name: "Getting home by public transit" });
     const save = within(home).getByRole("button", { name: "Take public transit" });
     expect(save).toBeDisabled();
-    fireEvent.change(within(home).getByLabelText("Starting from"), { target: { value: "Bar" } });
-    expect(save).toBeDisabled();
     fireEvent.change(within(home).getByLabelText("Going to"), { target: { value: "Home" } });
     expect(save).toBeEnabled();
+
+    const there = screen.getByRole("form", { name: "Getting there by public transit" });
+    expect(within(there).getByRole("button", { name: "Take public transit" })).toBeDisabled();
+    fireEvent.change(within(there).getByLabelText("Starting from"), { target: { value: "Bar" } });
+    expect(within(there).getByRole("button", { name: "Take public transit" })).toBeEnabled();
+  });
+
+  it("shows a single stop as text and asks for an address when no stop has one", () => {
+    const one = renderChoice([], me, noCars, [STOPS[0]]);
+    const home = screen.getByRole("form", { name: "Getting home by public transit" });
+    expect(within(home).queryByRole("combobox")).not.toBeInTheDocument();
+    expect(home).toHaveTextContent("Dinner · 1 Dinner St");
+    one.unmount();
+
+    renderChoice([], me, noCars, []);
+    const none = screen.getByRole("form", { name: "Getting home by public transit" });
+    expect(none).toHaveTextContent("Add an address to a stop in the itinerary first.");
+    expect(within(none).getByRole("button", { name: "Take public transit" })).toBeDisabled();
   });
 
   it("shows the server's refusal", async () => {

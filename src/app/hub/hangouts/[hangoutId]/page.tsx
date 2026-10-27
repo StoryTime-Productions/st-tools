@@ -285,6 +285,9 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
                 attendees={hangout.attendees}
                 transit={hangout.transit}
                 weather={{ warnings, checked: weather.length > 0 }}
+                stops={hangout.stops.flatMap((stop) =>
+                  stop.address ? [{ id: stop.id, title: stop.title, address: stop.address }] : []
+                )}
                 viewer={{
                   id: user.id,
                   isAdmin: user.role === "ADMIN",
