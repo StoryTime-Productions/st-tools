@@ -101,6 +101,7 @@ export function RecomputeRoutes({ hangoutId }: { hangoutId: string }) {
     <Button
       variant="outline"
       size="sm"
+      className="max-sm:h-11"
       disabled={isPending}
       onClick={() => run(() => recomputeRoutesAction(hangoutId), "Routes recomputed")}
     >
@@ -167,7 +168,7 @@ export function Carpools({
             ] as const
           ).map(([label, people]) =>
             people.length > 0 ? (
-              <span key={label} className="flex flex-wrap items-center gap-1.5">
+              <span key={label} className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto">
                 <Badge variant="secondary">{label}</Badge>
                 {people.map((person) => (
                   <Badge key={person.userId} variant="outline">
@@ -197,6 +198,12 @@ export function Carpools({
             const times = (direction === "PICKUP" ? there : back)?.stops;
             return (
               <>
+                <li
+                  aria-hidden="true"
+                  className="text-muted-foreground list-none pb-1 pl-6 text-xs font-medium tracking-wide uppercase"
+                >
+                  {direction === "PICKUP" ? "Getting there" : "Getting home"}
+                </li>
                 {people.length > 0 ? (
                   <li className="list-none">
                     <ul aria-label={title} className="m-0 list-none p-0">
@@ -210,7 +217,7 @@ export function Carpools({
                                   <Button
                                     size="icon"
                                     variant="ghost"
-                                    className="size-6"
+                                    className="size-6 max-sm:size-11"
                                     aria-label={`Remove ${rider.name} from ${title.toLowerCase()}`}
                                     disabled={isPending}
                                     onClick={() =>
@@ -292,6 +299,7 @@ export function Carpools({
                     <Button
                       size="icon"
                       variant="ghost"
+                      className="max-sm:size-11"
                       aria-label={`Remove ${car.driver.name}'s car`}
                       disabled={isPending}
                       onClick={() => {
@@ -401,7 +409,8 @@ export function Carpools({
   );
 }
 
-const selectClass = "border-input bg-background h-9 min-w-0 flex-1 rounded-md border px-3 text-sm";
+const selectClass =
+  "border-input bg-background min-h-9 min-w-0 flex-1 rounded-md border px-3 text-sm max-sm:min-h-11";
 
 type PointKind = "HOME" | "RIDER_HOME" | "COMMON";
 
@@ -435,7 +444,7 @@ function AddPassenger({
   if (seatsFull)
     return (
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="ghost" disabled>
+        <Button size="sm" variant="outline" className="max-sm:h-11" disabled>
           <Plus /> Add {noun}
         </Button>
         <p className="text-muted-foreground text-xs">Full: no seat left to add to {lower}.</p>
@@ -443,7 +452,13 @@ function AddPassenger({
     );
   if (!open)
     return (
-      <Button size="sm" variant="ghost" aria-expanded="false" onClick={() => setOpen(true)}>
+      <Button
+        size="sm"
+        variant="outline"
+        className="max-sm:h-11"
+        aria-expanded="false"
+        onClick={() => setOpen(true)}
+      >
         <Plus /> Add {noun}
       </Button>
     );
@@ -546,12 +561,20 @@ function AddPassenger({
           />
         </div>
       ) : null}
-      <Button type="submit" size="sm" disabled={isPending || !point}>
-        Add
-      </Button>
-      <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
-        Cancel
-      </Button>
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" className="max-sm:h-11" disabled={isPending || !point}>
+          Add
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="max-sm:h-11"
+          onClick={() => setOpen(false)}
+        >
+          Cancel
+        </Button>
+      </div>
     </form>
   );
 }
@@ -590,7 +613,12 @@ function CarDialog({ car }: { car: HangoutCarItem }) {
       }}
     >
       <DialogTrigger asChild>
-        <Button size="icon" variant="ghost" aria-label={`Edit ${car.driver.name}'s car`}>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="max-sm:size-11"
+          aria-label={`Edit ${car.driver.name}'s car`}
+        >
           <Pencil />
         </Button>
       </DialogTrigger>
