@@ -241,7 +241,7 @@ export function Carpools({
                   </TimelineRow>
                 )}
                 {canManage ? (
-                  <li className="list-none pb-3 pl-6">
+                  <li className="list-none pb-3 pl-6 empty:hidden">
                     <AddPassenger
                       carId={car.id}
                       direction={direction}
