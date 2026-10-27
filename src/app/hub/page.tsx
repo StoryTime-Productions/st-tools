@@ -18,15 +18,17 @@ export default async function HubPage() {
   const [projects, initiatives, hangouts] = await Promise.all([
     getProjectSummaries(),
     isAdmin ? getInitiativeOptions() : Promise.resolve([]),
-    getHangoutSummaries(),
+    getHangoutSummaries(user.id),
   ]);
 
   return (
     <div className="space-y-6">
       <HubTabs active="/hub" />
       {isAdmin ? (
-        <div className="flex flex-wrap gap-2 sm:justify-end">
-          <HangoutDialog />
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+          <div className="col-span-2 sm:contents">
+            <HangoutDialog />
+          </div>
           <ManageInitiativesDialog initiatives={initiatives} />
           <NewProjectDialog initiatives={initiatives} />
         </div>

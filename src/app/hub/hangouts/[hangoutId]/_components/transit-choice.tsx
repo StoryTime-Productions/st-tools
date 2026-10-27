@@ -44,7 +44,7 @@ export function TransitChoice({
 
   return (
     <section aria-label="Public transit" className="space-y-4">
-      <h3 className="font-medium">Public transit</h3>
+      <h3 className="text-sm font-medium">Public transit</h3>
       {transit.length > 0 ? (
         <div className="space-y-4">
           {TRIPS.map((trip) => {
@@ -65,12 +65,12 @@ export function TransitChoice({
                     >
                       <p className="font-medium">{row.name}</p>
                       <p className="text-muted-foreground break-words">
-                        <span className="text-xs tracking-wide uppercase">From </span>
+                        <span className="text-xs font-medium tracking-wide uppercase">From </span>
                         {row.startAddress}
                       </p>
                       {row.destAddress ? (
                         <p className="text-muted-foreground break-words">
-                          <span className="text-xs tracking-wide uppercase">To </span>
+                          <span className="text-xs font-medium tracking-wide uppercase">To </span>
                           {row.destAddress}
                         </p>
                       ) : null}
@@ -225,6 +225,7 @@ function TransitForm({
         <Button
           type="submit"
           size="sm"
+          variant="outline"
           className="max-sm:h-11 max-sm:w-full"
           aria-describedby={needsDestination && stops.length === 0 ? `${id}-no-stop` : undefined}
           disabled={

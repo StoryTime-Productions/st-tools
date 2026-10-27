@@ -1,15 +1,18 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, MessageCircle } from "lucide-react";
+import { ArrowLeft, ChevronDown, MessageCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AvailabilityGrid } from "@/app/hub/hangouts/[hangoutId]/_components/availability-grid";
-import { AvailabilitySetup } from "@/app/hub/hangouts/[hangoutId]/_components/availability-setup";
+import {
+  AvailabilitySetup,
+  EditableSetup,
+} from "@/app/hub/hangouts/[hangoutId]/_components/availability-setup";
 import { Carpools, RecomputeRoutes } from "@/app/hub/hangouts/[hangoutId]/_components/carpools";
-import { Costs } from "@/app/hub/hangouts/[hangoutId]/_components/costs";
+import { CostDialog, Costs } from "@/app/hub/hangouts/[hangoutId]/_components/costs";
 import { CommuteMap } from "@/app/hub/hangouts/[hangoutId]/_components/commute-map";
 import { HangoutCover } from "@/app/hub/hangouts/[hangoutId]/_components/hangout-cover";
-import { Itinerary } from "@/app/hub/hangouts/[hangoutId]/_components/itinerary";
+import { Itinerary, StopDialog } from "@/app/hub/hangouts/[hangoutId]/_components/itinerary";
 import {
   LockedIn,
   RankedSlots,
@@ -25,6 +28,8 @@ import { HANGOUT_STATUS_LABEL } from "@/lib/hub-format";
 import { buildCommuteMap, toMapCar, toMapTransit } from "@/lib/commute-map";
 import { scheduleStops, timeText } from "@/lib/itinerary";
 import { getStopWeather } from "@/lib/weather";
+
+const isPast = (date: Date) => date.getTime() < Date.now();
 
 export default async function HangoutPage({ params }: { params: Promise<{ hangoutId: string }> }) {
   const user = await getCurrentUser();
@@ -75,14 +80,92 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
   const warnings = [
     ...new Set(weather.flatMap((stop) => (stop.status === "ok" ? stop.warnings : []))),
   ];
+  const allShares = hangout.costs.flatMap((cost) => cost.shares);
+  const toConfirm = allShares.filter((share) => share.status === "SENT").length;
+  const unpaidText =
+    toConfirm > 0
+      ? `${hangout.unpaid - toConfirm} unpaid · ${toConfirm} to confirm`
+      : `${hangout.unpaid} unpaid`;
+  const owedCents = allShares
+    .filter((share) => share.userId === user.id && share.status === "UNPAID")
+    .reduce((sum, share) => sum + share.amountCents - share.paidCents, 0);
+  const deadlinePassed =
+    hangout.availabilityDeadline !== null && isPast(hangout.availabilityDeadline);
   const setup = {
     dates: hangout.availabilityDates,
     startHour: hangout.windowStartHour,
     endHour: hangout.windowEndHour,
   };
 
+  const setupSummary = (
+    <p className="text-muted-foreground flex flex-col text-sm sm:flex-row sm:gap-x-2">
+      <span className="whitespace-nowrap">
+        Window: {hourLabel(hangout.windowStartHour)} – {hourLabel(hangout.windowEndHour)} EST
+      </span>
+      {hangout.availabilityDeadline ? (
+        <>
+          <span aria-hidden="true" className="hidden sm:inline">
+            ·
+          </span>
+          <span className="whitespace-nowrap">
+            {deadlinePassed ? "Closed" : "Fill in by"}{" "}
+            {hangout.availabilityDeadline.toLocaleString("en-US", {
+              timeZone: "America/Toronto",
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+            })}
+          </span>
+        </>
+      ) : null}
+    </p>
+  );
+  const showItinerary = canEdit || hangout.stops.length > 0;
+  const jumps = [
+    ended && showCosts ? ["#costs", "Costs"] : null,
+    collecting || hasDates ? ["#availability", "Availability"] : null,
+    showItinerary ? ["#itinerary", "Itinerary"] : null,
+    ["#commute", "Commute"],
+    ["#carpools", "Carpools"],
+    !ended && showCosts ? ["#costs", "Costs"] : null,
+  ].filter((jump): jump is string[] => jump !== null);
+
+  const costsCard = showCosts ? (
+    <Card id="costs" className="border-border/70 bg-background/85 rounded-3xl shadow-none">
+      <CardHeader className="flex flex-row items-center justify-between gap-2">
+        <div className="flex flex-wrap items-baseline gap-x-3">
+          <CardTitle className="text-base">Costs</CardTitle>
+          {owedCents > 0 ? (
+            <span className="text-sm font-medium">You owe ${(owedCents / 100).toFixed(2)}</span>
+          ) : null}
+        </div>
+        {canEdit ? (
+          <CostDialog hangoutId={hangout.id} members={members} goingIds={goingIds} />
+        ) : null}
+      </CardHeader>
+      {hangout.costs.length > 0 ? (
+        <CardContent>
+          <Costs
+            items={hangout.costs}
+            members={members}
+            scheduled={scheduled}
+            goingIds={goingIds}
+            canEdit={canEdit}
+            viewer={{
+              id: user.id,
+              isAdmin: user.role === "ADMIN",
+              status:
+                hangout.attendees.find((attendee) => attendee.userId === user.id)?.status ?? null,
+            }}
+          />
+        </CardContent>
+      ) : null}
+    </Card>
+  ) : null;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24 lg:pb-0">
       <LiveRefresh hangoutId={hangout.id} />
       <Link
         href="/hub"
@@ -107,7 +190,9 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
                 {HANGOUT_STATUS_LABEL[hangout.phase]}
               </Badge>
               {hangout.phase === "SETTLING_UP" ? (
-                <Badge variant="outline">{hangout.unpaid} unpaid</Badge>
+                <a href="#costs" className="rounded-full">
+                  <Badge variant="outline">{unpaidText}</Badge>
+                </a>
               ) : null}
             </div>
             {hangout.proposerName ? (
@@ -130,6 +215,12 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
         <p className="max-w-3xl text-sm leading-6 whitespace-pre-line">{hangout.description}</p>
       ) : null}
 
+      {hangout.phase === "CANCELLED" ? (
+        <p role="status" className="bg-muted/40 rounded-2xl border px-4 py-3 text-sm">
+          This hangout was cancelled. It stays here as a record.
+        </p>
+      ) : null}
+
       {hangout.discordThreadUrl ? (
         <a
           href={hangout.discordThreadUrl}
@@ -140,6 +231,25 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
           <MessageCircle className="size-4" aria-hidden="true" />
           Discord thread
         </a>
+      ) : null}
+
+      {ended ? costsCard : null}
+
+      {scheduled ? (
+        <nav
+          aria-label="Jump to a section"
+          className="-mx-1 flex gap-2 overflow-x-auto [mask-image:linear-gradient(to_right,black_88%,transparent)] px-1 lg:hidden lg:[mask-image:none]"
+        >
+          {jumps.map(([href, label]) => (
+            <a
+              key={href}
+              href={href}
+              className="hover:bg-muted/40 inline-flex min-h-11 shrink-0 items-center rounded-full border px-4 text-sm"
+            >
+              {label}
+            </a>
+          ))}
+        </nav>
       ) : null}
 
       {collecting || hasDates ? (
@@ -165,55 +275,66 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
               </fieldset>
             ) : null}
             {collecting && user.role === "ADMIN" ? (
-              <AvailabilitySetup
-                hangoutId={hangout.id}
-                today={todayKey()}
-                initial={{
-                  dates: hangout.availabilityDates,
-                  startHour: hangout.windowStartHour,
-                  endHour: hangout.windowEndHour,
-                  deadline: hangout.availabilityDeadline
-                    ? torontoInputValue(hangout.availabilityDeadline)
-                    : null,
-                }}
-              />
+              <EditableSetup
+                defaultOpen={!hasDates}
+                summary={
+                  hasDates ? (
+                    setupSummary
+                  ) : (
+                    <p className="text-muted-foreground">Pick dates to start collecting.</p>
+                  )
+                }
+              >
+                <AvailabilitySetup
+                  hangoutId={hangout.id}
+                  today={todayKey()}
+                  initial={{
+                    dates: hangout.availabilityDates,
+                    startHour: hangout.windowStartHour,
+                    endHour: hangout.windowEndHour,
+                    deadline: hangout.availabilityDeadline
+                      ? torontoInputValue(hangout.availabilityDeadline)
+                      : null,
+                  }}
+                />
+              </EditableSetup>
             ) : !hasDates ? (
-              <p className="text-muted-foreground text-sm">
-                The admins haven&apos;t picked dates yet.
-              </p>
+              <div className="text-muted-foreground space-y-1 text-sm">
+                <p>The admins haven&apos;t picked dates yet.</p>
+                <p>The availability grid shows up here once they do.</p>
+              </div>
             ) : (
-              <p className="text-muted-foreground flex flex-col text-sm sm:flex-row sm:gap-x-2">
-                <span className="whitespace-nowrap">
-                  Window: {hourLabel(hangout.windowStartHour)} – {hourLabel(hangout.windowEndHour)}{" "}
-                  EST
-                </span>
-                {hangout.availabilityDeadline ? (
-                  <>
-                    <span aria-hidden="true" className="hidden sm:inline">
-                      ·
-                    </span>
-                    <span className="whitespace-nowrap">
-                      Fill in by{" "}
-                      {hangout.availabilityDeadline.toLocaleString("en-US", {
-                        timeZone: "America/Toronto",
-                        month: "short",
-                        day: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                  </>
-                ) : null}
-              </p>
+              setupSummary
             )}
-            {hasDates ? (
-              <AvailabilityGrid
-                hangoutId={hangout.id}
-                setup={setup}
-                user={{ id: user.id, name: user.name ?? user.email }}
-                responses={responses}
-                editable={collecting}
-              />
+            {hasDates && scheduled ? (
+              <details className="group rounded-2xl border">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-4 text-sm font-medium [&::-webkit-details-marker]:hidden">
+                  Availability responses
+                  <ChevronDown
+                    className="size-4 transition-transform group-open:rotate-180"
+                    aria-hidden="true"
+                  />
+                </summary>
+                <div className="p-4 pt-0">
+                  <AvailabilityGrid
+                    hangoutId={hangout.id}
+                    setup={setup}
+                    user={{ id: user.id, name: user.name ?? user.email }}
+                    responses={responses}
+                    editable={collecting}
+                  />
+                </div>
+              </details>
+            ) : hasDates ? (
+              <div className="space-y-4 border-t pt-4">
+                <AvailabilityGrid
+                  hangoutId={hangout.id}
+                  setup={setup}
+                  user={{ id: user.id, name: user.name ?? user.email }}
+                  responses={responses}
+                  editable={collecting}
+                />
+              </div>
             ) : null}
             {collecting ? (
               <RankedSlots
@@ -227,26 +348,29 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
         </Card>
       ) : null}
 
-      {canEdit || hangout.stops.length > 0 ? (
+      {showItinerary ? (
         <Card id="itinerary" className="border-border/70 bg-background/85 rounded-3xl shadow-none">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
             <CardTitle className="text-base">Itinerary</CardTitle>
+            {canEdit && !ended ? <StopDialog hangoutId={hangout.id} costs={hangout.costs} /> : null}
           </CardHeader>
-          <CardContent>
-            <Itinerary
-              hangoutId={hangout.id}
-              startSlot={hangout.startSlot}
-              stops={hangout.stops}
-              canEdit={canEdit && !ended}
-              weather={weather}
-              costs={hangout.costs}
-            />
-          </CardContent>
+          {hangout.stops.length > 0 || scheduled ? (
+            <CardContent>
+              <Itinerary
+                hangoutId={hangout.id}
+                startSlot={hangout.startSlot}
+                stops={hangout.stops}
+                canEdit={canEdit && !ended}
+                weather={weather}
+                costs={hangout.costs}
+              />
+            </CardContent>
+          ) : null}
         </Card>
       ) : null}
 
       {hangout.status === "SCHEDULED" ? (
-        <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
+        <Card id="commute" className="border-border/70 bg-background/85 rounded-3xl shadow-none">
           <CardHeader>
             <CardTitle className="text-base">Commute map</CardTitle>
           </CardHeader>
@@ -285,6 +409,7 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
                 attendees={hangout.attendees}
                 transit={hangout.transit}
                 weather={{ warnings, checked: weather.length > 0 }}
+                readOnly={ended}
                 stops={hangout.stops.flatMap((stop) =>
                   stop.address ? [{ id: stop.id, title: stop.title, address: stop.address }] : []
                 )}
@@ -302,29 +427,7 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
         </Card>
       ) : null}
 
-      {showCosts ? (
-        <Card id="costs" className="border-border/70 bg-background/85 rounded-3xl shadow-none">
-          <CardHeader>
-            <CardTitle className="text-base">Costs</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Costs
-              hangoutId={hangout.id}
-              items={hangout.costs}
-              members={members}
-              scheduled={scheduled}
-              goingIds={goingIds}
-              canEdit={canEdit}
-              viewer={{
-                id: user.id,
-                isAdmin: user.role === "ADMIN",
-                status:
-                  hangout.attendees.find((attendee) => attendee.userId === user.id)?.status ?? null,
-              }}
-            />
-          </CardContent>
-        </Card>
-      ) : null}
+      {!ended ? costsCard : null}
     </div>
   );
 }

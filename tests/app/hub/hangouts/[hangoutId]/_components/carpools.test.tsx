@@ -62,10 +62,16 @@ function renderCarpools(cars: HangoutCarItem[], who = viewer("c")) {
   return render(<Carpools hangoutId="h1" cars={cars} viewer={who} />);
 }
 
+/** Answers the in-app confirm dialog by clicking one of its buttons. */
+async function answer(label: string) {
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: label }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+}
+
 describe("Carpools", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     for (const action of Object.values(actionMocks)) action.mockResolvedValue({ success: true });
   });
 
@@ -120,6 +126,25 @@ describe("Carpools", () => {
 
     rerender(<Carpools hangoutId="h1" cars={[]} viewer={viewer("c")} />);
     expect(screen.getByText("No cars yet.")).toBeInTheDocument();
+  });
+
+  it("tells a Going rider with no car or transit that they have no ride yet", () => {
+    const { unmount } = renderCarpools([CAR], viewer("c"));
+    expect(screen.getByText(/You don't have a ride yet/)).toBeInTheDocument();
+    unmount();
+
+    // On a car (Bob rides with Alice), driving, or not Going: no nudge.
+    renderCarpools([CAR], viewer("b"));
+    expect(screen.queryByText(/You don't have a ride yet/)).not.toBeInTheDocument();
+  });
+
+  it("shows only who rode with whom, without join forms, once the hangout is over", () => {
+    render(<Carpools hangoutId="h1" cars={[CAR]} transit={[]} viewer={viewer("c")} readOnly />);
+    expect(screen.getByRole("listitem", { name: "Alice's car" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Offer my car" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Mark yourself Going to drive or ride.")).not.toBeInTheDocument();
+    expect(screen.queryByText(/You don't have a ride yet/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: /public transit/ })).not.toBeInTheDocument();
   });
 
   it("offers a car with a seat count", async () => {
@@ -215,10 +240,11 @@ describe("Carpools", () => {
       expect(screen.getByRole("button", { name: "Remove Alice's car" })).toBeEnabled()
     );
 
-    vi.mocked(window.confirm).mockReturnValueOnce(false);
     fireEvent.click(screen.getByRole("button", { name: "Remove Alice's car" }));
+    await answer("Cancel");
     expect(actionMocks.removeCarAction).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Remove Alice's car" }));
+    await answer("Remove");
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Car removed"));
     expect(actionMocks.removeCarAction).toHaveBeenCalledWith("car1");
   });
@@ -603,7 +629,7 @@ describe("Carpools", () => {
       expect(listing()).toHaveTextContent("Back 10:30 PM – 11:10 PM (+12 min for snow)");
     });
 
-    it("shows no note or banner when the weather costs nothing, but still credits Open-Meteo", () => {
+    it("shows no note or banner when the weather costs nothing", () => {
       render(
         <Carpools
           hangoutId="h1"
@@ -615,7 +641,8 @@ describe("Carpools", () => {
       expect(screen.queryByRole("status")).not.toBeInTheDocument();
       expect(listing()).not.toHaveTextContent("min for");
       expect(screen.queryByLabelText("Weather buffer (minutes)")).not.toBeInTheDocument();
-      expect(screen.getByText(/Open-Meteo\.com/)).toBeInTheDocument();
+      // The Open-Meteo credit lives once, in the itinerary.
+      expect(screen.queryByText(/Open-Meteo\.com/)).not.toBeInTheDocument();
     });
   });
 });

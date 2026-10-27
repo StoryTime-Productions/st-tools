@@ -42,6 +42,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { estimateCents, shareBalance } from "@/lib/costs";
 import type { HangoutCostItem } from "@/lib/hangouts";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 type Result = CostActionResult | PaymentActionResult;
 
@@ -79,7 +80,6 @@ function useRun() {
 }
 
 export function Costs({
-  hangoutId,
   items,
   viewer,
   members,
@@ -87,7 +87,6 @@ export function Costs({
   goingIds,
   canEdit,
 }: {
-  hangoutId: string;
   items: HangoutCostItem[];
   viewer: CostViewer;
   members: { id: string; name: string }[];
@@ -124,7 +123,6 @@ export function Costs({
           />
         ))}
       </ul>
-      {canEdit ? <CostDialog hangoutId={hangoutId} members={members} goingIds={goingIds} /> : null}
     </div>
   );
 }
@@ -145,6 +143,7 @@ function CostRow({
   canEdit: boolean;
 }) {
   const [isPending, run] = useRun();
+  const [confirm, confirmDialog] = useConfirm();
   const estimate = estimateCents(item.amountCents, item.participants.length);
   const isCollector = viewer.id === item.collector.userId;
   const inGroup = item.participants.some((person) => person.userId === viewer.id);
@@ -175,13 +174,17 @@ function CostRow({
               variant="ghost"
               aria-label={`Delete ${item.title}`}
               disabled={isPending}
-              onClick={() => {
-                if (window.confirm(`Delete "${item.title}" and its shares?`))
-                  run(() => deleteCostAction(item.id), "Cost deleted");
+              onClick={async () => {
+                const ok = await confirm("The item and its shares are removed.", {
+                  title: `Delete "${item.title}"?`,
+                  confirmLabel: "Delete",
+                });
+                if (ok) run(() => deleteCostAction(item.id), "Cost deleted");
               }}
             >
               <Trash2 />
             </Button>
+            {confirmDialog}
           </div>
         ) : null}
       </div>
@@ -223,6 +226,7 @@ function CostRow({
                         <Button
                           key={method}
                           size="sm"
+                          className="max-sm:h-11"
                           variant="outline"
                           disabled={isPending}
                           onClick={() => run(() => markSentAction(item.id, method), "Marked sent")}
@@ -234,6 +238,7 @@ function CostRow({
                   {mine && share.status === "SENT" && share.amountCents > 0 ? (
                     <Button
                       size="sm"
+                      className="max-sm:h-11"
                       variant="outline"
                       disabled={isPending}
                       onClick={() => run(() => undoSentAction(item.id), "Sent undone")}
@@ -244,6 +249,7 @@ function CostRow({
                   {isCollector && share.status === "SENT" ? (
                     <Button
                       size="sm"
+                      className="max-sm:h-11"
                       disabled={isPending}
                       onClick={() =>
                         run(() => confirmPaymentAction(item.id, share.userId), "Payment confirmed")
@@ -255,6 +261,7 @@ function CostRow({
                   {isCollector && share.status === "CONFIRMED" && !mine ? (
                     <Button
                       size="sm"
+                      className="max-sm:h-11"
                       variant="outline"
                       disabled={isPending}
                       onClick={() =>
@@ -267,6 +274,7 @@ function CostRow({
                   {isCollector && share.paidCents > share.amountCents ? (
                     <Button
                       size="sm"
+                      className="max-sm:h-11"
                       disabled={isPending}
                       onClick={() =>
                         run(() => markRefundedAction(item.id, share.userId), "Marked refunded")
@@ -285,7 +293,7 @@ function CostRow({
   );
 }
 
-function CostDialog({
+export function CostDialog({
   hangoutId,
   item,
   members,
@@ -349,11 +357,16 @@ function CostDialog({
     >
       <DialogTrigger asChild>
         {item ? (
-          <Button size="icon" variant="ghost" aria-label={`Edit ${item.title}`}>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="max-sm:size-11"
+            aria-label={`Edit ${item.title}`}
+          >
             <Pencil />
           </Button>
         ) : (
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" className="gap-2 max-sm:h-11">
             <Plus className="size-4" />
             Add cost
           </Button>
@@ -410,6 +423,7 @@ function CostDialog({
                   type="button"
                   size="sm"
                   variant="ghost"
+                  className="max-sm:h-11"
                   onClick={() =>
                     setForm({
                       ...form,
@@ -434,7 +448,7 @@ function CostDialog({
             <ul className="grid max-h-40 gap-1 overflow-y-auto sm:grid-cols-2">
               {members.map((member) => (
                 <li key={member.id}>
-                  <label className="flex items-center gap-2 py-1">
+                  <label className="flex items-center gap-2 py-1 max-sm:min-h-11">
                     <input
                       type="checkbox"
                       className="size-4"
@@ -454,7 +468,10 @@ function CostDialog({
             <Label htmlFor={id("notes")}>Notes (optional)</Label>
             <Textarea id={id("notes")} value={form.notes} onChange={set("notes")} rows={3} />
           </div>
-          <DialogFooter showCloseButton>
+          <DialogFooter
+            showCloseButton
+            className="bg-background before:from-background sticky bottom-0 -mx-6 -mb-6 border-t px-6 py-4 before:pointer-events-none before:absolute before:inset-x-0 before:-top-8 before:h-8 before:bg-gradient-to-t before:to-transparent"
+          >
             <Button
               type="submit"
               disabled={

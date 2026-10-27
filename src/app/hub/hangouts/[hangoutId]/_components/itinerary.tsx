@@ -38,6 +38,7 @@ import type { HangoutStopItem } from "@/lib/hangouts";
 import { scheduleStops, timeText } from "@/lib/itinerary";
 import type { StopWeather } from "@/lib/weather";
 import { WeatherChip, WeatherCredit } from "@/app/hub/hangouts/[hangoutId]/_components/weather";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 const STOP_TYPES: Array<[StopType, string]> = [
   ["COMMUTE", "Commute"],
@@ -97,6 +98,7 @@ export function Itinerary({
   costs?: StopCost[];
 }) {
   const [isPending, run] = useRun();
+  const [confirm, confirmDialog] = useConfirm();
   const { times, end } = scheduleStops(startSlot, stops);
   const startDay = startSlot?.slice(0, 10) ?? null;
 
@@ -135,6 +137,7 @@ export function Itinerary({
                       <Button
                         size="icon"
                         variant="ghost"
+                        className="max-sm:size-11"
                         aria-label={`Move ${stop.title} up`}
                         disabled={isPending || index === 0}
                         onClick={() => run(() => moveStopAction(stop.id, -1))}
@@ -144,6 +147,7 @@ export function Itinerary({
                       <Button
                         size="icon"
                         variant="ghost"
+                        className="max-sm:size-11"
                         aria-label={`Move ${stop.title} down`}
                         disabled={isPending || index === stops.length - 1}
                         onClick={() => run(() => moveStopAction(stop.id, 1))}
@@ -154,11 +158,15 @@ export function Itinerary({
                       <Button
                         size="icon"
                         variant="ghost"
+                        className="max-sm:size-11"
                         aria-label={`Delete ${stop.title}`}
                         disabled={isPending}
-                        onClick={() => {
-                          if (window.confirm(`Delete "${stop.title}"?`))
-                            run(() => deleteStopAction(stop.id), "Stop deleted");
+                        onClick={async () => {
+                          const ok = await confirm("This removes the stop from the itinerary.", {
+                            title: `Delete "${stop.title}"?`,
+                            confirmLabel: "Delete",
+                          });
+                          if (ok) run(() => deleteStopAction(stop.id), "Stop deleted");
                         }}
                       >
                         <Trash2 />
@@ -202,13 +210,13 @@ export function Itinerary({
           Ends {timeText({ at: end, lateBy: 0 }, startDay)}
         </p>
       ) : null}
-      {canEdit ? <StopDialog hangoutId={hangoutId} costs={costs} /> : null}
       {weather.length > 0 ? <WeatherCredit /> : null}
+      {confirmDialog}
     </div>
   );
 }
 
-function StopDialog({
+export function StopDialog({
   hangoutId,
   stop,
   costs,
@@ -272,11 +280,16 @@ function StopDialog({
     >
       <DialogTrigger asChild>
         {stop ? (
-          <Button size="icon" variant="ghost" aria-label={`Edit ${stop.title}`}>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="max-sm:size-11"
+            aria-label={`Edit ${stop.title}`}
+          >
             <Pencil />
           </Button>
         ) : (
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" className="gap-2 max-sm:h-11">
             <Plus className="size-4" />
             Add stop
           </Button>
@@ -390,7 +403,10 @@ function StopDialog({
             <Label htmlFor={id("notes")}>Notes (optional)</Label>
             <Textarea id={id("notes")} value={form.notes} onChange={set("notes")} rows={3} />
           </div>
-          <DialogFooter showCloseButton>
+          <DialogFooter
+            showCloseButton
+            className="bg-background before:from-background sticky bottom-0 -mx-6 -mb-6 border-t px-6 py-4 before:pointer-events-none before:absolute before:inset-x-0 before:-top-8 before:h-8 before:bg-gradient-to-t before:to-transparent"
+          >
             <Button type="submit" disabled={isPending || form.title.trim().length === 0}>
               {isPending ? "Saving..." : stop ? "Save stop" : "Add stop"}
             </Button>

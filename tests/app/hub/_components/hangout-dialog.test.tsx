@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { CancelHangoutButton, HangoutDialog } from "@/app/hub/_components/hangout-dialog";
 
 const actionMocks = vi.hoisted(() => ({
@@ -20,6 +20,13 @@ const HANGOUT = {
   description: "Bring sunscreen",
   discordThreadUrl: null,
 };
+
+/** Answers the in-app confirm dialog by clicking one of its buttons. */
+async function answer(label: string) {
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: label }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+}
 
 describe("HangoutDialog", () => {
   beforeEach(() => {
@@ -84,7 +91,6 @@ describe("CancelHangoutButton", () => {
   });
 
   it("confirms before cancelling and reports errors", async () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false);
     actionMocks.cancelHangoutAction
       .mockResolvedValueOnce({ error: "Hangout not found" })
       .mockResolvedValueOnce({ success: true });
@@ -92,17 +98,18 @@ describe("CancelHangoutButton", () => {
     const button = screen.getByRole("button", { name: "Cancel hangout" });
 
     fireEvent.click(button);
+    await answer("Keep it");
     expect(actionMocks.cancelHangoutAction).not.toHaveBeenCalled();
 
-    confirm.mockReturnValue(true);
     fireEvent.click(button);
+    await answer("Cancel hangout");
     await waitFor(() => expect(toastMocks.error).toHaveBeenCalledWith("Hangout not found"));
 
     await waitFor(() => expect(button).toBeEnabled());
     fireEvent.click(button);
+    await answer("Cancel hangout");
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Hangout cancelled"));
     expect(actionMocks.cancelHangoutAction).toHaveBeenCalledWith("h1");
     expect(routerMocks.refresh).toHaveBeenCalled();
-    confirm.mockRestore();
   });
 });

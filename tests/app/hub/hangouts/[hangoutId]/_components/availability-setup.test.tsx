@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AvailabilitySetup } from "@/app/hub/hangouts/[hangoutId]/_components/availability-setup";
 
 const actionMocks = vi.hoisted(() => ({ setAvailabilitySetupAction: vi.fn() }));
@@ -15,6 +15,13 @@ function renderSetup(
   initial = { dates: [] as string[], startHour: 9, endHour: 17, deadline: null as string | null }
 ) {
   render(<AvailabilitySetup hangoutId="h1" today="2026-09-28" initial={initial} />);
+}
+
+/** Answers the in-app confirm dialog by clicking one of its buttons. */
+async function answer(label: string) {
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: label }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 }
 
 describe("AvailabilitySetup", () => {
@@ -49,7 +56,7 @@ describe("AvailabilitySetup", () => {
     fireEvent.change(start, { target: { value: "18" } });
     fireEvent.change(end, { target: { value: "22" } });
     fireEvent.change(screen.getByLabelText("Deadline (optional, EST)"), {
-      target: { value: "2026-10-01T18:00" },
+      target: { value: "2026-10-01" },
     });
 
     fireEvent.click(save);
@@ -101,10 +108,6 @@ describe("AvailabilitySetup", () => {
   });
 
   it("asks before dropping answers and resubmits when confirmed", async () => {
-    const confirm = vi
-      .spyOn(window, "confirm")
-      .mockReturnValueOnce(false)
-      .mockReturnValueOnce(true);
     actionMocks.setAvailabilitySetupAction
       .mockResolvedValueOnce({ confirmDrop: 1 })
       .mockResolvedValueOnce({ confirmDrop: 3 })
@@ -113,20 +116,24 @@ describe("AvailabilitySetup", () => {
     const save = screen.getByRole("button", { name: "Save availability setup" });
 
     fireEvent.click(save);
-    await waitFor(() =>
-      expect(confirm).toHaveBeenCalledWith(
+    expect(
+      await screen.findByText(
         "This drops availability outside the new dates or hours for 1 member."
       )
-    );
+    ).toBeInTheDocument();
+    await answer("Cancel");
     await waitFor(() => expect(save).toBeEnabled());
     expect(actionMocks.setAvailabilitySetupAction).toHaveBeenCalledTimes(1);
 
     fireEvent.click(save);
+    expect(
+      await screen.findByText(
+        "This drops availability outside the new dates or hours for 3 members."
+      )
+    ).toBeInTheDocument();
+    await answer("Drop answers");
     await waitFor(() =>
       expect(toastMocks.success).toHaveBeenCalledWith("Availability setup saved")
-    );
-    expect(confirm).toHaveBeenLastCalledWith(
-      "This drops availability outside the new dates or hours for 3 members."
     );
     expect(actionMocks.setAvailabilitySetupAction).toHaveBeenLastCalledWith(
       expect.objectContaining({ dates: ["2026-10-03"] }),

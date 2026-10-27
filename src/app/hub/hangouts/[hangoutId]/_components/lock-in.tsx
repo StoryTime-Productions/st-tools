@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import type { RankedRun } from "@/lib/availability";
 import { dayLabel, timeLabel } from "@/lib/calendar";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 const DAY = { weekday: "short", month: "short", day: "numeric" } as const;
 const STATUSES = [
@@ -49,26 +50,39 @@ export function RankedSlots({
   canLock: boolean;
 }) {
   const [isPending, run] = useAction();
+  const [confirm, confirmDialog] = useConfirm();
 
   if (runs.length === 0) return null;
 
-  function lockIn({ day, start }: RankedRun) {
+  async function lockIn({ day, start }: RankedRun) {
     const label = `${dayLabel(day, DAY)}, ${timeLabel(start)}`;
-    if (!window.confirm(`Lock in ${label}? Members free then start as Going, the rest Maybe.`))
-      return;
+    const ok = await confirm(
+      `Lock in ${label}? Members free then start as Going, the rest Maybe.`,
+      {
+        title: "Lock in this time?",
+        confirmLabel: "Lock in",
+      }
+    );
+    if (!ok) return;
     run(() => lockInHangoutAction({ hangoutId, slot: `${day}T${start}` }), "Hangout scheduled");
   }
 
   return (
     <div className="space-y-2">
       <p className="text-sm font-medium">Best times</p>
+      <p className="text-muted-foreground text-xs">
+        {canLock
+          ? "Most people free first, then earliest. Lock one in to schedule the hangout."
+          : "Most people free first, then earliest. Admins lock in the final time."}
+      </p>
       <ol className="space-y-2">
-        {runs.map((option) => (
+        {runs.map((option, index) => (
           <li
             key={`${option.day}T${option.start}`}
             className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-4 py-2 text-sm"
           >
             <span>
+              <span className="text-muted-foreground mr-2 tabular-nums">{index + 1}.</span>
               {dayLabel(option.day, DAY)}, {timeLabel(option.start)} – {timeLabel(option.end)}
               <span className="text-muted-foreground">
                 {" "}
@@ -76,30 +90,49 @@ export function RankedSlots({
               </span>
             </span>
             {canLock ? (
-              <Button size="sm" disabled={isPending} onClick={() => lockIn(option)}>
+              <Button
+                size="sm"
+                className="max-sm:h-11"
+                disabled={isPending}
+                onClick={() => lockIn(option)}
+              >
                 Lock in
               </Button>
             ) : null}
           </li>
         ))}
       </ol>
+      {confirmDialog}
     </div>
   );
 }
 
 export function ReopenAvailability({ hangoutId }: { hangoutId: string }) {
   const [isPending, run] = useAction();
+  const [confirm, confirmDialog] = useConfirm();
 
-  function reopen() {
-    if (!window.confirm("Reopen availability? The locked time and everyone's Going / Maybe reset."))
-      return;
+  async function reopen() {
+    const ok = await confirm("The locked time and everyone's Going / Maybe reset.", {
+      title: "Reopen availability?",
+      confirmLabel: "Reopen",
+    });
+    if (!ok) return;
     run(() => reopenAvailabilityAction(hangoutId), "Availability reopened");
   }
 
   return (
-    <Button size="sm" variant="outline" disabled={isPending} onClick={reopen}>
-      Reopen availability
-    </Button>
+    <>
+      <Button
+        size="sm"
+        variant="outline"
+        className="max-sm:h-11"
+        disabled={isPending}
+        onClick={reopen}
+      >
+        Reopen availability
+      </Button>
+      {confirmDialog}
+    </>
   );
 }
 
@@ -117,6 +150,7 @@ export function LockedIn({
   const [isPending, run] = useAction();
   const [day, time] = startSlot.split("T");
   const mine = attendees.find((attendee) => attendee.userId === userId)?.status;
+  const mineLabel = STATUSES.find(([status]) => status === mine)?.[1];
 
   return (
     <div className="space-y-4 text-sm">
@@ -129,23 +163,28 @@ export function LockedIn({
             {dayLabel(day, DAY)} · {timeLabel(time)} EST
           </p>
         </div>
-        <div className="grid grid-cols-3 gap-1 sm:flex" role="group" aria-label="Your attendance">
-          {STATUSES.map(([status, label]) => (
-            <Button
-              key={status}
-              size="sm"
-              variant={mine === status ? "default" : "outline"}
-              className="h-11 whitespace-nowrap sm:h-8"
-              aria-pressed={mine === status}
-              disabled={isPending}
-              onClick={() =>
-                run(() => setAttendanceAction({ hangoutId, status }), "Attendance saved")
-              }
-            >
-              {mine === status ? <Check className="size-4" aria-hidden="true" /> : null}
-              {label}
-            </Button>
-          ))}
+        <div className="space-y-1">
+          <p className="text-muted-foreground text-xs sm:text-right">
+            Your response: {mineLabel ?? "Not answered"}
+          </p>
+          <div className="grid grid-cols-3 gap-1 sm:flex" role="group" aria-label="Your attendance">
+            {STATUSES.map(([status, label]) => (
+              <Button
+                key={status}
+                size="sm"
+                variant={mine === status ? "default" : "outline"}
+                className="h-11 whitespace-nowrap sm:h-8"
+                aria-pressed={mine === status}
+                disabled={isPending}
+                onClick={() =>
+                  run(() => setAttendanceAction({ hangoutId, status }), "Attendance saved")
+                }
+              >
+                {mine === status ? <Check className="size-4" aria-hidden="true" /> : null}
+                {label}
+              </Button>
+            ))}
+          </div>
         </div>
       </div>
       <dl className="space-y-2">

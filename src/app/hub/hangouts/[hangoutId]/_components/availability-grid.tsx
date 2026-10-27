@@ -415,14 +415,21 @@ export function AvailabilityGrid({
                 "text-muted-foreground mt-1.5 flex items-center gap-1.5 text-xs"
               )}
             >
-              <span aria-hidden="true" className="bg-muted/40 h-2.5 w-3.5 rounded-sm border" />
+              <span
+                aria-hidden="true"
+                className="bg-muted/40 border-foreground/30 h-2.5 w-3.5 rounded-sm border"
+              />
               Not free
               <span
                 aria-hidden="true"
                 className="h-2.5 w-3.5 rounded-sm border"
-                style={{ backgroundColor: "color-mix(in oklab, var(--avail) 35%, transparent)" }}
+                style={{
+                  backgroundColor: "color-mix(in oklab, var(--avail) 35%, transparent)",
+                  backgroundImage:
+                    "repeating-linear-gradient(135deg, transparent 0 3px, color-mix(in oklab, var(--avail) 70%, transparent) 3px 4px)",
+                }}
               />
-              Free
+              Free (hatched)
             </p>
           </div>
           {grid(
@@ -448,7 +455,7 @@ export function AvailabilityGrid({
                     cellClass(cell[1]),
                     "touch-none",
                     selected
-                      ? "bg-[color-mix(in_oklab,var(--avail)_35%,transparent)]"
+                      ? "bg-[color-mix(in_oklab,var(--avail)_35%,transparent)] bg-[image:repeating-linear-gradient(135deg,transparent_0_3px,color-mix(in_oklab,var(--avail)_70%,transparent)_3px_4px)]"
                       : "bg-muted/40",
                     editable && "cursor-pointer"
                   )}
@@ -466,6 +473,9 @@ export function AvailabilityGrid({
               {people.length === 0
                 ? "No one has filled this in yet."
                 : `Darker = more of the ${people.length} ${people.length === 1 ? "person" : "people"} who filled in are free.`}
+            </p>
+            <p className="text-muted-foreground text-xs lg:hidden">
+              Tap a slot to see who is free. Press and hold, then drag, to check a range.
             </p>
             <p
               className={cn(
@@ -522,7 +532,10 @@ export function AvailabilityGrid({
       {view === "group" ? (
         <aside
           aria-label="Who is free"
-          className="bg-background border-t-foreground/30 sticky bottom-0 z-20 max-h-[30vh] overflow-y-auto border-t py-3 text-sm shadow-[0_-6px_12px_-6px_rgb(0_0_0/0.25)] lg:top-4 lg:bottom-auto lg:z-auto lg:max-h-none lg:self-start lg:overflow-visible lg:border-t-0 lg:bg-transparent lg:p-0 lg:shadow-none"
+          className={cn(
+            !box && "max-lg:hidden",
+            "bg-background border-t-foreground/30 sticky bottom-0 z-20 max-h-[30vh] overflow-y-auto border-t py-3 text-sm shadow-[0_-6px_12px_-6px_rgb(0_0_0/0.25)] lg:top-4 lg:bottom-auto lg:z-auto lg:max-h-none lg:self-start lg:overflow-visible lg:border-t-0 lg:bg-transparent lg:p-0 lg:shadow-none"
+          )}
         >
           {box ? (
             <>
@@ -535,11 +548,15 @@ export function AvailabilityGrid({
               </p>
               <div className="mt-2 grid grid-cols-2 gap-3 pr-16 lg:grid-cols-1 lg:pr-0">
                 <div>
-                  <p className="text-muted-foreground text-xs font-medium uppercase">Free</p>
+                  <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                    Free
+                  </p>
                   <p>{names(true)}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground text-xs font-medium uppercase">Not free</p>
+                  <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                    Not free
+                  </p>
                   <p>{names(false)}</p>
                 </div>
               </div>
