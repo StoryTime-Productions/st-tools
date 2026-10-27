@@ -386,7 +386,6 @@ export function Carpools({
             null,
         }}
       />
-      {weather.checked ? <WeatherCredit /> : null}
       {!viewer.going ? (
         <p className="text-muted-foreground">Mark yourself Going to drive or ride.</p>
       ) : !driving ? (
@@ -415,7 +414,7 @@ export function Carpools({
                 inputMode="numeric"
                 min={1}
                 max={12}
-                className="w-20 text-center max-sm:h-11"
+                className="w-20 [appearance:textfield] text-center max-sm:h-11 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 value={seats}
                 onChange={(event) => setSeats(event.target.value)}
               />
@@ -460,6 +459,7 @@ export function Carpools({
           </Button>
         </div>
       ) : null}
+      {weather.checked ? <WeatherCredit /> : null}
     </div>
   );
 }
