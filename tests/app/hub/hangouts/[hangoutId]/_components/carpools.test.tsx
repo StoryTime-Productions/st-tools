@@ -133,6 +133,23 @@ describe("Carpools", () => {
     expect(screen.queryByLabelText("Your start address")).not.toBeInTheDocument();
   });
 
+  it("steps the seat count within 1 to 12", () => {
+    renderCarpools([]);
+    const seats = screen.getByLabelText("Seats for riders");
+    expect(seats).toHaveValue(4);
+
+    fireEvent.click(screen.getByRole("button", { name: "More seats" }));
+    expect(seats).toHaveValue(5);
+    fireEvent.click(screen.getByRole("button", { name: "Fewer seats" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fewer seats" }));
+    expect(seats).toHaveValue(3);
+
+    fireEvent.change(seats, { target: { value: "1" } });
+    expect(screen.getByRole("button", { name: "Fewer seats" })).toBeDisabled();
+    fireEvent.change(seats, { target: { value: "12" } });
+    expect(screen.getByRole("button", { name: "More seats" })).toBeDisabled();
+  });
+
   it("asks for a start address next to the seats only when the viewer has no home address (AC1, AC2)", async () => {
     const { unmount } = renderCarpools([], viewer("c", { homeAddress: "1 Main St" }));
     expect(screen.queryByLabelText("Your start address")).not.toBeInTheDocument();

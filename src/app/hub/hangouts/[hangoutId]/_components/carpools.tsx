@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Plus, Trash2, TriangleAlert, X } from "lucide-react";
+import { Minus, Pencil, Plus, Trash2, TriangleAlert, X } from "lucide-react";
 import type { RideDirection } from "@prisma/client";
 import {
   offerCarAction,
@@ -390,26 +390,56 @@ export function Carpools({
       {!viewer.going ? (
         <p className="text-muted-foreground">Mark yourself Going to drive or ride.</p>
       ) : !driving ? (
-        <div className="flex flex-wrap items-end gap-2">
+        <div className="space-y-4 rounded-2xl border px-4 py-3">
+          <div>
+            <p className="font-medium">Offer your car</p>
+            <p className="text-muted-foreground text-xs">Riders you can take, not counting you.</p>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="offer-seats">Seats for riders</Label>
-            <Input
-              id="offer-seats"
-              type="number"
-              min={1}
-              max={12}
-              className="w-24"
-              value={seats}
-              onChange={(event) => setSeats(event.target.value)}
-            />
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="max-sm:size-11"
+                aria-label="Fewer seats"
+                disabled={Number(seats) <= 1}
+                onClick={() => setSeats(String(Math.max(1, (Number(seats) || 1) - 1)))}
+              >
+                <Minus />
+              </Button>
+              <Input
+                id="offer-seats"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={12}
+                className="w-20 text-center max-sm:h-11"
+                value={seats}
+                onChange={(event) => setSeats(event.target.value)}
+              />
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="max-sm:size-11"
+                aria-label="More seats"
+                disabled={Number(seats) >= 12}
+                onClick={() => setSeats(String(Math.min(12, (Number(seats) || 0) + 1)))}
+              >
+                <Plus />
+              </Button>
+            </div>
           </div>
           {needsAddress ? (
-            <div className="min-w-56 flex-1 space-y-2">
+            <div className="space-y-2">
               <Label htmlFor="offer-address">Your start address</Label>
               <Input
                 id="offer-address"
                 autoComplete="street-address"
                 maxLength={300}
+                className="max-sm:h-11"
                 placeholder="Saved to your profile"
                 value={address}
                 onChange={(event) => setAddress(event.target.value)}
@@ -417,6 +447,7 @@ export function Carpools({
             </div>
           ) : null}
           <Button
+            className="w-full max-sm:h-11 sm:w-auto"
             disabled={isPending || (needsAddress && address.trim().length === 0)}
             onClick={() =>
               run(
