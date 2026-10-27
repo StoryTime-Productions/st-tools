@@ -37,6 +37,7 @@ import {
   type TransitStop,
 } from "@/app/hub/hangouts/[hangoutId]/_components/transit-choice";
 import { useRun } from "@/app/hub/hangouts/[hangoutId]/_components/use-run";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 const clock = (iso: string) =>
   new Date(iso).toLocaleTimeString("en-US", {
@@ -157,6 +158,7 @@ export function Carpools({
   stops?: TransitStop[];
 }) {
   const [isPending, run] = useRun();
+  const [confirm, confirmDialog] = useConfirm();
   const [seats, setSeats] = useState("4");
   const [address, setAddress] = useState("");
   const needsAddress = viewer.homeAddress !== undefined && !viewer.homeAddress;
@@ -331,9 +333,12 @@ export function Carpools({
                       className="max-sm:size-11"
                       aria-label={`Remove ${car.driver.name}'s car`}
                       disabled={isPending}
-                      onClick={() => {
-                        if (window.confirm("Remove this car? Its riders will need another car."))
-                          run(() => removeCarAction(car.id), "Car removed");
+                      onClick={async () => {
+                        const ok = await confirm("Its riders will need another car.", {
+                          title: `Remove ${car.driver.name}'s car?`,
+                          confirmLabel: "Remove",
+                        });
+                        if (ok) run(() => removeCarAction(car.id), "Car removed");
                       }}
                     >
                       <Trash2 />
@@ -465,6 +470,7 @@ export function Carpools({
           </Button>
         </div>
       ) : null}
+      {confirmDialog}
     </div>
   );
 }

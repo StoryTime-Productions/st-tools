@@ -59,10 +59,16 @@ const STOPS = [
   }),
 ];
 
+/** Answers the in-app confirm dialog by clicking one of its buttons. */
+async function answer(label: string) {
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: label }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+}
+
 describe("Itinerary", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     for (const action of Object.values(actionMocks)) action.mockResolvedValue({ success: true });
   });
 
@@ -128,18 +134,20 @@ describe("Itinerary", () => {
       expect(screen.getByRole("button", { name: "Delete Dinner" })).toBeEnabled()
     );
 
-    vi.mocked(window.confirm).mockReturnValueOnce(false);
     fireEvent.click(screen.getByRole("button", { name: "Delete Dinner" }));
+    await answer("Cancel");
     expect(actionMocks.deleteStopAction).not.toHaveBeenCalled();
 
     actionMocks.deleteStopAction.mockResolvedValueOnce({ error: "Stop not found" });
     fireEvent.click(screen.getByRole("button", { name: "Delete Dinner" }));
+    await answer("Delete");
     await waitFor(() => expect(toastMocks.error).toHaveBeenCalledWith("Stop not found"));
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Delete Dinner" })).toBeEnabled()
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Delete Dinner" }));
+    await answer("Delete");
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Stop deleted"));
     expect(routerMocks.refresh).toHaveBeenCalled();
   });

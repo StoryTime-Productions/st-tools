@@ -62,10 +62,16 @@ function renderCarpools(cars: HangoutCarItem[], who = viewer("c")) {
   return render(<Carpools hangoutId="h1" cars={cars} viewer={who} />);
 }
 
+/** Answers the in-app confirm dialog by clicking one of its buttons. */
+async function answer(label: string) {
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: label }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+}
+
 describe("Carpools", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     for (const action of Object.values(actionMocks)) action.mockResolvedValue({ success: true });
   });
 
@@ -215,10 +221,11 @@ describe("Carpools", () => {
       expect(screen.getByRole("button", { name: "Remove Alice's car" })).toBeEnabled()
     );
 
-    vi.mocked(window.confirm).mockReturnValueOnce(false);
     fireEvent.click(screen.getByRole("button", { name: "Remove Alice's car" }));
+    await answer("Cancel");
     expect(actionMocks.removeCarAction).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Remove Alice's car" }));
+    await answer("Remove");
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Car removed"));
     expect(actionMocks.removeCarAction).toHaveBeenCalledWith("car1");
   });

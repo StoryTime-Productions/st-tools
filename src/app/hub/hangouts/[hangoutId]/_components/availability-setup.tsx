@@ -15,8 +15,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { dayLabel, hourLabel, rangeLabel, stepAnchor, visibleDays } from "@/lib/calendar";
+import {
+  dayLabel,
+  hourLabel,
+  rangeLabel,
+  stepAnchor,
+  timeLabel,
+  visibleDays,
+} from "@/lib/calendar";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 export interface AvailabilitySetupValues {
   dates: string[];
@@ -26,6 +34,14 @@ export interface AvailabilitySetupValues {
 }
 
 const HOURS = Array.from({ length: 25 }, (_, hour) => hour);
+const QUARTERS = Array.from({ length: 96 }, (_, index) => {
+  const hour = String(Math.floor(index / 4)).padStart(2, "0");
+  return `${hour}:${String((index % 4) * 15).padStart(2, "0")}`;
+});
+
+/** Quarter-hour deadline choices, plus a saved time that isn't on the quarter hour. */
+const timeOptions = (current: string) =>
+  QUARTERS.includes(current) ? QUARTERS : [...QUARTERS, current].sort();
 
 export function AvailabilitySetup({
   hangoutId,
@@ -41,8 +57,11 @@ export function AvailabilitySetup({
   const [anchor, setAnchor] = useState(initial.dates[0] ?? today);
   const [startHour, setStartHour] = useState(initial.startHour);
   const [endHour, setEndHour] = useState(initial.endHour);
-  const [deadline, setDeadline] = useState(initial.deadline ?? "");
+  const [deadlineDate, setDeadlineDate] = useState(initial.deadline?.slice(0, 10) ?? "");
+  const [deadlineTime, setDeadlineTime] = useState(initial.deadline?.slice(11, 16) ?? "18:00");
+  const deadline = deadlineDate ? `${deadlineDate}T${deadlineTime}` : "";
   const [isPending, startTransition] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
 
   const month = anchor.slice(0, 7);
   const days = visibleDays("month", anchor);
@@ -59,8 +78,11 @@ export function AvailabilitySetup({
       let result = await setAvailabilitySetupAction(values);
       if ("confirmDrop" in result) {
         const members = result.confirmDrop === 1 ? "1 member" : `${result.confirmDrop} members`;
-        if (!confirm(`This drops availability outside the new dates or hours for ${members}.`))
-          return;
+        const ok = await confirm(
+          `This drops availability outside the new dates or hours for ${members}.`,
+          { title: "Drop some answers?", confirmLabel: "Drop answers" }
+        );
+        if (!ok) return;
         result = await setAvailabilitySetupAction(values, true);
       }
       if ("error" in result) {
@@ -147,13 +169,27 @@ export function AvailabilitySetup({
           />
           <div className="space-y-2">
             <Label htmlFor="availability-deadline">Deadline (optional, EST)</Label>
-            <Input
-              id="availability-deadline"
-              type="datetime-local"
-              value={deadline}
-              onChange={(event) => setDeadline(event.target.value)}
-              className="w-56 lg:w-full"
-            />
+            <div className="flex flex-wrap gap-2 lg:flex-col">
+              <Input
+                id="availability-deadline"
+                type="date"
+                value={deadlineDate}
+                onChange={(event) => setDeadlineDate(event.target.value)}
+                className="w-40 max-sm:h-11 lg:w-full"
+              />
+              <Select value={deadlineTime} onValueChange={setDeadlineTime} disabled={!deadlineDate}>
+                <SelectTrigger className="w-32 max-sm:h-11 lg:w-full" aria-label="Deadline time">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {timeOptions(deadlineTime).map((time) => (
+                    <SelectItem key={time} value={time}>
+                      {timeLabel(time)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
 
@@ -161,6 +197,7 @@ export function AvailabilitySetup({
           {isPending ? "Saving..." : "Save availability setup"}
         </Button>
       </div>
+      {confirmDialog}
     </div>
   );
 }

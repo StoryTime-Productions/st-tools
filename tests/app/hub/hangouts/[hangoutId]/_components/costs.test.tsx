@@ -94,6 +94,13 @@ beforeEach(() => {
     mock.mockResolvedValue({ success: true });
 });
 
+/** Answers the in-app confirm dialog by clicking one of its buttons. */
+async function answer(label: string) {
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: label }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+}
+
 describe("Costs", () => {
   it("shows an empty state and estimates before scheduling", () => {
     const empty = renderCosts([], { scheduled: false });
@@ -301,13 +308,11 @@ describe("Costs", () => {
       notes: "Split three ways",
     });
 
-    const confirm = vi.spyOn(window, "confirm");
-    confirm.mockReturnValueOnce(false);
     fireEvent.click(screen.getByRole("button", { name: "Delete Dinner" }));
+    await answer("Cancel");
     expect(costMocks.deleteCostAction).not.toHaveBeenCalled();
-    confirm.mockReturnValueOnce(true);
     fireEvent.click(screen.getByRole("button", { name: "Delete Dinner" }));
+    await answer("Delete");
     await waitFor(() => expect(costMocks.deleteCostAction).toHaveBeenCalledWith("c1"));
-    confirm.mockRestore();
   });
 });

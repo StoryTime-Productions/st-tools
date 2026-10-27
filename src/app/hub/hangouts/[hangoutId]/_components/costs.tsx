@@ -42,6 +42,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { estimateCents, shareBalance } from "@/lib/costs";
 import type { HangoutCostItem } from "@/lib/hangouts";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 type Result = CostActionResult | PaymentActionResult;
 
@@ -142,6 +143,7 @@ function CostRow({
   canEdit: boolean;
 }) {
   const [isPending, run] = useRun();
+  const [confirm, confirmDialog] = useConfirm();
   const estimate = estimateCents(item.amountCents, item.participants.length);
   const isCollector = viewer.id === item.collector.userId;
   const inGroup = item.participants.some((person) => person.userId === viewer.id);
@@ -172,13 +174,17 @@ function CostRow({
               variant="ghost"
               aria-label={`Delete ${item.title}`}
               disabled={isPending}
-              onClick={() => {
-                if (window.confirm(`Delete "${item.title}" and its shares?`))
-                  run(() => deleteCostAction(item.id), "Cost deleted");
+              onClick={async () => {
+                const ok = await confirm("The item and its shares are removed.", {
+                  title: `Delete "${item.title}"?`,
+                  confirmLabel: "Delete",
+                });
+                if (ok) run(() => deleteCostAction(item.id), "Cost deleted");
               }}
             >
               <Trash2 />
             </Button>
+            {confirmDialog}
           </div>
         ) : null}
       </div>

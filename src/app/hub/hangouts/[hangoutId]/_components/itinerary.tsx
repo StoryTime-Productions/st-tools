@@ -38,6 +38,7 @@ import type { HangoutStopItem } from "@/lib/hangouts";
 import { scheduleStops, timeText } from "@/lib/itinerary";
 import type { StopWeather } from "@/lib/weather";
 import { WeatherChip, WeatherCredit } from "@/app/hub/hangouts/[hangoutId]/_components/weather";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 const STOP_TYPES: Array<[StopType, string]> = [
   ["COMMUTE", "Commute"],
@@ -97,6 +98,7 @@ export function Itinerary({
   costs?: StopCost[];
 }) {
   const [isPending, run] = useRun();
+  const [confirm, confirmDialog] = useConfirm();
   const { times, end } = scheduleStops(startSlot, stops);
   const startDay = startSlot?.slice(0, 10) ?? null;
 
@@ -159,9 +161,12 @@ export function Itinerary({
                         className="max-sm:size-11"
                         aria-label={`Delete ${stop.title}`}
                         disabled={isPending}
-                        onClick={() => {
-                          if (window.confirm(`Delete "${stop.title}"?`))
-                            run(() => deleteStopAction(stop.id), "Stop deleted");
+                        onClick={async () => {
+                          const ok = await confirm("This removes the stop from the itinerary.", {
+                            title: `Delete "${stop.title}"?`,
+                            confirmLabel: "Delete",
+                          });
+                          if (ok) run(() => deleteStopAction(stop.id), "Stop deleted");
                         }}
                       >
                         <Trash2 />
@@ -206,6 +211,7 @@ export function Itinerary({
         </p>
       ) : null}
       {weather.length > 0 ? <WeatherCredit /> : null}
+      {confirmDialog}
     </div>
   );
 }
