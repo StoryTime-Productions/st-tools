@@ -157,28 +157,39 @@ function TransitForm({
       <div className="flex flex-wrap items-end gap-2">
         {needsDestination ? (
           <div className="flex min-w-44 flex-1 flex-col gap-1">
-            <Label htmlFor={`${id}-start`} className="text-xs">
-              Leaving from
-            </Label>
             {stops.length > 1 ? (
-              <select
-                id={`${id}-start`}
-                className="border-input bg-background min-h-9 min-w-0 rounded-md border px-3 text-sm max-sm:min-h-11"
-                value={stopId}
-                onChange={(event) => setStopId(event.target.value)}
-              >
-                {stops.map((stop) => (
-                  <option key={stop.id} value={stop.id}>
-                    {stop.title} · {stop.address}
-                  </option>
-                ))}
-              </select>
+              <Label htmlFor={`${id}-start`} className="text-xs">
+                Leaving from
+              </Label>
+            ) : (
+              <span id={`${id}-start-label`} className="text-xs leading-none font-medium">
+                Leaving from
+              </span>
+            )}
+            {stops.length > 1 ? (
+              <>
+                <select
+                  id={`${id}-start`}
+                  className="border-input bg-background h-9 w-full min-w-0 shrink-0 rounded-md border px-3 text-base max-sm:h-11 md:text-sm"
+                  value={stopId}
+                  onChange={(event) => setStopId(event.target.value)}
+                >
+                  {stops.map((stop) => (
+                    <option key={stop.id} value={stop.id}>
+                      {stop.title} · {stop.address}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-muted-foreground text-xs break-words">
+                  {stops.find((stop) => stop.id === stopId)?.address}
+                </p>
+              </>
             ) : stops.length === 1 ? (
-              <p id={`${id}-start`} className="py-2 text-sm">
+              <p aria-labelledby={`${id}-start-label`} className="py-2 text-sm">
                 {stops[0].title} · {stops[0].address}
               </p>
             ) : (
-              <p id={`${id}-start`} className="text-muted-foreground py-2 text-sm">
+              <p id={`${id}-no-stop`} className="text-muted-foreground py-2 text-sm">
                 Add an address to a stop in the itinerary first.
               </p>
             )}
@@ -191,6 +202,7 @@ function TransitForm({
             <Input
               id={`${id}-start`}
               maxLength={300}
+              className="max-sm:h-11"
               value={start}
               onChange={(event) => setStart(event.target.value)}
             />
@@ -204,6 +216,7 @@ function TransitForm({
             <Input
               id={`${id}-destination`}
               maxLength={300}
+              className="max-sm:h-11"
               value={destination}
               onChange={(event) => setDestination(event.target.value)}
             />
@@ -212,6 +225,8 @@ function TransitForm({
         <Button
           type="submit"
           size="sm"
+          className="max-sm:h-11 max-sm:w-full"
+          aria-describedby={needsDestination && stops.length === 0 ? `${id}-no-stop` : undefined}
           disabled={
             isPending || (needsDestination ? !stopId || !destination.trim() : !start.trim())
           }
@@ -223,6 +238,7 @@ function TransitForm({
             type="button"
             size="sm"
             variant="ghost"
+            className="max-sm:h-11 max-sm:w-full"
             disabled={isPending}
             onClick={() =>
               run(() => clearTransitAction(hangoutId, trip.direction), "Transit choice removed")
