@@ -106,7 +106,7 @@ function TimelineRow({
           filled
             ? "border-foreground/40 bg-muted"
             : muted
-              ? "border-dashed bg-transparent"
+              ? "border-foreground/25 border-dashed bg-transparent"
               : "bg-muted/40"
         }`}
       >

@@ -415,7 +415,10 @@ export function AvailabilityGrid({
                 "text-muted-foreground mt-1.5 flex items-center gap-1.5 text-xs"
               )}
             >
-              <span aria-hidden="true" className="bg-muted/40 h-2.5 w-3.5 rounded-sm border" />
+              <span
+                aria-hidden="true"
+                className="bg-muted/40 border-foreground/30 h-2.5 w-3.5 rounded-sm border"
+              />
               Not free
               <span
                 aria-hidden="true"
