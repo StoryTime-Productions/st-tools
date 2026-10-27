@@ -81,16 +81,34 @@ function groupStops(people: CarPassenger[], times: Record<string, string> | unde
 }
 
 /** One row of a car's vertical timeline; `filled` marks the hangout itself. */
-function TimelineRow({ filled, children }: { filled?: boolean; children: React.ReactNode }) {
+function TimelineRow({
+  filled,
+  muted,
+  children,
+}: {
+  filled?: boolean;
+  muted?: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <li className="relative min-w-0 pb-3 pl-6 last:pb-0">
+    <li className="relative min-w-0 pb-3 pl-7 last:pb-0">
       <span
         aria-hidden="true"
-        className={`absolute top-1 left-0 size-3.5 rounded-full border-2 ${
+        className={`absolute top-3.5 left-0 size-3.5 rounded-full border-2 ${
           filled ? "border-foreground bg-foreground" : "border-muted-foreground bg-background"
         }`}
       />
-      {children}
+      <div
+        className={`rounded-xl border px-3 py-2.5 ${
+          filled
+            ? "border-foreground/40 bg-muted"
+            : muted
+              ? "border-dashed bg-transparent"
+              : "bg-muted/40"
+        }`}
+      >
+        {children}
+      </div>
     </li>
   );
 }
@@ -200,7 +218,7 @@ export function Carpools({
               <>
                 <li
                   aria-hidden="true"
-                  className="text-muted-foreground list-none pb-1 pl-6 text-xs font-medium tracking-wide uppercase"
+                  className="text-muted-foreground list-none pt-4 pb-2 pl-7 text-xs font-medium tracking-wide uppercase"
                 >
                   {direction === "PICKUP" ? "Getting there" : "Getting home"}
                 </li>
@@ -243,12 +261,12 @@ export function Carpools({
                     </ul>
                   </li>
                 ) : (
-                  <TimelineRow>
+                  <TimelineRow muted>
                     <p className="text-muted-foreground">No one assigned</p>
                   </TimelineRow>
                 )}
                 {canManage ? (
-                  <li className="list-none pb-3 pl-6 empty:hidden">
+                  <li className="list-none pt-1 pb-4 pl-7 empty:hidden">
                     <AddPassenger
                       carId={car.id}
                       direction={direction}
@@ -312,7 +330,7 @@ export function Carpools({
                   </div>
                 ) : null}
               </div>
-              <ol className="before:bg-border relative m-0 list-none p-0 before:absolute before:top-2 before:bottom-2 before:left-[6px] before:w-px">
+              <ol className="before:bg-border relative m-0 list-none p-0 before:absolute before:top-4 before:bottom-4 before:left-[6px] before:w-px">
                 <TimelineRow>
                   <p>
                     <span className="text-muted-foreground">Start: </span>
