@@ -482,9 +482,9 @@ describe("Carpools", () => {
 
     it("tells drivers and admins who needs a ride, and nobody else", () => {
       const { unmount } = render_([empty], viewer("a"));
-      const row = screen.getByText("Needs a ride").parentElement;
-      expect(row).toHaveTextContent("thereEve");
-      expect(row).toHaveTextContent("homeEveFinn");
+      const card = screen.getByText("Needs a ride").parentElement;
+      expect(card).toHaveTextContent("Getting thereEve");
+      expect(card).toHaveTextContent("Getting homeEveFinn");
       unmount();
 
       const admin = render_([empty], viewer("z", { isAdmin: true }));

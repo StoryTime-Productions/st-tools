@@ -177,25 +177,31 @@ export function Carpools({
       ) : null}
       {cars.length === 0 ? <p className="text-muted-foreground">No cars yet.</p> : null}
       {showNeeds && (waiting("pickup").length > 0 || waiting("dropoff").length > 0) ? (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border px-4 py-3">
-          <span className="font-medium">Needs a ride</span>
-          {(
-            [
-              ["there", waiting("pickup")],
-              ["home", waiting("dropoff")],
-            ] as const
-          ).map(([label, people]) =>
-            people.length > 0 ? (
-              <span key={label} className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto">
-                <Badge variant="secondary">{label}</Badge>
-                {people.map((person) => (
-                  <Badge key={person.userId} variant="outline">
-                    {person.name}
-                  </Badge>
-                ))}
-              </span>
-            ) : null
-          )}
+        <div className="space-y-3 rounded-2xl border px-4 py-3">
+          <p className="font-medium">Needs a ride</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {(
+              [
+                ["Getting there", waiting("pickup")],
+                ["Getting home", waiting("dropoff")],
+              ] as const
+            ).map(([label, people]) =>
+              people.length > 0 ? (
+                <div key={label} className="space-y-2">
+                  <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                    {label}
+                  </p>
+                  <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
+                    {people.map((person) => (
+                      <li key={person.userId} className="bg-muted/40 rounded-full border px-3 py-1">
+                        {person.name}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null
+            )}
+          </div>
         </div>
       ) : null}
       <ul className="space-y-3">
