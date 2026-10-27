@@ -180,7 +180,7 @@ function TransitForm({
                     </option>
                   ))}
                 </select>
-                <p className="text-muted-foreground text-xs break-words">
+                <p className="text-muted-foreground text-xs break-words sm:hidden">
                   {stops.find((stop) => stop.id === stopId)?.address}
                 </p>
               </>
@@ -233,6 +233,12 @@ function TransitForm({
         >
           {mine ? "Update" : "Take public transit"}
         </Button>
+        {needsDestination && stops.length > 1 ? (
+          // On wider screens the address sits on its own row so the two fields stay aligned.
+          <p className="text-muted-foreground order-last hidden w-full text-xs break-words sm:block">
+            {stops.find((stop) => stop.id === stopId)?.address}
+          </p>
+        ) : null}
         {mine ? (
           <Button
             type="button"
