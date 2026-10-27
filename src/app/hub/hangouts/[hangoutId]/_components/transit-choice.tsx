@@ -225,6 +225,7 @@ function TransitForm({
         <Button
           type="submit"
           size="sm"
+          variant="outline"
           className="max-sm:h-11 max-sm:w-full"
           aria-describedby={needsDestination && stops.length === 0 ? `${id}-no-stop` : undefined}
           disabled={

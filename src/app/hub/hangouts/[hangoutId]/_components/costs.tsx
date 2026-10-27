@@ -470,7 +470,7 @@ export function CostDialog({
           </div>
           <DialogFooter
             showCloseButton
-            className="bg-background sticky bottom-0 -mx-6 -mb-6 border-t px-6 py-4"
+            className="bg-background before:from-background sticky bottom-0 -mx-6 -mb-6 border-t px-6 py-4 before:pointer-events-none before:absolute before:inset-x-0 before:-top-8 before:h-8 before:bg-gradient-to-t before:to-transparent"
           >
             <Button
               type="submit"

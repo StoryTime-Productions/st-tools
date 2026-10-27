@@ -29,6 +29,8 @@ export interface HangoutCardInfo extends HangoutSummary {
   availabilityDeadline: string | null;
   /** Whether the viewer has marked any availability yet. */
   responded: boolean;
+  /** Payments marked Sent that the collector has not confirmed yet. */
+  toConfirm: number;
 }
 
 export interface HangoutDetail extends HangoutSummary {
@@ -208,6 +210,8 @@ export async function getHangoutSummaries(viewerId: string): Promise<HangoutCard
       phase: hangoutPhase(hangout, stops, unpaid),
       availabilityDeadline: availabilityDeadline?.toISOString() ?? null,
       responded: availability.length > 0,
+      toConfirm: costs.flatMap((cost) => cost.shares).filter((share) => share.status === "SENT")
+        .length,
     };
   });
 }

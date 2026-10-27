@@ -51,6 +51,7 @@ describe("hangout data loaders", () => {
         unpaid: 0,
         availabilityDeadline: "2026-10-01T22:00:00.000Z",
         responded: false,
+        toConfirm: 0,
       },
       {
         id: "h2",
@@ -60,6 +61,7 @@ describe("hangout data loaders", () => {
         unpaid: 1,
         availabilityDeadline: null,
         responded: true,
+        toConfirm: 1,
       },
     ]);
     expect(prisma.hangout.findMany).toHaveBeenCalledWith(

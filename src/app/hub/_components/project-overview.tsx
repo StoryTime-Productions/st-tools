@@ -281,7 +281,11 @@ function HangoutCard({ hangout }: { hangout: HangoutCardInfo }) {
             {HANGOUT_STATUS_LABEL[hangout.phase]}
           </Badge>
           {hangout.phase === "SETTLING_UP" ? (
-            <Badge variant="outline">{hangout.unpaid} unpaid</Badge>
+            <Badge variant="outline">
+              {hangout.toConfirm > 0
+                ? `${hangout.unpaid - hangout.toConfirm} unpaid · ${hangout.toConfirm} to confirm`
+                : `${hangout.unpaid} unpaid`}
+            </Badge>
           ) : null}
         </div>
       </div>

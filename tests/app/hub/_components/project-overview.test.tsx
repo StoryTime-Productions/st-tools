@@ -61,6 +61,7 @@ const HANGOUTS: HangoutCardInfo[] = [
     unpaid: 0,
     availabilityDeadline: "2026-10-01T22:00:00.000Z",
     responded: false,
+    toConfirm: 0,
   },
   {
     id: "h2",
@@ -72,6 +73,7 @@ const HANGOUTS: HangoutCardInfo[] = [
     unpaid: 0,
     availabilityDeadline: null,
     responded: false,
+    toConfirm: 0,
   },
 ];
 
@@ -246,6 +248,7 @@ describe("ProjectOverview", () => {
         startSlot: "2026-08-15T12:00",
         availabilityDeadline: null,
         responded: false,
+        toConfirm: 0,
       },
     ]);
 
@@ -263,13 +266,23 @@ describe("ProjectOverview", () => {
         phase: "SETTLING_UP",
         unpaid: 2,
       },
+      {
+        ...HANGOUTS[0],
+        id: "h8",
+        title: "Cookout",
+        status: "SCHEDULED",
+        phase: "SETTLING_UP",
+        unpaid: 3,
+        toConfirm: 1,
+      },
       { ...HANGOUTS[0], id: "h5", title: "Arcade", status: "SCHEDULED", phase: "DONE" },
     ]);
 
     expect(titles()).toContain("Bonfire");
     expect(titles()).not.toContain("Arcade");
-    expect(screen.getByText("Settling up")).toBeInTheDocument();
+    expect(screen.getAllByText("Settling up")).toHaveLength(2);
     expect(screen.getByText("2 unpaid")).toBeInTheDocument();
+    expect(screen.getByText("2 unpaid · 1 to confirm")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Past" }));
     expect(titles()).toContain("Arcade");
