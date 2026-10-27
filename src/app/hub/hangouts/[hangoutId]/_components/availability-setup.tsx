@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { setAvailabilitySetupAction } from "@/app/actions/hangouts";
 import { Button } from "@/components/ui/button";
@@ -191,6 +191,39 @@ function HourSelect({
           ))}
         </SelectContent>
       </Select>
+    </div>
+  );
+}
+
+/** The setup summary with an "Edit setup" button; the form opens in place (collapsed once dates exist). */
+export function EditableSetup({
+  summary,
+  defaultOpen,
+  children,
+}: {
+  summary: React.ReactNode;
+  defaultOpen: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-sm">{summary}</div>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="gap-2 max-sm:h-11"
+          aria-expanded={open}
+          aria-controls="availability-setup-form"
+          onClick={() => setOpen((current) => !current)}
+        >
+          <Pencil className="size-4" aria-hidden="true" />
+          {open ? "Hide setup" : "Edit setup"}
+        </Button>
+      </div>
+      {open ? <div id="availability-setup-form">{children}</div> : null}
     </div>
   );
 }

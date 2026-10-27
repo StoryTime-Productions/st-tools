@@ -111,7 +111,8 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
           "#475569"
         ).bindTooltip(text(`${rider.name} (public transit)`), {
           permanent: true,
-          direction: "bottom",
+          direction: "top",
+          offset: [0, -6],
         });
         points.push(rider.position);
       }
@@ -156,6 +157,7 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
             key={id}
             type="button"
             size="sm"
+            className="max-sm:h-11"
             variant={active === id ? "default" : "outline"}
             aria-pressed={active === id}
             onClick={() => setPhase(id)}
@@ -166,7 +168,7 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
       </div>
       <div
         ref={container}
-        className="relative z-0 h-72 w-full overflow-hidden rounded-2xl sm:h-96"
+        className="relative z-0 h-80 w-full overflow-hidden rounded-2xl sm:h-96"
         role="group"
         aria-label="Map of the hangout's stops and carpool routes. The itinerary lists the same stops."
       />

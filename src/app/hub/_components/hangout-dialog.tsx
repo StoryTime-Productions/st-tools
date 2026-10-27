@@ -77,12 +77,12 @@ export function HangoutDialog({ hangout }: { hangout?: EditableHangout }) {
     >
       <DialogTrigger asChild>
         {hangout ? (
-          <Button className="gap-2">
+          <Button className="gap-2 max-sm:h-11">
             <Pencil className="size-4" />
             Edit hangout
           </Button>
         ) : (
-          <Button className="gap-2">
+          <Button className="gap-2 max-sm:h-11">
             <Plus className="size-4" />
             New hangout
           </Button>
@@ -163,7 +163,13 @@ export function CancelHangoutButton({ hangoutId, title }: { hangoutId: string; t
   }
 
   return (
-    <Button type="button" variant="ghost" onClick={handleCancel} disabled={isPending}>
+    <Button
+      type="button"
+      variant="ghost"
+      className="max-sm:h-11"
+      onClick={handleCancel}
+      disabled={isPending}
+    >
       <Ban className="size-4" />
       Cancel hangout
     </Button>

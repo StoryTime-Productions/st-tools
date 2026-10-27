@@ -135,6 +135,20 @@ async function loadHub() {
     LiveRefresh: () => null,
   }));
   vi.doMock("@/app/hub/hangouts/[hangoutId]/_components/availability-setup", () => ({
+    EditableSetup: ({
+      summary,
+      defaultOpen,
+      children,
+    }: {
+      summary: React.ReactNode;
+      defaultOpen: boolean;
+      children: React.ReactNode;
+    }) => (
+      <div data-testid="editable-setup" data-open={String(defaultOpen)}>
+        {summary}
+        {children}
+      </div>
+    ),
     AvailabilitySetup: ({ initial }: { initial: { dates: string[]; deadline: string | null } }) => (
       <p data-testid="availability-setup">
         {initial.dates.join(",")} {initial.deadline ?? "no deadline"}
@@ -164,6 +178,11 @@ async function loadHub() {
     ),
   }));
   vi.doMock("@/app/hub/hangouts/[hangoutId]/_components/costs", () => ({
+    CostDialog: ({ members, goingIds }: { members: unknown[]; goingIds: string[] }) => (
+      <button type="button">
+        Add cost {members.length} {goingIds.length}
+      </button>
+    ),
     Costs: ({
       items,
       members,
@@ -191,6 +210,7 @@ async function loadHub() {
     ),
   }));
   vi.doMock("@/app/hub/hangouts/[hangoutId]/_components/itinerary", () => ({
+    StopDialog: () => <button type="button">Add stop</button>,
     Itinerary: ({ stops, canEdit }: { stops: unknown[]; canEdit: boolean }) => (
       <p data-testid="itinerary">
         {stops.length} {canEdit ? "editable" : "read-only"}
@@ -448,7 +468,9 @@ describe("hub pages", () => {
     expect(screen.getByRole("button", { name: "Edit Beach day" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel hangout" })).toBeInTheDocument();
     expect(screen.getByTestId("hangout-cover")).toHaveTextContent("editable");
-    expect(screen.getByTestId("itinerary")).toHaveTextContent("0 editable");
+    // Nothing under the Itinerary header until there are stops or the time is locked in.
+    expect(screen.getByRole("button", { name: "Add stop" })).toBeInTheDocument();
+    expect(screen.queryByTestId("itinerary")).not.toBeInTheDocument();
     admins.unmount();
 
     hangouts.getHangoutDetail.mockResolvedValueOnce({
@@ -480,7 +502,8 @@ describe("hub pages", () => {
 
     getCurrentUser.mockResolvedValue(admin);
     const admins = render(await HangoutPage(params()));
-    expect(screen.getByTestId("costs")).toHaveTextContent("0 1 0 estimate editable");
+    expect(screen.getByRole("button", { name: "Add cost 1 0" })).toBeInTheDocument();
+    expect(screen.queryByTestId("costs")).not.toBeInTheDocument();
     admins.unmount();
 
     getCurrentUser.mockResolvedValue(member);

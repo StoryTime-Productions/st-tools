@@ -79,7 +79,6 @@ function useRun() {
 }
 
 export function Costs({
-  hangoutId,
   items,
   viewer,
   members,
@@ -87,7 +86,6 @@ export function Costs({
   goingIds,
   canEdit,
 }: {
-  hangoutId: string;
   items: HangoutCostItem[];
   viewer: CostViewer;
   members: { id: string; name: string }[];
@@ -124,7 +122,6 @@ export function Costs({
           />
         ))}
       </ul>
-      {canEdit ? <CostDialog hangoutId={hangoutId} members={members} goingIds={goingIds} /> : null}
     </div>
   );
 }
@@ -223,6 +220,7 @@ function CostRow({
                         <Button
                           key={method}
                           size="sm"
+                          className="max-sm:h-11"
                           variant="outline"
                           disabled={isPending}
                           onClick={() => run(() => markSentAction(item.id, method), "Marked sent")}
@@ -234,6 +232,7 @@ function CostRow({
                   {mine && share.status === "SENT" && share.amountCents > 0 ? (
                     <Button
                       size="sm"
+                      className="max-sm:h-11"
                       variant="outline"
                       disabled={isPending}
                       onClick={() => run(() => undoSentAction(item.id), "Sent undone")}
@@ -244,6 +243,7 @@ function CostRow({
                   {isCollector && share.status === "SENT" ? (
                     <Button
                       size="sm"
+                      className="max-sm:h-11"
                       disabled={isPending}
                       onClick={() =>
                         run(() => confirmPaymentAction(item.id, share.userId), "Payment confirmed")
@@ -255,6 +255,7 @@ function CostRow({
                   {isCollector && share.status === "CONFIRMED" && !mine ? (
                     <Button
                       size="sm"
+                      className="max-sm:h-11"
                       variant="outline"
                       disabled={isPending}
                       onClick={() =>
@@ -267,6 +268,7 @@ function CostRow({
                   {isCollector && share.paidCents > share.amountCents ? (
                     <Button
                       size="sm"
+                      className="max-sm:h-11"
                       disabled={isPending}
                       onClick={() =>
                         run(() => markRefundedAction(item.id, share.userId), "Marked refunded")
@@ -285,7 +287,7 @@ function CostRow({
   );
 }
 
-function CostDialog({
+export function CostDialog({
   hangoutId,
   item,
   members,
@@ -349,11 +351,16 @@ function CostDialog({
     >
       <DialogTrigger asChild>
         {item ? (
-          <Button size="icon" variant="ghost" aria-label={`Edit ${item.title}`}>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="max-sm:size-11"
+            aria-label={`Edit ${item.title}`}
+          >
             <Pencil />
           </Button>
         ) : (
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" className="gap-2 max-sm:h-11">
             <Plus className="size-4" />
             Add cost
           </Button>

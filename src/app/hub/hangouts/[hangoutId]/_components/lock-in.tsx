@@ -76,7 +76,12 @@ export function RankedSlots({
               </span>
             </span>
             {canLock ? (
-              <Button size="sm" disabled={isPending} onClick={() => lockIn(option)}>
+              <Button
+                size="sm"
+                className="max-sm:h-11"
+                disabled={isPending}
+                onClick={() => lockIn(option)}
+              >
                 Lock in
               </Button>
             ) : null}
@@ -97,7 +102,13 @@ export function ReopenAvailability({ hangoutId }: { hangoutId: string }) {
   }
 
   return (
-    <Button size="sm" variant="outline" disabled={isPending} onClick={reopen}>
+    <Button
+      size="sm"
+      variant="outline"
+      className="max-sm:h-11"
+      disabled={isPending}
+      onClick={reopen}
+    >
       Reopen availability
     </Button>
   );

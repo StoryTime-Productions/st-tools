@@ -135,6 +135,7 @@ export function Itinerary({
                       <Button
                         size="icon"
                         variant="ghost"
+                        className="max-sm:size-11"
                         aria-label={`Move ${stop.title} up`}
                         disabled={isPending || index === 0}
                         onClick={() => run(() => moveStopAction(stop.id, -1))}
@@ -144,6 +145,7 @@ export function Itinerary({
                       <Button
                         size="icon"
                         variant="ghost"
+                        className="max-sm:size-11"
                         aria-label={`Move ${stop.title} down`}
                         disabled={isPending || index === stops.length - 1}
                         onClick={() => run(() => moveStopAction(stop.id, 1))}
@@ -154,6 +156,7 @@ export function Itinerary({
                       <Button
                         size="icon"
                         variant="ghost"
+                        className="max-sm:size-11"
                         aria-label={`Delete ${stop.title}`}
                         disabled={isPending}
                         onClick={() => {
@@ -202,13 +205,12 @@ export function Itinerary({
           Ends {timeText({ at: end, lateBy: 0 }, startDay)}
         </p>
       ) : null}
-      {canEdit ? <StopDialog hangoutId={hangoutId} costs={costs} /> : null}
       {weather.length > 0 ? <WeatherCredit /> : null}
     </div>
   );
 }
 
-function StopDialog({
+export function StopDialog({
   hangoutId,
   stop,
   costs,
@@ -272,11 +274,16 @@ function StopDialog({
     >
       <DialogTrigger asChild>
         {stop ? (
-          <Button size="icon" variant="ghost" aria-label={`Edit ${stop.title}`}>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="max-sm:size-11"
+            aria-label={`Edit ${stop.title}`}
+          >
             <Pencil />
           </Button>
         ) : (
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" className="gap-2 max-sm:h-11">
             <Plus className="size-4" />
             Add stop
           </Button>

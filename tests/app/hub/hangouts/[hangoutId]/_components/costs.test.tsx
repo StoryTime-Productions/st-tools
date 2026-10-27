@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { Costs, type CostViewer } from "@/app/hub/hangouts/[hangoutId]/_components/costs";
+import {
+  Costs,
+  type CostViewer,
+  CostDialog,
+} from "@/app/hub/hangouts/[hangoutId]/_components/costs";
 import type { HangoutCostItem } from "@/lib/hangouts";
 
 const costMocks = vi.hoisted(() => ({
@@ -74,7 +78,6 @@ function renderCosts(
 ) {
   return render(
     <Costs
-      hangoutId="h1"
       items={items}
       viewer={options.who ?? viewer("c")}
       members={MEMBERS}
@@ -242,7 +245,7 @@ describe("Costs", () => {
   });
 
   it("lets admins add a cost with a collector", async () => {
-    renderCosts([], { canEdit: true, who: viewer("z", "GOING", true) });
+    render(<CostDialog hangoutId="h1" members={MEMBERS} goingIds={["a"]} />);
     fireEvent.click(screen.getByRole("button", { name: "Add cost" }));
     const dialog = screen.getByRole("dialog");
     const submit = within(dialog).getByRole("button", { name: "Add cost" });

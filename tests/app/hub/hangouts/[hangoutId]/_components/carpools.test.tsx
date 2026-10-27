@@ -603,7 +603,7 @@ describe("Carpools", () => {
       expect(listing()).toHaveTextContent("Back 10:30 PM – 11:10 PM (+12 min for snow)");
     });
 
-    it("shows no note or banner when the weather costs nothing, but still credits Open-Meteo", () => {
+    it("shows no note or banner when the weather costs nothing", () => {
       render(
         <Carpools
           hangoutId="h1"
@@ -615,7 +615,8 @@ describe("Carpools", () => {
       expect(screen.queryByRole("status")).not.toBeInTheDocument();
       expect(listing()).not.toHaveTextContent("min for");
       expect(screen.queryByLabelText("Weather buffer (minutes)")).not.toBeInTheDocument();
-      expect(screen.getByText(/Open-Meteo\.com/)).toBeInTheDocument();
+      // The Open-Meteo credit lives once, in the itinerary.
+      expect(screen.queryByText(/Open-Meteo\.com/)).not.toBeInTheDocument();
     });
   });
 });

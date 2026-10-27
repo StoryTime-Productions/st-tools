@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { Itinerary } from "@/app/hub/hangouts/[hangoutId]/_components/itinerary";
+import { Itinerary, StopDialog } from "@/app/hub/hangouts/[hangoutId]/_components/itinerary";
 import type { HangoutStopItem } from "@/lib/hangouts";
 
 const actionMocks = vi.hoisted(() => ({
@@ -145,7 +145,7 @@ describe("Itinerary", () => {
   });
 
   it("adds a stop with an arrive-by, cash and notes", async () => {
-    render(<Itinerary hangoutId="h1" startSlot={null} stops={[]} canEdit />);
+    render(<StopDialog hangoutId="h1" costs={[]} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Add stop" }));
     const dialog = screen.getByRole("dialog");

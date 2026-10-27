@@ -37,7 +37,6 @@ import {
   type TransitStop,
 } from "@/app/hub/hangouts/[hangoutId]/_components/transit-choice";
 import { useRun } from "@/app/hub/hangouts/[hangoutId]/_components/use-run";
-import { WeatherCredit } from "@/app/hub/hangouts/[hangoutId]/_components/weather";
 
 const clock = (iso: string) =>
   new Date(iso).toLocaleTimeString("en-US", {
@@ -466,7 +465,6 @@ export function Carpools({
           </Button>
         </div>
       ) : null}
-      {weather.checked ? <WeatherCredit /> : null}
     </div>
   );
 }
