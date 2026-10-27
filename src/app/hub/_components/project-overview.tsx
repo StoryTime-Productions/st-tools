@@ -6,7 +6,8 @@ import { ProjectCover } from "@/app/hub/_components/project-cover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { HangoutSummary } from "@/lib/hangouts";
+import { dayLabel, timeLabel } from "@/lib/calendar";
+import type { HangoutCardInfo } from "@/lib/hangouts";
 import type { ProjectSummary } from "@/lib/hub";
 import {
   groupByInitiative,
@@ -87,10 +88,10 @@ type Item =
       startQuarter: string | null;
       endQuarter: string | null;
       initiativeName: string;
-      hangout: HangoutSummary;
+      hangout: HangoutCardInfo;
     };
 
-function hangoutItem(hangout: HangoutSummary): Item {
+function hangoutItem(hangout: HangoutCardInfo): Item {
   const quarter = hangout.startSlot
     ? `${hangout.startSlot.slice(0, 4)}-Q${Math.ceil(Number(hangout.startSlot.slice(5, 7)) / 3)}`
     : null;
@@ -151,7 +152,7 @@ export function ProjectOverview({
   hangouts = [],
 }: {
   projects: ProjectSummary[];
-  hangouts?: HangoutSummary[];
+  hangouts?: HangoutCardInfo[];
 }) {
   const view = usePersisted(viewStore);
   const mode = usePersisted(modeStore);
@@ -164,14 +165,13 @@ export function ProjectOverview({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
-          <Toggle label="Layout" options={MODES} value={mode} onChange={modeStore.choose} />
-          <Toggle label="View" options={VIEWS} value={view} onChange={viewStore.choose} />
-        </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Toggle label="Layout" options={MODES} value={mode} onChange={modeStore.choose} />
+        <Toggle label="View" options={VIEWS} value={view} onChange={viewStore.choose} />
         <Button
           type="button"
           size="sm"
+          className="sm:ml-auto"
           variant={showPast ? "default" : "outline"}
           aria-pressed={showPast}
           onClick={() => setShowPast((current) => !current)}
@@ -237,7 +237,30 @@ function ItemGroups({ groups, empty }: { groups: ProjectGroup<Item>[]; empty: st
   ));
 }
 
-function HangoutCard({ hangout }: { hangout: HangoutSummary }) {
+const DEADLINE = {
+  timeZone: "America/Toronto",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+} as const;
+
+/** The one line that says what a hangout needs from you: when it is, or whether to fill in availability. */
+function hangoutWhen(hangout: HangoutCardInfo) {
+  if (hangout.phase === "COLLECTING") {
+    const deadline = hangout.availabilityDeadline
+      ? ` · fill in by ${new Date(hangout.availabilityDeadline).toLocaleString("en-US", DEADLINE)}`
+      : "";
+    return `${hangout.responded ? "You've responded" : "You haven't responded"}${deadline}`;
+  }
+  if (hangout.startSlot) {
+    const [day, time] = hangout.startSlot.split("T");
+    return `${dayLabel(day, { weekday: "short", month: "short", day: "numeric" })} · ${timeLabel(time)}`;
+  }
+  return null;
+}
+
+function HangoutCard({ hangout }: { hangout: HangoutCardInfo }) {
   return (
     <Link
       href={`/hub/hangouts/${hangout.id}`}
@@ -248,6 +271,7 @@ function HangoutCard({ hangout }: { hangout: HangoutSummary }) {
         <div className="space-y-1">
           <p className="truncate font-medium">{hangout.title}</p>
           <p className="text-muted-foreground text-xs">Hangout</p>
+          {hangoutWhen(hangout) ? <p className="text-sm">{hangoutWhen(hangout)}</p> : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <Badge variant={hangout.phase === "CANCELLED" ? "outline" : "secondary"}>

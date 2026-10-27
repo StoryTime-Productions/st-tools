@@ -23,6 +23,14 @@ export interface HangoutSummary {
   unpaid: number;
 }
 
+/** A hub card: the summary plus what the viewer needs to know before opening it. */
+export interface HangoutCardInfo extends HangoutSummary {
+  /** ISO time the availability must be filled in by, if the admins set one. */
+  availabilityDeadline: string | null;
+  /** Whether the viewer has marked any availability yet. */
+  responded: boolean;
+}
+
 export interface HangoutDetail extends HangoutSummary {
   description: string | null;
   discordThreadUrl: string | null;
@@ -177,7 +185,7 @@ export interface HangoutIdeaItem {
   proposerAvatarUrl: string | null;
 }
 
-export async function getHangoutSummaries(): Promise<HangoutSummary[]> {
+export async function getHangoutSummaries(viewerId: string): Promise<HangoutCardInfo[]> {
   const hangouts = await prisma.hangout.findMany({
     select: {
       id: true,
@@ -185,14 +193,22 @@ export async function getHangoutSummaries(): Promise<HangoutSummary[]> {
       coverImageUrl: true,
       status: true,
       startSlot: true,
+      availabilityDeadline: true,
+      availability: { where: { userId: viewerId }, select: { userId: true } },
       stops: { select: { durationMinutes: true, arriveBy: true }, orderBy: { position: "asc" } },
       costs: { select: { shares: { select: SHARE_MONEY } } },
     },
     orderBy: { createdAt: "desc" },
   });
-  return hangouts.map(({ stops, costs, ...hangout }) => {
+  return hangouts.map(({ stops, costs, availability, availabilityDeadline, ...hangout }) => {
     const unpaid = unpaidCount(costs.flatMap((cost) => cost.shares));
-    return { ...hangout, unpaid, phase: hangoutPhase(hangout, stops, unpaid) };
+    return {
+      ...hangout,
+      unpaid,
+      phase: hangoutPhase(hangout, stops, unpaid),
+      availabilityDeadline: availabilityDeadline?.toISOString() ?? null,
+      responded: availability.length > 0,
+    };
   });
 }
 

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import type { HangoutSummary } from "@/lib/hangouts";
+import type { HangoutCardInfo } from "@/lib/hangouts";
 import type { ProjectSummary } from "@/lib/hub";
 
 function summary(overrides: Partial<ProjectSummary>): ProjectSummary {
@@ -50,7 +50,7 @@ const PROJECTS = [
   summary({ id: "p4", title: "Shipped", finished: true }),
 ];
 
-const HANGOUTS: HangoutSummary[] = [
+const HANGOUTS: HangoutCardInfo[] = [
   {
     id: "h1",
     title: "Beach day",
@@ -59,6 +59,8 @@ const HANGOUTS: HangoutSummary[] = [
     startSlot: null,
     phase: "COLLECTING",
     unpaid: 0,
+    availabilityDeadline: "2026-10-01T22:00:00.000Z",
+    responded: false,
   },
   {
     id: "h2",
@@ -68,10 +70,12 @@ const HANGOUTS: HangoutSummary[] = [
     startSlot: null,
     phase: "CANCELLED",
     unpaid: 0,
+    availabilityDeadline: null,
+    responded: false,
   },
 ];
 
-async function renderOverview(projects = PROJECTS, hangouts: HangoutSummary[] = []) {
+async function renderOverview(projects = PROJECTS, hangouts: HangoutCardInfo[] = []) {
   const { ProjectOverview } = await import("@/app/hub/_components/project-overview");
   render(<ProjectOverview projects={projects} hangouts={hangouts} />);
 }
@@ -177,6 +181,30 @@ describe("ProjectOverview", () => {
     expect(screen.getByText("Nothing finished or cancelled yet.")).toBeInTheDocument();
   });
 
+  it("tells each hangout card what it needs from you", async () => {
+    await renderOverview(
+      [],
+      [
+        HANGOUTS[0],
+        { ...HANGOUTS[0], id: "h6", title: "Picnic", responded: true, availabilityDeadline: null },
+        {
+          ...HANGOUTS[0],
+          id: "h3",
+          title: "Dinner",
+          status: "SCHEDULED",
+          phase: "SCHEDULED",
+          startSlot: "2026-10-30T18:00",
+        },
+      ]
+    );
+
+    expect(screen.getByRole("link", { name: /Beach day/ })).toHaveTextContent(
+      "You haven't responded · fill in by Oct 1, 6:00 PM"
+    );
+    expect(screen.getByRole("link", { name: /Picnic/ })).toHaveTextContent("You've responded");
+    expect(screen.getByRole("link", { name: /Dinner/ })).toHaveTextContent("Fri, Oct 30 · 6:00 PM");
+  });
+
   it("mixes hangouts into every view by default", async () => {
     await renderOverview(PROJECTS, HANGOUTS);
 
@@ -209,6 +237,8 @@ describe("ProjectOverview", () => {
         phase: "SCHEDULED",
         unpaid: 0,
         startSlot: "2026-08-15T12:00",
+        availabilityDeadline: null,
+        responded: false,
       },
     ]);
 

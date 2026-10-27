@@ -19,12 +19,22 @@ describe("hangout data loaders", () => {
   it("lists every hangout, newest first", async () => {
     const { getHangoutSummaries, prisma } = await loadHangoutsLib();
     prisma.hangout.findMany.mockResolvedValue([
-      { id: "h1", status: "COLLECTING", startSlot: null, stops: [], costs: [] },
+      {
+        id: "h1",
+        status: "COLLECTING",
+        startSlot: null,
+        stops: [],
+        costs: [],
+        availability: [],
+        availabilityDeadline: new Date("2026-10-01T22:00:00Z"),
+      },
       {
         id: "h2",
         status: "SCHEDULED",
         startSlot: "2020-01-01T19:30",
         stops: [],
+        availability: [{ userId: "u1" }],
+        availabilityDeadline: null,
         costs: [
           { shares: [{ status: "SENT", amountCents: 1000, paidCents: 1000 }] },
           { shares: [{ status: "CONFIRMED", amountCents: 1000, paidCents: 1000 }] },
@@ -32,18 +42,33 @@ describe("hangout data loaders", () => {
       },
     ]);
 
-    await expect(getHangoutSummaries()).resolves.toEqual([
-      { id: "h1", status: "COLLECTING", startSlot: null, phase: "COLLECTING", unpaid: 0 },
+    await expect(getHangoutSummaries("u1")).resolves.toEqual([
+      {
+        id: "h1",
+        status: "COLLECTING",
+        startSlot: null,
+        phase: "COLLECTING",
+        unpaid: 0,
+        availabilityDeadline: "2026-10-01T22:00:00.000Z",
+        responded: false,
+      },
       {
         id: "h2",
         status: "SCHEDULED",
         startSlot: "2020-01-01T19:30",
         phase: "SETTLING_UP",
         unpaid: 1,
+        availabilityDeadline: null,
+        responded: true,
       },
     ]);
     expect(prisma.hangout.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ orderBy: { createdAt: "desc" } })
+      expect.objectContaining({
+        select: expect.objectContaining({
+          availability: { where: { userId: "u1" }, select: { userId: true } },
+        }),
+        orderBy: { createdAt: "desc" },
+      })
     );
   });
 
