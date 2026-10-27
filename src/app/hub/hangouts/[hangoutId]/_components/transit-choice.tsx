@@ -34,7 +34,7 @@ export function TransitChoice({
   if (transit.length === 0 && !canChoose) return null;
 
   return (
-    <section aria-label="Public transit" className="space-y-3">
+    <section aria-label="Public transit" className="space-y-4">
       <h3 className="font-medium">Public transit</h3>
       {transit.length > 0 ? (
         <div className="space-y-4">
@@ -115,7 +115,7 @@ function TransitForm({
   return (
     <form
       aria-label={`${trip.title} by public transit`}
-      className="space-y-2 rounded-2xl border px-4 py-3"
+      className="space-y-2 rounded-2xl border px-4 py-3 first:mt-2"
       onSubmit={(event) => {
         event.preventDefault();
         run(

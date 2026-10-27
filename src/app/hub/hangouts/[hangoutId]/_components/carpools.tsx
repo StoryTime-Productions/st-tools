@@ -91,7 +91,7 @@ function TimelineRow({
   children: React.ReactNode;
 }) {
   return (
-    <li className="relative min-w-0 pb-3 pl-7 last:pb-0">
+    <li className="relative min-w-0 pb-3 pl-7">
       <span
         aria-hidden="true"
         className={`absolute top-3.5 left-0 size-3.5 rounded-full border-2 ${
@@ -295,8 +295,8 @@ export function Carpools({
               aria-label={`${car.driver.name}'s car`}
               className="space-y-3 rounded-2xl border px-4 py-3"
             >
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 space-y-2">
                   <p className="font-medium">{car.driver.name}&apos;s car</p>
                   <div className="flex flex-wrap gap-1.5">
                     <Badge variant="outline">
@@ -336,7 +336,7 @@ export function Carpools({
                   </div>
                 ) : null}
               </div>
-              <ol className="before:bg-border relative m-0 list-none p-0 before:absolute before:top-4 before:bottom-4 before:left-[6px] before:w-px">
+              <ol className="before:bg-border relative m-0 -mb-3 list-none p-0 before:absolute before:top-4 before:bottom-4 before:left-[6px] before:w-px">
                 <TimelineRow>
                   <p>
                     <span className="text-muted-foreground">Start: </span>
