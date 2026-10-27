@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AvailabilityGrid } from "@/app/hub/hangouts/[hangoutId]/_components/availability-grid";
 import { AvailabilitySetup } from "@/app/hub/hangouts/[hangoutId]/_components/availability-setup";
-import { Carpools } from "@/app/hub/hangouts/[hangoutId]/_components/carpools";
+import { Carpools, RecomputeRoutes } from "@/app/hub/hangouts/[hangoutId]/_components/carpools";
 import { Costs } from "@/app/hub/hangouts/[hangoutId]/_components/costs";
 import { CommuteMap } from "@/app/hub/hangouts/[hangoutId]/_components/commute-map";
 import { HangoutCover } from "@/app/hub/hangouts/[hangoutId]/_components/hangout-cover";
@@ -271,8 +271,11 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
 
       {hangout.status === "SCHEDULED" ? (
         <Card id="carpools" className="border-border/70 bg-background/85 rounded-3xl shadow-none">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
             <CardTitle className="text-base">Carpools</CardTitle>
+            {user.role === "ADMIN" && !ended && hangout.cars.length > 0 ? (
+              <RecomputeRoutes hangoutId={hangout.id} />
+            ) : null}
           </CardHeader>
           <CardContent>
             <fieldset disabled={ended} className="min-w-0">
@@ -282,6 +285,9 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
                 attendees={hangout.attendees}
                 transit={hangout.transit}
                 weather={{ warnings, checked: weather.length > 0 }}
+                stops={hangout.stops.flatMap((stop) =>
+                  stop.address ? [{ id: stop.id, title: stop.title, address: stop.address }] : []
+                )}
                 viewer={{
                   id: user.id,
                   isAdmin: user.role === "ADMIN",

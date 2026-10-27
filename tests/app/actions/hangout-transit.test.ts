@@ -23,6 +23,9 @@ async function loadModule() {
   const prisma = {
     hangoutAttendee: { findFirst: vi.fn().mockResolvedValue({ userId: user.id }) },
     hangoutCar: { findFirst: vi.fn().mockResolvedValue(null) },
+    hangoutStop: {
+      findFirst: vi.fn().mockResolvedValue({ address: "9 Last St", lat: 3, lon: 4 }),
+    },
     hangoutPassenger: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     hangoutTransit: {
       findUnique: vi.fn().mockResolvedValue(null),
@@ -129,6 +132,70 @@ describe("transit actions", () => {
     );
   });
 
+  it("starts getting home at the last stop with an address, ignoring a typed start", async () => {
+    const mod = await loadModule();
+
+    await mod.setTransitAction(HANGOUT_ID, "DROPOFF", {
+      start: "Somewhere else",
+      destination: "7 Home Rd",
+    });
+
+    expect(mod.prisma.hangoutStop.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { hangoutId: HANGOUT_ID, address: { not: null } },
+        orderBy: { position: "desc" },
+      })
+    );
+    expect(mod.prisma.hangoutTransit.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ startAddress: "9 Last St", startLat: 3, startLon: 4 }),
+      })
+    );
+  });
+
+  it("lets someone leave from an earlier stop of the same hangout", async () => {
+    const mod = await loadModule();
+    const stopId = "55555555-5555-4555-8555-555555555555";
+
+    await mod.setTransitAction(HANGOUT_ID, "DROPOFF", {
+      startStopId: stopId,
+      destination: "7 Home Rd",
+    });
+    expect(mod.prisma.hangoutStop.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { hangoutId: HANGOUT_ID, address: { not: null }, id: stopId },
+      })
+    );
+
+    await expect(
+      mod.setTransitAction(HANGOUT_ID, "DROPOFF", { startStopId: "nope", destination: "7 Home Rd" })
+    ).resolves.toEqual({ error: "That stop isn't part of this hangout" });
+
+    // A stop from another hangout, or one without an address, matches nothing.
+    mod.prisma.hangoutStop.findFirst.mockResolvedValueOnce(null);
+    await expect(
+      mod.setTransitAction(HANGOUT_ID, "DROPOFF", { startStopId: stopId, destination: "7 Home Rd" })
+    ).resolves.toEqual({ error: "Pick a hangout stop that has an address" });
+  });
+
+  it("looks up a stop that has no saved coordinates", async () => {
+    const mod = await loadModule();
+    mod.prisma.hangoutStop.findFirst.mockResolvedValueOnce({
+      address: "3 Old Stop",
+      lat: null,
+      lon: null,
+    });
+
+    await mod.setTransitAction(HANGOUT_ID, "DROPOFF", { destination: "1 Main St" });
+
+    expect(mod.geocodeAddress).toHaveBeenCalledWith("3 Old Stop");
+    expect(mod.prisma.hangoutTransit.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ startAddress: "3 Old Stop (found)" }),
+      })
+    );
+  });
+
   it("reuses the profile home without a lookup", async () => {
     const mod = await loadModule();
 
@@ -137,7 +204,8 @@ describe("transit actions", () => {
       destination: "1 Main St",
     });
 
-    expect(mod.geocodeAddress).toHaveBeenCalledTimes(1);
+    // The start is a stop of the hangout with coordinates, so only a typed address is looked up.
+    expect(mod.geocodeAddress).not.toHaveBeenCalled();
     expect(mod.prisma.hangoutTransit.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         update: expect.objectContaining({ destAddress: "1 Main St", destLat: 10, destLon: 20 }),
@@ -159,7 +227,6 @@ describe("transit actions", () => {
         error: "Couldn't find that address",
       });
     }
-    mod.geocodeAddress.mockResolvedValueOnce({ address: "Bar", lat: 1, lon: 2 });
     mod.geocodeAddress.mockResolvedValueOnce("no-match");
     await expect(
       mod.setTransitAction(HANGOUT_ID, "DROPOFF", { start: "Bar", destination: "zzqq" })
