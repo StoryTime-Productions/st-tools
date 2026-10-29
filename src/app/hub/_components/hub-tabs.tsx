@@ -16,7 +16,7 @@ export function HubTabs({ active }: { active: (typeof TABS)[number]["href"] }) {
           href={tab.href}
           aria-current={tab.href === active ? "page" : undefined}
           className={cn(
-            "-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+            "-mb-px flex items-center border-b-2 px-3 py-2 text-sm font-medium transition-colors max-md:min-h-11",
             tab.href === active
               ? "border-primary text-foreground"
               : "text-muted-foreground hover:text-foreground border-transparent"

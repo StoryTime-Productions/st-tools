@@ -363,7 +363,7 @@ export function AppearanceForm({
                 aria-label="Primary color picker"
                 type="color"
                 value={normalizeHexColor(primaryColorHex) ?? FALLBACK_PRIMARY}
-                className="border-input h-10 w-14 cursor-pointer rounded-md border bg-transparent p-1"
+                className="border-input h-10 w-14 cursor-pointer rounded-md border bg-transparent p-1 max-md:h-11"
                 onChange={(event) => {
                   handleColorWheelChange(event, setPrimaryColorHex);
                 }}
@@ -388,7 +388,7 @@ export function AppearanceForm({
                 aria-label="Secondary color picker"
                 type="color"
                 value={normalizeHexColor(secondaryColorHex) ?? FALLBACK_SECONDARY}
-                className="border-input h-10 w-14 cursor-pointer rounded-md border bg-transparent p-1"
+                className="border-input h-10 w-14 cursor-pointer rounded-md border bg-transparent p-1 max-md:h-11"
                 onChange={(event) => {
                   handleColorWheelChange(event, setSecondaryColorHex);
                 }}
@@ -442,7 +442,7 @@ export function AppearanceForm({
                 aria-label="Background color picker"
                 type="color"
                 value={normalizeHexColor(backgroundColorHex) ?? FALLBACK_BACKGROUND}
-                className="border-input h-10 w-14 cursor-pointer rounded-md border bg-transparent p-1"
+                className="border-input h-10 w-14 cursor-pointer rounded-md border bg-transparent p-1 max-md:h-11"
                 disabled={backgroundMode !== "COLOR"}
                 onChange={(event) => {
                   handleColorWheelChange(event, setBackgroundColorHex);
