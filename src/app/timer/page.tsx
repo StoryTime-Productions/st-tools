@@ -23,7 +23,7 @@ export default async function TimerPage() {
       user={user}
       activeNav="focus"
       title="Focus timer"
-      description="Run Pomodoro sessions and track your progress"
+      description="Focus sessions and your progress"
     >
       <TimerClient
         currentUserId={user.id}

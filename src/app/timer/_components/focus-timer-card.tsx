@@ -92,16 +92,24 @@ export function FocusTimerCard({
   const next = describeNext(phase, sessionNumber, durations);
   const announcement = `${phaseLabel(phase)} ${isRunning ? "running" : canResume ? "paused" : "ready"}`;
   const sessionText = isBreakPhase(phase)
-    ? `Next: ${sessionNumber} of ${LONG_BREAK_CYCLE}`
+    ? `Up next: session ${sessionNumber} of ${LONG_BREAK_CYCLE}`
     : `Session ${sessionNumber} of ${LONG_BREAK_CYCLE}`;
 
   return (
     <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none" style={style}>
       <CardHeader className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <CardTitle id="timer-phase-label" className="text-2xl tracking-tight">
-            {phaseLabel(phase)}
-          </CardTitle>
+          <div className="flex items-center gap-2.5">
+            <CardTitle id="timer-phase-label" className="text-2xl tracking-tight">
+              {phaseLabel(phase)}
+            </CardTitle>
+            {isRunning ? (
+              <span
+                aria-hidden="true"
+                className="bg-primary size-2.5 rounded-full motion-safe:animate-pulse"
+              />
+            ) : null}
+          </div>
           <div className="flex items-center gap-3">
             <Badge
               variant="outline"
@@ -111,7 +119,7 @@ export function FocusTimerCard({
             >
               Saving session…
             </Badge>
-            <span className="text-foreground/70 text-xs">{sessionText}</span>
+            <span className="text-foreground/80 text-xs sm:text-sm">{sessionText}</span>
             <div aria-hidden="true" className="flex items-center gap-1.5">
               {Array.from({ length: LONG_BREAK_CYCLE }, (_, index) => (
                 <div
@@ -135,7 +143,7 @@ export function FocusTimerCard({
           <div
             role="timer"
             aria-labelledby="timer-phase-label"
-            className="text-center text-6xl font-semibold tabular-nums"
+            className="text-center text-6xl font-semibold tabular-nums sm:text-7xl lg:text-8xl"
           >
             {formatClock(secondsLeft)}
           </div>
