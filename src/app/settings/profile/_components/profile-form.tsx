@@ -54,7 +54,7 @@ export function ProfileForm({ initialName }: ProfileFormProps) {
           name="name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Display name</FormLabel>
+              <FormLabel className="sr-only">Display name</FormLabel>
               <FormControl>
                 <Input placeholder="Your name" {...field} />
               </FormControl>
