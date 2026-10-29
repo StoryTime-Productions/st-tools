@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import { ArrowUpRight, BookOpen, Clock3, FolderKanban, User, Users } from "lucide-react";
+import { ArrowUpRight, BookOpen, Clock3, Compass, FolderKanban, User, Users } from "lucide-react";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -27,15 +27,14 @@ function ModuleCard({ item }: { item: ModuleItem }) {
   const badgeClassName =
     item.badge === "Live"
       ? "border-emerald-200 bg-emerald-100 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-900/30 dark:text-emerald-300"
-      : item.badge === "Soon"
-        ? "border-rose-200 bg-rose-100 text-rose-800 dark:border-rose-900/40 dark:bg-rose-900/30 dark:text-rose-300"
-        : undefined;
+      : undefined;
 
   const content = (
     <Card
+      aria-disabled={item.disabled ? true : undefined}
       className={cn(
         "border-border/70 bg-background/80 h-full rounded-3xl shadow-none transition duration-200",
-        item.disabled ? "opacity-70" : "hover:-translate-y-0.5 hover:shadow-lg"
+        item.disabled ? "bg-muted/40" : "hover:shadow-lg motion-safe:hover:-translate-y-0.5"
       )}
     >
       <CardHeader className="gap-4">
@@ -85,18 +84,28 @@ export default async function DashboardPage() {
       badge: "Live",
       badgeVariant: "secondary",
     },
-    {
-      href: isAdmin ? "/admin/members" : "#",
-      title: "Member access",
-      icon: Users,
-      badge: isAdmin ? "Live" : "Admin",
-      badgeVariant: isAdmin ? "secondary" : "outline",
-      disabled: !isAdmin,
-    },
+    ...(isAdmin
+      ? [
+          {
+            href: "/admin/members",
+            title: "Member access",
+            icon: Users,
+            badge: "Live",
+            badgeVariant: "secondary" as const,
+          },
+        ]
+      : []),
     {
       href: "/boards",
       title: "Kanban boards",
       icon: FolderKanban,
+      badge: "Live",
+      badgeVariant: "secondary",
+    },
+    {
+      href: "/hub",
+      title: "Hub",
+      icon: Compass,
       badge: "Live",
       badgeVariant: "secondary",
     },
