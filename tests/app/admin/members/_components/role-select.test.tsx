@@ -1,3 +1,4 @@
+import { Children, isValidElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { RoleSelect } from "@/app/admin/members/_components/role-select";
@@ -16,25 +17,35 @@ vi.mock("sonner", () => ({ toast: toastMocks }));
 vi.mock("@/components/ui/select", () => ({
   Select: ({
     children,
-    defaultValue,
+    value,
     onValueChange,
     disabled,
   }: {
     children: React.ReactNode;
-    defaultValue?: string;
+    value?: string;
     onValueChange?: (value: string) => void;
     disabled?: boolean;
-  }) => (
-    <select
-      aria-label="Role"
-      defaultValue={defaultValue}
-      onChange={(event) => onValueChange?.(event.target.value)}
-      disabled={disabled}
-    >
-      {children}
-    </select>
-  ),
-  SelectTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  }) => {
+    // the real trigger carries the accessible name, so read it from there like a user's screen reader would
+    const trigger = Children.toArray(children).find(
+      (child) => isValidElement(child) && "aria-label" in (child.props as object)
+    );
+    const label = isValidElement(trigger)
+      ? ((trigger.props as { "aria-label": string })["aria-label"] ?? "Role")
+      : "Role";
+
+    return (
+      <select
+        aria-label={label}
+        value={value}
+        onChange={(event) => onValueChange?.(event.target.value)}
+        disabled={disabled}
+      >
+        {children}
+      </select>
+    );
+  },
+  SelectTrigger: () => null,
   SelectValue: () => null,
   SelectContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   SelectItem: ({ value, children }: { value: string; children: React.ReactNode }) => (
@@ -42,64 +53,100 @@ vi.mock("@/components/ui/select", () => ({
   ),
 }));
 
+const SELF = "11111111-1111-4111-8111-111111111111";
+const OTHER = "22222222-2222-4222-8222-222222222222";
+
+function renderSelect(props: { userId?: string; currentRole: "ADMIN" | "MEMBER" }) {
+  return render(
+    <RoleSelect
+      userId={props.userId ?? OTHER}
+      label="Bob Member"
+      currentUserId={SELF}
+      currentRole={props.currentRole}
+    />
+  );
+}
+
 describe("RoleSelect", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     actionMocks.updateUserRoleAction.mockResolvedValue({ success: true });
   });
 
-  it("disables role changes for the current user", () => {
+  it("names each select after its member and disables the current user's own", () => {
     render(
-      <RoleSelect
-        userId="11111111-1111-4111-8111-111111111111"
-        currentUserId="11111111-1111-4111-8111-111111111111"
-        currentRole="ADMIN"
-      />
+      <RoleSelect userId={SELF} label="Alice Admin" currentUserId={SELF} currentRole="ADMIN" />
     );
 
-    expect(screen.getByRole("combobox", { name: "Role" })).toBeDisabled();
+    expect(
+      screen.getByRole("combobox", {
+        name: "Role for Alice Admin (you can't change your own role)",
+      })
+    ).toBeDisabled();
   });
 
-  it("updates role and shows success toast", async () => {
-    render(
-      <RoleSelect
-        userId="22222222-2222-4222-8222-222222222222"
-        currentUserId="11111111-1111-4111-8111-111111111111"
-        currentRole="MEMBER"
-      />
-    );
+  it("asks before making a member an admin, and only saves once confirmed", async () => {
+    renderSelect({ currentRole: "MEMBER" });
 
-    fireEvent.change(screen.getByRole("combobox", { name: "Role" }), {
+    fireEvent.change(screen.getByRole("combobox", { name: "Role for Bob Member" }), {
       target: { value: "ADMIN" },
     });
+
+    expect(await screen.findByText("Make this member an admin?")).toBeVisible();
+    expect(screen.getByText(/Make Bob Member an admin\?/)).toBeVisible();
+    expect(actionMocks.updateUserRoleAction).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Make admin" }));
 
     await waitFor(() => {
-      expect(actionMocks.updateUserRoleAction).toHaveBeenCalledWith(
-        "22222222-2222-4222-8222-222222222222",
-        "ADMIN"
-      );
+      expect(actionMocks.updateUserRoleAction).toHaveBeenCalledWith(OTHER, "ADMIN");
     });
-
-    expect(toastMocks.success).toHaveBeenCalledWith("Role updated");
+    expect(toastMocks.success).toHaveBeenCalledWith("Bob Member is now an admin");
+    expect(screen.getByRole("combobox", { name: "Role for Bob Member" })).toHaveValue("ADMIN");
   });
 
-  it("shows an error toast when update fails", async () => {
-    actionMocks.updateUserRoleAction.mockResolvedValueOnce({ error: "Not allowed" });
+  it("does nothing when the admin confirmation is cancelled", async () => {
+    renderSelect({ currentRole: "MEMBER" });
 
-    render(
-      <RoleSelect
-        userId="22222222-2222-4222-8222-222222222222"
-        currentUserId="11111111-1111-4111-8111-111111111111"
-        currentRole="MEMBER"
-      />
-    );
-
-    fireEvent.change(screen.getByRole("combobox", { name: "Role" }), {
+    fireEvent.change(screen.getByRole("combobox", { name: "Role for Bob Member" }), {
       target: { value: "ADMIN" },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Make this member an admin?")).not.toBeInTheDocument();
+    });
+    expect(actionMocks.updateUserRoleAction).not.toHaveBeenCalled();
+    expect(screen.getByRole("combobox", { name: "Role for Bob Member" })).toHaveValue("MEMBER");
+  });
+
+  it("demotes without asking and ignores re-selecting the current role", async () => {
+    renderSelect({ currentRole: "ADMIN" });
+    const select = screen.getByRole("combobox", { name: "Role for Bob Member" });
+
+    fireEvent.change(select, { target: { value: "ADMIN" } });
+    expect(actionMocks.updateUserRoleAction).not.toHaveBeenCalled();
+
+    fireEvent.change(select, { target: { value: "MEMBER" } });
+
+    await waitFor(() => {
+      expect(actionMocks.updateUserRoleAction).toHaveBeenCalledWith(OTHER, "MEMBER");
+    });
+    expect(toastMocks.success).toHaveBeenCalledWith("Bob Member is now a member");
+    expect(screen.queryByText("Make this member an admin?")).not.toBeInTheDocument();
+  });
+
+  it("shows an error toast and keeps the old role when the update fails", async () => {
+    actionMocks.updateUserRoleAction.mockResolvedValueOnce({ error: "Not allowed" });
+    renderSelect({ currentRole: "ADMIN" });
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Role for Bob Member" }), {
+      target: { value: "MEMBER" },
     });
 
     await waitFor(() => {
       expect(toastMocks.error).toHaveBeenCalledWith("Not allowed");
     });
+    expect(screen.getByRole("combobox", { name: "Role for Bob Member" })).toHaveValue("ADMIN");
   });
 });

@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RoleSelect } from "./_components/role-select";
 
 export const metadata = { title: "Members – Admin" };
@@ -40,57 +40,45 @@ export default async function AdminMembersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
-          <CardHeader className="space-y-2">
-            <CardDescription className="text-xs tracking-[0.24em] uppercase">
-              Total members
-            </CardDescription>
-            <CardTitle className="text-3xl tracking-tight">{users.length}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
-          <CardHeader className="space-y-2">
-            <CardDescription className="text-xs tracking-[0.24em] uppercase">
-              Administrators
-            </CardDescription>
-            <CardTitle className="text-3xl tracking-tight">{adminCount}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
-          <CardHeader className="space-y-2">
-            <CardDescription className="text-xs tracking-[0.24em] uppercase">
-              Members
-            </CardDescription>
-            <CardTitle className="text-3xl tracking-tight">{memberCount}</CardTitle>
-          </CardHeader>
-        </Card>
-      </div>
+      <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
+        <dl className="grid grid-cols-3 gap-4 px-6 text-center sm:text-left">
+          {[
+            { label: "Total", value: users.length },
+            { label: "Admins", value: adminCount },
+            { label: "Members", value: memberCount },
+          ].map((stat) => (
+            <div key={stat.label} className="space-y-1">
+              <dt className="text-muted-foreground text-xs tracking-widest uppercase">
+                {stat.label}
+              </dt>
+              <dd className="text-3xl font-semibold tracking-tight">{stat.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </Card>
 
       <Card className="border-border/70 bg-background/85 overflow-hidden rounded-3xl shadow-none">
         <CardHeader className="border-border/60 flex flex-col gap-2 border-b sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Members</CardTitle>
-          <Badge variant="outline">{adminCount} admin</Badge>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-14" />
+                <TableHead className="hidden w-14 sm:table-cell">
+                  <span className="sr-only">Avatar</span>
+                </TableHead>
                 <TableHead>Name / Email</TableHead>
-                <TableHead>Member since</TableHead>
+                <TableHead className="hidden sm:table-cell">Member since</TableHead>
                 <TableHead>Role</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {users.map((user) => (
                 <TableRow key={user.id}>
-                  <TableCell>
+                  <TableCell className="hidden sm:table-cell">
                     <Avatar className="h-9 w-9 rounded-xl">
-                      <AvatarImage
-                        src={user.avatarUrl ?? undefined}
-                        alt={user.name ?? user.email}
-                      />
+                      <AvatarImage src={user.avatarUrl ?? undefined} alt="" />
                       <AvatarFallback className="rounded-xl text-xs">
                         {initials(user.name, user.email)}
                       </AvatarFallback>
@@ -98,11 +86,14 @@ export default async function AdminMembersPage() {
                   </TableCell>
 
                   <TableCell>
-                    <p className="font-medium">{user.name ?? "-"}</p>
-                    <p className="text-muted-foreground text-xs">{user.email}</p>
+                    <p className="flex items-center gap-2 font-medium">
+                      {user.name ?? "-"}
+                      {user.id === currentUser!.id ? <Badge variant="outline">You</Badge> : null}
+                    </p>
+                    <p className="text-muted-foreground text-xs break-all">{user.email}</p>
                   </TableCell>
 
-                  <TableCell className="text-muted-foreground text-sm">
+                  <TableCell className="text-muted-foreground hidden text-sm sm:table-cell">
                     {user.createdAt.toLocaleDateString("en-US", {
                       year: "numeric",
                       month: "short",
@@ -112,7 +103,9 @@ export default async function AdminMembersPage() {
 
                   <TableCell>
                     <RoleSelect
+                      key={`${user.id}-${user.role}`}
                       userId={user.id}
+                      label={user.name ?? user.email}
                       currentRole={user.role}
                       currentUserId={currentUser!.id}
                     />

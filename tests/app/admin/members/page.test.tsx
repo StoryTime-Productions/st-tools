@@ -76,10 +76,12 @@ describe("AdminMembersPage", () => {
     const output = await AdminMembersPage();
     render(output);
 
-    expect(screen.getByText("Total members")).toBeInTheDocument();
-    expect(screen.getByText("Administrators")).toBeInTheDocument();
+    expect(screen.getByText("Total")).toBeInTheDocument();
+    expect(screen.getByText("Admins")).toBeInTheDocument();
     expect(screen.getAllByText("Members").length).toBeGreaterThan(0);
-    expect(screen.getByText("1 admin")).toBeInTheDocument();
+    // one compact summary: total 3, administrators 1, members 2
+    expect(screen.getByText("Total").nextElementSibling).toHaveTextContent("3");
+    expect(screen.getByText("Admins").nextElementSibling).toHaveTextContent("1");
 
     expect(findManyMock).toHaveBeenCalledWith({
       orderBy: { createdAt: "asc" },
@@ -130,11 +132,20 @@ describe("AdminMembersPage", () => {
     expect(roleSelectMock).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "admin-1",
+        label: "Alice Admin",
         currentRole: "ADMIN",
         currentUserId: "admin-1",
       }),
       undefined
     );
+    expect(roleSelectMock).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "member-1", label: "Bob Member" }),
+      undefined
+    );
+
+    // the signed-in admin is marked, and the avatar column has a hidden header for screen readers
+    expect(screen.getByText("You")).toBeInTheDocument();
+    expect(screen.getByText("Avatar")).toHaveClass("sr-only");
   });
 
   it("uses email initial fallback when member name is missing", async () => {
