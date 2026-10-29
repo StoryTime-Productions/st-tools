@@ -11,6 +11,7 @@ function buildSupabaseClient() {
       signOut: vi.fn(),
       resetPasswordForEmail: vi.fn(),
       getUser: vi.fn(),
+      getClaims: vi.fn(),
       updateUser: vi.fn(),
     },
   };
@@ -409,6 +410,19 @@ describe("auth actions", () => {
     expect(supabase.auth.updateUser).not.toHaveBeenCalled();
 
     supabase.auth.getUser.mockResolvedValue({ data: { user: { id: "u-1" } } });
+
+    // an ordinary signed-in session (password sign-in) cannot change the password this way
+    supabase.auth.getClaims.mockResolvedValueOnce({
+      data: { claims: { amr: [{ method: "password", timestamp: Date.now() / 1000 }] } },
+    });
+    await expect(updatePasswordAction(values)).resolves.toEqual({
+      error: "This reset link has expired. Request a new one.",
+    });
+    expect(supabase.auth.updateUser).not.toHaveBeenCalled();
+
+    supabase.auth.getClaims.mockResolvedValue({
+      data: { claims: { amr: [{ method: "otp", timestamp: Date.now() / 1000 }] } },
+    });
     for (const [code, message] of [
       ["same_password", "Choose a different password from your current one."],
       ["weak_password", "Choose a stronger password."],

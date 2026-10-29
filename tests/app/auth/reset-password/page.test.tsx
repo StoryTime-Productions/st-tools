@@ -4,16 +4,27 @@ import ResetPasswordPage from "@/app/auth/reset-password/page";
 import { ResetPasswordForm } from "@/app/auth/reset-password/reset-password-form";
 
 const createClientMock = vi.hoisted(() => vi.fn());
+const redirectMock = vi.hoisted(() =>
+  vi.fn((path: string) => {
+    throw new Error(`NEXT_REDIRECT ${path}`);
+  })
+);
 const actionMocks = vi.hoisted(() => ({
   updatePasswordAction: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: createClientMock }));
+vi.mock("next/navigation", () => ({ redirect: redirectMock }));
 vi.mock("@/app/actions/auth", () => actionMocks);
 
-function mockSession(user: { id: string } | null) {
+function mockSession(user: { id: string } | null, method = "otp") {
   createClientMock.mockResolvedValue({
-    auth: { getUser: vi.fn().mockResolvedValue({ data: { user } }) },
+    auth: {
+      getUser: vi.fn().mockResolvedValue({ data: { user } }),
+      getClaims: vi.fn().mockResolvedValue({
+        data: { claims: { amr: [{ method, timestamp: Date.now() / 1000 }] } },
+      }),
+    },
   });
 }
 
@@ -28,6 +39,13 @@ describe("ResetPasswordPage", () => {
     render(await ResetPasswordPage());
 
     expect(screen.getByRole("heading", { level: 1, name: "Choose a new password" })).toBeVisible();
+  });
+
+  it("sends an ordinary signed-in session to the dashboard instead of the form", async () => {
+    mockSession({ id: "u-1" }, "password");
+
+    await expect(ResetPasswordPage()).rejects.toThrow("NEXT_REDIRECT /dashboard");
+    expect(redirectMock).toHaveBeenCalledWith("/dashboard");
   });
 
   it("explains an expired link and offers a new one when there is no session", async () => {

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
+import { isRecoverySession } from "@/lib/auth-recovery";
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
@@ -261,8 +262,13 @@ export async function updatePasswordAction(
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const expired = { error: "This reset link has expired. Request a new one." };
   if (!user) {
-    return { error: "This reset link has expired. Request a new one." };
+    return expired;
+  }
+  const { data: claimsData } = await supabase.auth.getClaims();
+  if (!isRecoverySession(claimsData?.claims)) {
+    return expired;
   }
 
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
