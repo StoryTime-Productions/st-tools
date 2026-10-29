@@ -2,6 +2,7 @@ export const CALLBACK_ERRORS = {
   email: "We couldn't find an email for this account.",
   sync: "We couldn't set up your account. Try again.",
   confirm: "We couldn't confirm your account. Request a new link and try again.",
+  expired: "That reset link has expired or was already used. Request a new one.",
 } as const;
 
 export type CallbackErrorCode = keyof typeof CALLBACK_ERRORS;

@@ -54,6 +54,15 @@ describe("SignInPage", () => {
     expect(screen.queryByText(/555-0100/)).not.toBeInTheDocument();
   });
 
+  it("links to the forgot password page", () => {
+    render(<SignInPage />);
+
+    expect(screen.getByRole("link", { name: "Forgot password?" })).toHaveAttribute(
+      "href",
+      "/auth/forgot-password"
+    );
+  });
+
   it("has one level 1 heading and autocomplete hints", () => {
     render(<SignInPage />);
 

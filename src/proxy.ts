@@ -44,7 +44,8 @@ export async function proxy(request: NextRequest) {
   }
 
   // Redirect authenticated users away from auth pages
-  if (user && pathname.startsWith("/auth")) {
+  // (the emailed reset link signs the user in first, so the reset page must stay reachable)
+  if (user && pathname.startsWith("/auth") && pathname !== "/auth/reset-password") {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);

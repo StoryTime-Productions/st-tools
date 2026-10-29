@@ -9,6 +9,9 @@ function buildSupabaseClient() {
       signInWithOAuth: vi.fn(),
       signInWithPassword: vi.fn(),
       signOut: vi.fn(),
+      resetPasswordForEmail: vi.fn(),
+      getUser: vi.fn(),
+      updateUser: vi.fn(),
     },
   };
 }
@@ -345,6 +348,84 @@ describe("auth actions", () => {
       expect.objectContaining({ provider: "discord" })
     );
     expect(redirect).toHaveBeenCalledWith("https://discord.com/oauth2/authorize");
+  });
+
+  it("asks Supabase for a reset email and always answers the same way", async () => {
+    const { requestPasswordResetAction, createClient } = await loadAuthModule();
+    const supabase = buildSupabaseClient();
+    createClient.mockResolvedValue(supabase);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(requestPasswordResetAction({ email: "not an email" })).resolves.toEqual({
+      error: "Invalid email address",
+    });
+    expect(supabase.auth.resetPasswordForEmail).not.toHaveBeenCalled();
+
+    supabase.auth.resetPasswordForEmail.mockResolvedValueOnce({ error: null });
+    await expect(requestPasswordResetAction({ email: "user@example.com" })).resolves.toEqual({
+      success: true,
+    });
+    expect(supabase.auth.resetPasswordForEmail).toHaveBeenCalledWith("user@example.com", {
+      redirectTo: "https://example.com/auth/callback?next=/auth/reset-password",
+    });
+
+    // an unknown account and an unexpected failure look identical to the user
+    supabase.auth.resetPasswordForEmail.mockResolvedValueOnce({
+      error: { message: "User not found", code: "user_not_found" },
+    });
+    await expect(requestPasswordResetAction({ email: "nobody@example.com" })).resolves.toEqual({
+      success: true,
+    });
+    expect(errorSpy).toHaveBeenCalledWith("Failed to request a password reset", expect.anything());
+
+    for (const code of ["over_request_rate_limit", "over_email_send_rate_limit"]) {
+      supabase.auth.resetPasswordForEmail.mockResolvedValueOnce({
+        error: { message: "slow down", code },
+      });
+      await expect(requestPasswordResetAction({ email: "user@example.com" })).resolves.toEqual({
+        error: "Too many attempts. Wait a few minutes and try again.",
+      });
+    }
+    errorSpy.mockRestore();
+  });
+
+  it("updates the password for a signed-in recovery session", async () => {
+    const { updatePasswordAction, createClient, redirect } = await loadAuthModule();
+    const supabase = buildSupabaseClient();
+    createClient.mockResolvedValue(supabase);
+    const values = { password: "newpassword1", confirmPassword: "newpassword1" };
+
+    await expect(
+      updatePasswordAction({ password: "short", confirmPassword: "short" })
+    ).resolves.toEqual({ error: "Password must be at least 8 characters" });
+    await expect(
+      updatePasswordAction({ password: "newpassword1", confirmPassword: "different1" })
+    ).resolves.toEqual({ error: "Passwords do not match" });
+
+    supabase.auth.getUser.mockResolvedValueOnce({ data: { user: null } });
+    await expect(updatePasswordAction(values)).resolves.toEqual({
+      error: "This reset link has expired. Request a new one.",
+    });
+    expect(supabase.auth.updateUser).not.toHaveBeenCalled();
+
+    supabase.auth.getUser.mockResolvedValue({ data: { user: { id: "u-1" } } });
+    for (const [code, message] of [
+      ["same_password", "Choose a different password from your current one."],
+      ["weak_password", "Choose a stronger password."],
+      ["over_request_rate_limit", "Too many attempts. Wait a few minutes and try again."],
+      ["unexpected_failure", "We couldn't update your password. Try again."],
+    ]) {
+      supabase.auth.updateUser.mockResolvedValueOnce({
+        error: { message: "raw server text that must never reach the user", code },
+      });
+      await expect(updatePasswordAction(values)).resolves.toEqual({ error: message });
+    }
+    expect(redirect).not.toHaveBeenCalled();
+
+    supabase.auth.updateUser.mockResolvedValueOnce({ error: null });
+    await updatePasswordAction(values);
+    expect(supabase.auth.updateUser).toHaveBeenLastCalledWith({ password: "newpassword1" });
+    expect(redirect).toHaveBeenCalledWith("/dashboard");
   });
 
   it("maps sign-up error codes to fixed messages", async () => {
