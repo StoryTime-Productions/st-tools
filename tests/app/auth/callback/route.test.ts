@@ -27,9 +27,7 @@ describe("GET /auth/callback", () => {
     const response = await GET(request as never);
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toContain(
-      "/auth/sign-in?error=Could%20not%20confirm%20your%20account."
-    );
+    expect(response.headers.get("location")).toContain("/auth/sign-in?error=confirm");
   });
 
   it("redirects with profile sync error when upsert fails", async () => {
@@ -55,9 +53,7 @@ describe("GET /auth/callback", () => {
 
     expect(prismaUserUpsertMock).toHaveBeenCalled();
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toContain(
-      "/auth/sign-in?error=Could%20not%20sync%20your%20account%20profile."
-    );
+    expect(response.headers.get("location")).toContain("/auth/sign-in?error=sync");
   });
 
   it("redirects with email error when callback user email is missing", async () => {
@@ -82,9 +78,7 @@ describe("GET /auth/callback", () => {
 
     expect(prismaUserUpsertMock).not.toHaveBeenCalled();
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toContain(
-      "/auth/sign-in?error=Could%20not%20determine%20an%20email%20for%20this%20account."
-    );
+    expect(response.headers.get("location")).toContain("/auth/sign-in?error=email");
   });
 
   it("upserts user and redirects to next destination on success", async () => {
