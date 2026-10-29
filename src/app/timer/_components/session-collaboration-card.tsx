@@ -367,6 +367,7 @@ export function SessionCollaborationCard({
               />
               <Button
                 type="button"
+                variant="outline"
                 onClick={onStartOwn}
                 disabled={isBusy}
                 className="min-h-11 shrink-0 gap-2"

@@ -64,7 +64,7 @@ describe("FocusTimerCard", () => {
     renderCard({ phase: "shortBreak", secondsLeft: 300, sessionNumber: 3 });
 
     expect(screen.getByText("Up next: Focus · 25 min")).toBeInTheDocument();
-    expect(screen.getByText("Next: 3 of 4")).toBeInTheDocument();
+    expect(screen.getByText("Up next: session 3 of 4")).toBeInTheDocument();
     expect(screen.getByRole("timer", { name: "Short break" })).toHaveTextContent("05:00");
   });
 
