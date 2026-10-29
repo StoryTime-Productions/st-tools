@@ -15,6 +15,8 @@ interface ConfirmOptions {
   title?: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  /** Style the confirm button as destructive, for deletes. */
+  destructive?: boolean;
 }
 
 interface Pending extends ConfirmOptions {
@@ -51,7 +53,11 @@ export function useConfirm() {
           <Button variant="outline" className="max-sm:h-11" onClick={() => settle(false)}>
             {pending?.cancelLabel ?? "Cancel"}
           </Button>
-          <Button className="max-sm:h-11" onClick={() => settle(true)}>
+          <Button
+            variant={pending?.destructive ? "destructive" : "default"}
+            className="max-sm:h-11"
+            onClick={() => settle(true)}
+          >
             {pending?.confirmLabel ?? "Confirm"}
           </Button>
         </DialogFooter>
