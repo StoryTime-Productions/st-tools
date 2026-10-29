@@ -531,7 +531,10 @@ describe("hub pages", () => {
 
     getCurrentUser.mockResolvedValue(member);
     const empty = render(await IdeasPage());
-    expect(screen.getByText("No ideas yet.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: "No ideas yet" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Ideas" })).toBeInTheDocument();
+    expect(screen.getByText("/idea")).toBeInTheDocument();
+    expect(screen.queryByText(/Promoted ideas become hangouts/)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Ideas" })).toHaveAttribute("aria-current", "page");
     expect(screen.queryByText(/Promote one/)).not.toBeInTheDocument();
     empty.unmount();

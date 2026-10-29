@@ -23,7 +23,7 @@ describe("IdeaActions", () => {
       .mockResolvedValueOnce({ error: "Idea not found or already promoted" })
       .mockResolvedValueOnce({ success: true, hangoutId: "h9" });
     render(<IdeaActions ideaId="i1" title="Karaoke" />);
-    const promote = screen.getByRole("button", { name: "Promote" });
+    const promote = screen.getByRole("button", { name: "Promote Karaoke" });
 
     fireEvent.click(promote);
     await waitFor(() =>
@@ -37,27 +37,47 @@ describe("IdeaActions", () => {
     expect(toastMocks.success).toHaveBeenCalledWith("Hangout created from idea");
   });
 
-  it("confirms before dismissing", async () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false);
+  it("names each action after its idea", () => {
+    render(<IdeaActions ideaId="i1" title="Karaoke" />);
+
+    expect(screen.getByRole("button", { name: "Promote Karaoke" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Dismiss Karaoke" })).toBeVisible();
+  });
+
+  it("asks in a destructive themed dialog before dismissing, and does nothing on cancel", async () => {
+    render(<IdeaActions ideaId="i1" title="Karaoke" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss Karaoke" }));
+    expect(await screen.findByText("Dismiss this idea?")).toBeVisible();
+    expect(screen.getByText(/"Karaoke" will be deleted/)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Dismiss" })).toHaveAttribute(
+      "data-variant",
+      "destructive"
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByText("Dismiss this idea?")).not.toBeInTheDocument());
+    expect(actionMocks.dismissIdeaAction).not.toHaveBeenCalled();
+  });
+
+  it("dismisses once confirmed, reporting a failure first", async () => {
     actionMocks.dismissIdeaAction
       .mockResolvedValueOnce({ error: "Forbidden: Admin access required" })
       .mockResolvedValueOnce({ success: true });
     render(<IdeaActions ideaId="i1" title="Karaoke" />);
-    const dismiss = screen.getByRole("button", { name: "Dismiss" });
 
-    fireEvent.click(dismiss);
-    expect(actionMocks.dismissIdeaAction).not.toHaveBeenCalled();
-
-    confirm.mockReturnValue(true);
-    fireEvent.click(dismiss);
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss Karaoke" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Dismiss" }));
     await waitFor(() =>
       expect(toastMocks.error).toHaveBeenCalledWith("Forbidden: Admin access required")
     );
 
-    await waitFor(() => expect(dismiss).toBeEnabled());
-    fireEvent.click(dismiss);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Dismiss Karaoke" })).toBeEnabled()
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss Karaoke" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Dismiss" }));
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Idea dismissed"));
     expect(routerMocks.refresh).toHaveBeenCalled();
-    confirm.mockRestore();
   });
 });
