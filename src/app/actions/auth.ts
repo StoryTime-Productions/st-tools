@@ -59,8 +59,39 @@ const signUpSchema = z
 
 const signInSchema = z.object({
   email: z.string().email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  password: z.string().min(1, "Enter your password"),
 });
+
+const RATE_LIMITED = "Too many attempts. Wait a few minutes and try again.";
+
+function signInErrorMessage(error: { code?: string }): string {
+  switch (error.code) {
+    case "invalid_credentials":
+      return "Wrong email or password.";
+    case "email_not_confirmed":
+      return "Confirm your email first. Check your inbox for the link.";
+    case "over_request_rate_limit":
+    case "over_email_send_rate_limit":
+      return RATE_LIMITED;
+    default:
+      return "We couldn't sign you in. Try again.";
+  }
+}
+
+function signUpErrorMessage(error: { code?: string }): string {
+  switch (error.code) {
+    case "user_already_exists":
+    case "email_exists":
+      return "An account with that email already exists. Try signing in.";
+    case "weak_password":
+      return "Choose a stronger password.";
+    case "over_request_rate_limit":
+    case "over_email_send_rate_limit":
+      return RATE_LIMITED;
+    default:
+      return "We couldn't create your account. Try again.";
+  }
+}
 
 export type AuthActionResult = { error: string } | { success: true } | { confirmEmail: true };
 
@@ -83,7 +114,7 @@ export async function signUpAction(
     },
   });
 
-  if (error) return { error: error.message };
+  if (error) return { error: signUpErrorMessage(error) };
 
   // Supabase requires email confirmation — session will be null until confirmed.
   // The /auth/callback route handles the prisma upsert after the user clicks the link.
@@ -127,7 +158,11 @@ async function signInWithProvider(provider: "google" | "discord"): Promise<AuthA
     },
   });
 
-  if (error) return { error: error.message };
+  if (error) {
+    return {
+      error: `We couldn't start sign-in with ${provider === "google" ? "Google" : "Discord"}. Try again.`,
+    };
+  }
 
   redirect(data.url!);
 }
@@ -154,7 +189,7 @@ export async function signInAction(
     password: parsed.data.password,
   });
 
-  if (error) return { error: error.message };
+  if (error) return { error: signInErrorMessage(error) };
 
   redirect("/dashboard");
 }

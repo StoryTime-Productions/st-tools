@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
+import type { CallbackErrorCode } from "@/lib/auth-errors";
 
 function resolveAuthEmail(user: {
   email?: string | null;
@@ -16,8 +17,8 @@ function resolveAuthEmail(user: {
   return normalized.length > 0 ? normalized : null;
 }
 
-function authErrorRedirect(origin: string, message: string): NextResponse {
-  return NextResponse.redirect(`${origin}/auth/sign-in?error=${encodeURIComponent(message)}`);
+function authErrorRedirect(origin: string, code: CallbackErrorCode): NextResponse {
+  return NextResponse.redirect(`${origin}/auth/sign-in?error=${code}`);
 }
 
 export async function GET(request: NextRequest) {
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
     if (!error && data.user) {
       const email = resolveAuthEmail(data.user);
       if (!email) {
-        return authErrorRedirect(origin, "Could not determine an email for this account.");
+        return authErrorRedirect(origin, "email");
       }
 
       const discordId =
@@ -52,7 +53,7 @@ export async function GET(request: NextRequest) {
         });
       } catch (upsertError) {
         console.error("Failed to sync callback user profile", upsertError);
-        return authErrorRedirect(origin, "Could not sync your account profile.");
+        return authErrorRedirect(origin, "sync");
       }
 
       return NextResponse.redirect(`${origin}${next}`);
@@ -60,5 +61,5 @@ export async function GET(request: NextRequest) {
   }
 
   // Something went wrong — send back to sign-in with an error
-  return authErrorRedirect(origin, "Could not confirm your account.");
+  return authErrorRedirect(origin, "confirm");
 }

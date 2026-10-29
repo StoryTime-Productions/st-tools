@@ -57,7 +57,31 @@ describe("SignUpPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /^sign up$/i }));
 
-    expect(await screen.findByText("Check your email")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Check your email" })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("member@example.com");
+    expect(screen.getByRole("link", { name: "Back to sign in" })).toHaveAttribute(
+      "href",
+      "/auth/sign-in"
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Use a different email" }));
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Create an account" })
+    ).toBeInTheDocument();
+  });
+
+  it("states the password rule and sets autocomplete hints", () => {
+    render(<SignUpPage />);
+
+    expect(screen.getByText("Use at least 8 characters.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Email")).toHaveAttribute("autocomplete", "email");
+    expect(screen.getByLabelText("Password")).toHaveAttribute("autocomplete", "new-password");
+    expect(screen.getByLabelText("Confirm password")).toHaveAttribute(
+      "autocomplete",
+      "new-password"
+    );
   });
 
   it("starts discord sign-in from the discord button", async () => {

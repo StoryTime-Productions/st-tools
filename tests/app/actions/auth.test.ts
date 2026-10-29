@@ -119,7 +119,7 @@ describe("auth actions", () => {
       confirmPassword: "password123",
     });
 
-    expect(result).toEqual({ error: "Sign-up failed" });
+    expect(result).toEqual({ error: "We couldn't create your account. Try again." });
     expect(supabase.auth.signUp).toHaveBeenCalledWith(
       expect.objectContaining({
         options: expect.objectContaining({
@@ -149,7 +149,7 @@ describe("auth actions", () => {
 
     const result = await signInWithGoogleAction();
 
-    expect(result).toEqual({ error: "OAuth unavailable" });
+    expect(result).toEqual({ error: "We couldn't start sign-in with Google. Try again." });
     expect(supabase.auth.signInWithOAuth).toHaveBeenCalledWith(
       expect.objectContaining({
         options: expect.objectContaining({
@@ -179,7 +179,7 @@ describe("auth actions", () => {
 
     const result = await signInWithGoogleAction();
 
-    expect(result).toEqual({ error: "Provider unavailable" });
+    expect(result).toEqual({ error: "We couldn't start sign-in with Google. Try again." });
     expect(supabase.auth.signInWithOAuth).toHaveBeenCalledWith(
       expect.objectContaining({
         options: expect.objectContaining({
@@ -282,17 +282,31 @@ describe("auth actions", () => {
     const supabase = buildSupabaseClient();
     createClient.mockResolvedValue(supabase);
 
-    await expect(signInAction({ email: "user@example.com", password: "short" })).resolves.toEqual({
-      error: "Password must be at least 8 characters",
+    await expect(signInAction({ email: "user@example.com", password: "" })).resolves.toEqual({
+      error: "Enter your password",
     });
 
     supabase.auth.signInWithPassword.mockResolvedValueOnce({
-      error: { message: "Invalid login credentials" },
+      error: { message: "Invalid login credentials", code: "invalid_credentials" },
     });
 
     await expect(
       signInAction({ email: "user@example.com", password: "password123" })
-    ).resolves.toEqual({ error: "Invalid login credentials" });
+    ).resolves.toEqual({ error: "Wrong email or password." });
+
+    for (const [code, message] of [
+      ["email_not_confirmed", "Confirm your email first. Check your inbox for the link."],
+      ["over_request_rate_limit", "Too many attempts. Wait a few minutes and try again."],
+      ["over_email_send_rate_limit", "Too many attempts. Wait a few minutes and try again."],
+      ["unexpected_failure", "We couldn't sign you in. Try again."],
+    ]) {
+      supabase.auth.signInWithPassword.mockResolvedValueOnce({
+        error: { message: "raw server text that must never reach the user", code },
+      });
+      await expect(
+        signInAction({ email: "user@example.com", password: "password123" })
+      ).resolves.toEqual({ error: message });
+    }
 
     supabase.auth.signInWithPassword.mockResolvedValueOnce({ error: null });
 
@@ -333,6 +347,31 @@ describe("auth actions", () => {
     expect(redirect).toHaveBeenCalledWith("https://discord.com/oauth2/authorize");
   });
 
+  it("maps sign-up error codes to fixed messages", async () => {
+    const { signUpAction, createClient } = await loadAuthModule();
+    const supabase = buildSupabaseClient();
+    createClient.mockResolvedValue(supabase);
+    const values = {
+      email: "new@example.com",
+      password: "password123",
+      confirmPassword: "password123",
+    };
+
+    for (const [code, message] of [
+      ["user_already_exists", "An account with that email already exists. Try signing in."],
+      ["email_exists", "An account with that email already exists. Try signing in."],
+      ["weak_password", "Choose a stronger password."],
+      ["over_request_rate_limit", "Too many attempts. Wait a few minutes and try again."],
+      ["over_email_send_rate_limit", "Too many attempts. Wait a few minutes and try again."],
+    ]) {
+      supabase.auth.signUp.mockResolvedValueOnce({
+        data: { session: null, user: null },
+        error: { message: "raw server text that must never reach the user", code },
+      });
+      await expect(signUpAction(values)).resolves.toEqual({ error: message });
+    }
+  });
+
   it("returns the provider error when discord oauth fails", async () => {
     const { signInWithDiscordAction, createClient } = await loadAuthModule();
     const supabase = buildSupabaseClient();
@@ -343,7 +382,9 @@ describe("auth actions", () => {
       error: { message: "Discord disabled" },
     });
 
-    expect(await signInWithDiscordAction()).toEqual({ error: "Discord disabled" });
+    expect(await signInWithDiscordAction()).toEqual({
+      error: "We couldn't start sign-in with Discord. Try again.",
+    });
   });
 
   it("signs out and redirects to sign-in", async () => {
