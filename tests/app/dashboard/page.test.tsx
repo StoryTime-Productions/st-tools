@@ -70,7 +70,7 @@ describe("DashboardPage", () => {
     expect(redirect).toHaveBeenCalledWith("/auth/sign-in");
   }, 10000);
 
-  it("renders member dashboard with disabled member-access module", async () => {
+  it("renders member dashboard without the member-access module", async () => {
     const {
       default: DashboardPage,
       getCurrentUser,
@@ -103,7 +103,8 @@ describe("DashboardPage", () => {
     );
     expect(liveTimeWeather).toHaveBeenCalledWith({ firstName: "member" }, undefined);
     expect(screen.getByText("Quick access")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /member access/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("Member access")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /hub/i })).toHaveAttribute("href", "/hub");
     expect(screen.getAllByText("Planned area").length).toBeGreaterThan(0);
 
     expect(playlistWidget).toHaveBeenCalledWith({ discordId: "d-1" }, undefined);
