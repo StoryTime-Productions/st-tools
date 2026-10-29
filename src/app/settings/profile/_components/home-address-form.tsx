@@ -35,7 +35,9 @@ export function HomeAddressForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       <div className="space-y-2">
-        <Label htmlFor="home-address">Home address</Label>
+        <Label htmlFor="home-address" className="sr-only">
+          Home address
+        </Label>
         <Input
           id="home-address"
           value={value}
