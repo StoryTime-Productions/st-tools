@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { isRecoverySession } from "@/lib/auth-recovery";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +13,9 @@ export default async function ResetPasswordPage() {
   } = await supabase.auth.getUser();
 
   if (user) {
-    return <ResetPasswordForm />;
+    const { data } = await supabase.auth.getClaims();
+    // an ordinary signed-in session has nothing to reset, and must not change the password without a reset link
+    return isRecoverySession(data?.claims) ? <ResetPasswordForm /> : redirect("/dashboard");
   }
 
   return (
