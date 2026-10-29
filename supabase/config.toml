@@ -213,6 +213,12 @@ secure_password_change = false
 max_frequency = "1s"
 # Number of characters used in the email OTP.
 otp_length = 6
+
+# The recovery link carries a token hash that /auth/callback verifies, so a reset email also works when it is
+# opened on a different device than the one that asked for it.
+[auth.email.template.recovery]
+subject = "Reset Your Password"
+content_path = "./supabase/templates/recovery.html"
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
 

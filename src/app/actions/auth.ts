@@ -62,6 +62,20 @@ const signInSchema = z.object({
   password: z.string().min(1, "Enter your password"),
 });
 
+const requestResetSchema = z.object({
+  email: z.string().email("Invalid email address"),
+});
+
+const resetPasswordSchema = z
+  .object({
+    password: z.string().min(8, "Password must be at least 8 characters"),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+
 const RATE_LIMITED = "Too many attempts. Wait a few minutes and try again.";
 
 function signInErrorMessage(error: { code?: string }): string {
@@ -75,6 +89,19 @@ function signInErrorMessage(error: { code?: string }): string {
       return RATE_LIMITED;
     default:
       return "We couldn't sign you in. Try again.";
+  }
+}
+
+function updatePasswordErrorMessage(error: { code?: string }): string {
+  switch (error.code) {
+    case "same_password":
+      return "Choose a different password from your current one.";
+    case "weak_password":
+      return "Choose a stronger password.";
+    case "over_request_rate_limit":
+      return RATE_LIMITED;
+    default:
+      return "We couldn't update your password. Try again.";
   }
 }
 
@@ -190,6 +217,58 @@ export async function signInAction(
   });
 
   if (error) return { error: signInErrorMessage(error) };
+
+  redirect("/dashboard");
+}
+
+/**
+ * Always answers the same way for a well-formed address, so the form never reveals whether an account
+ * exists. Only a rate limit is reported, because the user has to wait before trying again.
+ */
+export async function requestPasswordResetAction(
+  values: z.infer<typeof requestResetSchema>
+): Promise<AuthActionResult> {
+  const parsed = requestResetSchema.safeParse(values);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
+
+  const supabase = await createClient();
+  const origin = await resolveSiteOrigin();
+  const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
+    redirectTo: `${origin}/auth/callback?next=/auth/reset-password`,
+  });
+
+  if (error?.code === "over_request_rate_limit" || error?.code === "over_email_send_rate_limit") {
+    return { error: RATE_LIMITED };
+  }
+  if (error) {
+    console.error("Failed to request a password reset", error);
+  }
+
+  return { success: true };
+}
+
+export async function updatePasswordAction(
+  values: z.infer<typeof resetPasswordSchema>
+): Promise<AuthActionResult> {
+  const parsed = resetPasswordSchema.safeParse(values);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "This reset link has expired. Request a new one." };
+  }
+
+  const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
+  if (error) {
+    return { error: updatePasswordErrorMessage(error) };
+  }
 
   redirect("/dashboard");
 }

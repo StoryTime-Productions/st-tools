@@ -17,23 +17,38 @@ function resolveAuthEmail(user: {
   return normalized.length > 0 ? normalized : null;
 }
 
-function authErrorRedirect(origin: string, code: CallbackErrorCode): NextResponse {
-  return NextResponse.redirect(`${origin}/auth/sign-in?error=${code}`);
+const RESET_PATH = "/auth/reset-password";
+
+/** Only same-site paths: "@evil.com" or "//evil.com" would otherwise send the user to another host. */
+function safeNext(value: string | null): string {
+  return value && value.startsWith("/") && !value.startsWith("//") ? value : "/dashboard";
+}
+
+function authErrorRedirect(origin: string, code: CallbackErrorCode, next: string): NextResponse {
+  // an expired or used reset link goes back to the request page, everything else to sign-in
+  const page = next === RESET_PATH ? "/auth/forgot-password" : "/auth/sign-in";
+  return NextResponse.redirect(`${origin}${page}?error=${next === RESET_PATH ? "expired" : code}`);
 }
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/dashboard";
+  const tokenHash = searchParams.get("token_hash");
+  const next = safeNext(searchParams.get("next"));
 
-  if (code) {
+  // `code` is the default PKCE link and only works in the browser that asked for it. A `token_hash` link
+  // (used by the recovery email template) is verified here, so it also works when the email is opened on
+  // another device.
+  if (code || (tokenHash && searchParams.get("type") === "recovery")) {
     const supabase = await createClient();
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = code
+      ? await supabase.auth.exchangeCodeForSession(code)
+      : await supabase.auth.verifyOtp({ type: "recovery", token_hash: tokenHash! });
 
     if (!error && data.user) {
       const email = resolveAuthEmail(data.user);
       if (!email) {
-        return authErrorRedirect(origin, "email");
+        return authErrorRedirect(origin, "email", next);
       }
 
       const discordId =
@@ -53,7 +68,7 @@ export async function GET(request: NextRequest) {
         });
       } catch (upsertError) {
         console.error("Failed to sync callback user profile", upsertError);
-        return authErrorRedirect(origin, "sync");
+        return authErrorRedirect(origin, "sync", next);
       }
 
       return NextResponse.redirect(`${origin}${next}`);
@@ -61,5 +76,5 @@ export async function GET(request: NextRequest) {
   }
 
   // Something went wrong — send back to sign-in with an error
-  return authErrorRedirect(origin, "confirm");
+  return authErrorRedirect(origin, "confirm", next);
 }

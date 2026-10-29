@@ -77,13 +77,13 @@ export default function SignUpPage() {
           <button
             type="button"
             onClick={() => setEmailSent(null)}
-            className="text-foreground inline-flex min-h-11 items-center underline-offset-4 hover:underline"
+            className="text-foreground inline-flex min-h-11 items-center underline underline-offset-4 hover:no-underline"
           >
             Use a different email
           </button>
           <Link
             href="/auth/sign-in"
-            className="text-foreground inline-flex min-h-11 items-center underline-offset-4 hover:underline"
+            className="text-foreground inline-flex min-h-11 items-center underline underline-offset-4 hover:no-underline"
           >
             Back to sign in
           </Link>
@@ -211,7 +211,7 @@ export default function SignUpPage() {
         Already have an account?&nbsp;
         <Link
           href="/auth/sign-in"
-          className="text-foreground inline-flex min-h-11 items-center underline-offset-4 hover:underline"
+          className="text-foreground inline-flex min-h-11 items-center underline underline-offset-4 hover:no-underline"
         >
           Sign in
         </Link>

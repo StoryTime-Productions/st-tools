@@ -82,7 +82,15 @@ export default function SignInPage() {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Password</FormLabel>
+                    <div className="flex items-center justify-between gap-2">
+                      <FormLabel>Password</FormLabel>
+                      <Link
+                        href="/auth/forgot-password"
+                        className="text-foreground -my-3 inline-flex min-h-11 items-center text-sm underline underline-offset-4 hover:no-underline"
+                      >
+                        Forgot password?
+                      </Link>
+                    </div>
                     <FormControl>
                       <Input
                         type="password"
@@ -149,7 +157,7 @@ export default function SignInPage() {
           Don&apos;t have an account?&nbsp;
           <Link
             href="/auth/sign-up"
-            className="text-foreground inline-flex min-h-11 items-center underline-offset-4 hover:underline"
+            className="text-foreground inline-flex min-h-11 items-center underline underline-offset-4 hover:no-underline"
           >
             Sign up
           </Link>

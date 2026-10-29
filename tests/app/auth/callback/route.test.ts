@@ -119,6 +119,62 @@ describe("GET /auth/callback", () => {
     expect(response.headers.get("location")).toBe("https://example.test/boards");
   });
 
+  it("verifies a recovery token hash so the link works on another device", async () => {
+    const verifyOtp = vi.fn().mockResolvedValue({
+      data: { user: { id: "44444444-4444-4444-8444-444444444444", email: "a@example.com" } },
+      error: null,
+    });
+    createClientMock.mockResolvedValueOnce({ auth: { verifyOtp } });
+    prismaUserUpsertMock.mockResolvedValueOnce({});
+
+    const response = await GET(
+      new Request(
+        "https://example.test/auth/callback?token_hash=hash123&type=recovery&next=/auth/reset-password"
+      ) as never
+    );
+
+    expect(verifyOtp).toHaveBeenCalledWith({ type: "recovery", token_hash: "hash123" });
+    expect(response.headers.get("location")).toBe("https://example.test/auth/reset-password");
+  });
+
+  it("ignores a token hash that is not a recovery link", async () => {
+    const response = await GET(
+      new Request("https://example.test/auth/callback?token_hash=hash123&type=magiclink") as never
+    );
+
+    expect(createClientMock).not.toHaveBeenCalled();
+    expect(response.headers.get("location")).toContain("/auth/sign-in?error=confirm");
+  });
+
+  it("sends an expired or used reset link back to the request page", async () => {
+    createClientMock.mockResolvedValueOnce({
+      auth: {
+        verifyOtp: vi.fn().mockResolvedValue({ data: { user: null }, error: { message: "x" } }),
+      },
+    });
+
+    const response = await GET(
+      new Request(
+        "https://example.test/auth/callback?token_hash=used&type=recovery&next=/auth/reset-password"
+      ) as never
+    );
+
+    expect(response.headers.get("location")).toBe(
+      "https://example.test/auth/forgot-password?error=expired"
+    );
+  });
+
+  it("only follows same-site next paths", async () => {
+    for (const next of ["@evil.example", "//evil.example", "https://evil.example", ""]) {
+      const response = await GET(
+        new Request(`https://example.test/auth/callback?next=${encodeURIComponent(next)}`) as never
+      );
+      expect(response.headers.get("location")).toBe(
+        "https://example.test/auth/sign-in?error=confirm"
+      );
+    }
+  });
+
   it("stores the Discord id after linking a Discord identity", async () => {
     createClientMock.mockResolvedValueOnce({
       auth: {
