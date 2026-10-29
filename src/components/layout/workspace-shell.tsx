@@ -14,6 +14,7 @@ import {
   Users,
 } from "lucide-react";
 import { signOutAction } from "@/app/actions/auth";
+import { MobileNav } from "@/components/layout/mobile-nav";
 import { OnlinePresenceTracker } from "@/components/layout/online-presence-tracker";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -279,6 +280,64 @@ export function WorkspaceShell({
     },
   ];
 
+  const sidebarNav = (
+    <>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Link
+              href="/dashboard"
+              aria-label="StoryTime Productions"
+              className="block w-full rounded-2xl"
+            >
+              <Image
+                src="/storytime-logo-light.png"
+                alt=""
+                width={431}
+                height={177}
+                priority
+                className="mx-auto h-auto w-full dark:hidden"
+              />
+              <Image
+                src="/storytime-logo.png"
+                alt=""
+                width={431}
+                height={177}
+                priority
+                className="mx-auto hidden h-auto w-full dark:block"
+              />
+            </Link>
+          </TooltipTrigger>
+          <TooltipContent side="right">StoryTime Tools</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      <div className="mt-8 space-y-6">
+        <div className="space-y-2">
+          <p className="text-muted-foreground px-2 text-xs font-medium tracking-[0.24em] uppercase">
+            Workspace
+          </p>
+          <div className="space-y-1">
+            {primaryItems.map((item) => (
+              <SidebarItem key={item.label} item={item} isActive={item.key === activeNav} />
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-muted-foreground px-2 text-xs font-medium tracking-[0.24em] uppercase">
+            Coming next
+          </p>
+          <div className="space-y-1">
+            {upcomingItems.map((item) => (
+              <SidebarItem key={item.label} item={item} isActive={false} />
+            ))}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <div data-workspace-shell className="relative min-h-screen" style={shellStyle}>
       {backgroundImageUrl ? (
@@ -315,72 +374,25 @@ export function WorkspaceShell({
         )}
         <div className="mx-auto flex min-h-screen max-w-7xl">
           <aside className="border-border/70 bg-background/90 hidden w-72 shrink-0 border-r px-4 py-5 backdrop-blur lg:flex lg:flex-col">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Link
-                    href="/dashboard"
-                    aria-label="StoryTime Productions"
-                    className="block w-full rounded-2xl"
-                  >
-                    <Image
-                      src="/storytime-logo-light.png"
-                      alt=""
-                      width={431}
-                      height={177}
-                      priority
-                      className="mx-auto h-auto w-full dark:hidden"
-                    />
-                    <Image
-                      src="/storytime-logo.png"
-                      alt=""
-                      width={431}
-                      height={177}
-                      priority
-                      className="mx-auto hidden h-auto w-full dark:block"
-                    />
-                  </Link>
-                </TooltipTrigger>
-                <TooltipContent side="right">StoryTime Tools</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-
-            <div className="mt-8 space-y-6">
-              <div className="space-y-2">
-                <p className="text-muted-foreground px-2 text-xs font-medium tracking-[0.24em] uppercase">
-                  Workspace
-                </p>
-                <div className="space-y-1">
-                  {primaryItems.map((item) => (
-                    <SidebarItem key={item.label} item={item} isActive={item.key === activeNav} />
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-muted-foreground px-2 text-xs font-medium tracking-[0.24em] uppercase">
-                  Coming next
-                </p>
-                <div className="space-y-1">
-                  {upcomingItems.map((item) => (
-                    <SidebarItem key={item.label} item={item} isActive={false} />
-                  ))}
-                </div>
-              </div>
-            </div>
+            {sidebarNav}
           </aside>
 
           <div className="flex min-w-0 flex-1 flex-col">
             <header className="border-border/70 bg-background/85 sticky top-0 z-20 border-b backdrop-blur">
               <div className="flex min-h-16 items-center justify-between gap-4 px-4 py-2 md:px-6">
-                <div className="min-w-0">
-                  <p className="text-muted-foreground text-xs font-medium tracking-[0.24em] uppercase lg:hidden">
-                    StoryTime Tools
-                  </p>
-                  <h1 className="truncate text-lg font-semibold tracking-tight">{title}</h1>
-                  {description ? (
-                    <p className="text-muted-foreground truncate text-sm">{description}</p>
-                  ) : null}
+                <div className="flex min-w-0 items-center gap-3">
+                  <MobileNav>{sidebarNav}</MobileNav>
+                  <div className="min-w-0">
+                    <p className="text-muted-foreground text-xs font-medium tracking-[0.24em] uppercase lg:hidden">
+                      StoryTime Tools
+                    </p>
+                    <h1 className="truncate text-lg font-semibold tracking-tight">{title}</h1>
+                    {description ? (
+                      <p className="text-muted-foreground hidden truncate text-sm sm:block">
+                        {description}
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2 md:gap-3">
