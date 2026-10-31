@@ -290,6 +290,17 @@ describe("ProjectOverview", () => {
     expect(screen.queryByText(/unpaid/)).not.toBeInTheDocument();
   });
 
+  it("keeps group headings in outline order in both layouts", async () => {
+    await renderOverview(PROJECTS, HANGOUTS);
+
+    fireEvent.click(screen.getByRole("button", { name: "By quarter" }));
+    expect(screen.getByRole("heading", { level: 2, name: "Q4 2026" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Separate" }));
+    expect(screen.getByRole("heading", { level: 2, name: "Projects" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: "Q4 2026" })).toBeInTheDocument();
+  });
+
   it("separates hangouts from projects and remembers the layout", async () => {
     await renderOverview(PROJECTS, HANGOUTS);
 
