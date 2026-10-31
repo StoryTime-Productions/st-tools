@@ -1,6 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 
+const USER = {
+  id: "11111111-1111-4111-8111-111111111111",
+  name: null,
+  email: "member@example.com",
+  avatarUrl: null,
+  role: "MEMBER",
+  discordId: "d-1",
+};
+
 async function loadDashboardPageModule() {
   const redirect = vi.fn();
   const getCurrentUser = vi.fn();
@@ -13,16 +22,22 @@ async function loadDashboardPageModule() {
       </div>
     )
   );
-
   const liveTimeWeather = vi.fn(({ firstName }: { firstName: string }) => (
     <div data-testid="live-time-weather">{firstName}</div>
   ));
-
   const onlineUsersCard = vi.fn(() => <div data-testid="online-users-card" />);
-  const puppyOfTheDayCard = vi.fn(() => <div data-testid="puppy-card" />);
+  const playlistWidget = vi.fn(() => <div data-testid="playlist-widget" />);
+  const rightNow = vi.fn(() => <div data-testid="right-now" />);
+  const leaderboards = vi.fn(() => <div data-testid="leaderboards" />);
+  const autoRefresh = vi.fn(() => <div data-testid="auto-refresh" />);
+
+  const getVoiceNow = vi.fn().mockResolvedValue([{ discordId: "1" }]);
+  const getWordleStreak = vi.fn().mockResolvedValue({ streak: 80, postedOn: "2026-10-30" });
+  const getDiscordStats = vi.fn(async (range: string) => ({ range }));
 
   vi.doMock("next/navigation", () => ({ redirect }));
   vi.doMock("@/lib/get-current-user", () => ({ getCurrentUser }));
+  vi.doMock("@/lib/discord-stats", () => ({ getVoiceNow, getWordleStreak, getDiscordStats }));
   vi.doMock("@/components/layout/workspace-shell", () => ({ WorkspaceShell: workspaceShell }));
   vi.doMock("@/app/dashboard/_components/live-time-weather", () => ({
     LiveTimeWeather: liveTimeWeather,
@@ -30,13 +45,14 @@ async function loadDashboardPageModule() {
   vi.doMock("@/app/dashboard/_components/online-users-card", () => ({
     OnlineUsersCard: onlineUsersCard,
   }));
-  const playlistWidget = vi.fn(() => <div data-testid="playlist-widget" />);
   vi.doMock("@/app/dashboard/_components/playlist-widget", () => ({
     PlaylistWidget: playlistWidget,
   }));
-  vi.doMock("@/app/dashboard/_components/puppy-of-the-day", () => ({
-    PuppyOfTheDayCard: puppyOfTheDayCard,
+  vi.doMock("@/app/dashboard/_components/right-now", () => ({ RightNow: rightNow }));
+  vi.doMock("@/app/dashboard/_components/discord-leaderboards", () => ({
+    DiscordLeaderboards: leaderboards,
   }));
+  vi.doMock("@/app/dashboard/_components/auto-refresh", () => ({ AutoRefresh: autoRefresh }));
 
   const dashboardPageModule = await import("@/app/dashboard/page");
 
@@ -47,8 +63,10 @@ async function loadDashboardPageModule() {
     workspaceShell,
     liveTimeWeather,
     onlineUsersCard,
-    puppyOfTheDayCard,
     playlistWidget,
+    rightNow,
+    leaderboards,
+    getVoiceNow,
   };
 }
 
@@ -70,7 +88,7 @@ describe("DashboardPage", () => {
     expect(redirect).toHaveBeenCalledWith("/auth/sign-in");
   }, 10000);
 
-  it("renders member dashboard without the member-access module", async () => {
+  it("shows what is happening on Discord instead of the Quick access cards", async () => {
     const {
       default: DashboardPage,
       getCurrentUser,
@@ -78,72 +96,73 @@ describe("DashboardPage", () => {
       liveTimeWeather,
       onlineUsersCard,
       playlistWidget,
+      rightNow,
+      leaderboards,
     } = await loadDashboardPageModule();
 
-    const user = {
-      id: "11111111-1111-4111-8111-111111111111",
-      name: null,
-      email: "member@example.com",
-      avatarUrl: null,
-      role: "MEMBER",
-      discordId: "d-1",
-    };
+    getCurrentUser.mockResolvedValueOnce(USER);
 
-    getCurrentUser.mockResolvedValueOnce(user);
-
-    const output = await DashboardPage();
-    render(output);
+    render(await DashboardPage());
 
     expect(workspaceShell).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: "Dashboard",
-        activeNav: "overview",
-      }),
+      expect.objectContaining({ title: "Dashboard", activeNav: "overview" }),
       undefined
     );
     expect(liveTimeWeather).toHaveBeenCalledWith({ firstName: "member" }, undefined);
-    expect(screen.getByText("Quick access")).toBeInTheDocument();
-    expect(screen.queryByText("Member access")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /hub/i })).toHaveAttribute("href", "/hub");
-    expect(screen.getAllByText("Planned area").length).toBeGreaterThan(0);
-
+    expect(screen.queryByText("Quick access")).not.toBeInTheDocument();
+    expect(screen.getByTestId("auto-refresh")).toBeInTheDocument();
+    expect(rightNow).toHaveBeenCalledWith(
+      {
+        loaded: true,
+        voice: [{ discordId: "1" }],
+        wordle: { streak: 80, postedOn: "2026-10-30" },
+      },
+      undefined
+    );
+    expect(leaderboards).toHaveBeenCalledWith(
+      { stats: { week: { range: "week" }, month: { range: "month" }, year: { range: "year" } } },
+      undefined
+    );
     expect(playlistWidget).toHaveBeenCalledWith({ discordId: "d-1" }, undefined);
     expect(onlineUsersCard).toHaveBeenCalledWith(
       {
-        currentUser: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          avatarUrl: user.avatarUrl,
-        },
+        currentUser: { id: USER.id, name: USER.name, email: USER.email, avatarUrl: USER.avatarUrl },
       },
       undefined
     );
   });
 
-  it("renders admin dashboard with live member-access link", async () => {
+  it("uses the first name of a named user", async () => {
     const {
       default: DashboardPage,
       getCurrentUser,
       liveTimeWeather,
     } = await loadDashboardPageModule();
 
-    getCurrentUser.mockResolvedValueOnce({
-      id: "22222222-2222-4222-8222-222222222222",
-      name: "Alice Admin",
-      email: "admin@example.com",
-      avatarUrl: null,
-      role: "ADMIN",
-    });
-
-    const output = await DashboardPage();
-    render(output);
+    getCurrentUser.mockResolvedValueOnce({ ...USER, name: "Alice Admin", role: "ADMIN" });
+    render(await DashboardPage());
 
     expect(liveTimeWeather).toHaveBeenCalledWith({ firstName: "Alice" }, undefined);
+  });
 
-    const membersLink = screen.getByRole("link", { name: /member access/i });
-    expect(membersLink).toHaveAttribute("href", "/admin/members");
-    // Verify the admin member-access card is visible by checking its link
-    expect(membersLink).toBeInTheDocument();
+  it("keeps the dashboard working and says so when the Discord stats fail to load", async () => {
+    const {
+      default: DashboardPage,
+      getCurrentUser,
+      getVoiceNow,
+      rightNow,
+      leaderboards,
+    } = await loadDashboardPageModule();
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    getCurrentUser.mockResolvedValueOnce(USER);
+    getVoiceNow.mockRejectedValueOnce(new Error("db down"));
+
+    render(await DashboardPage());
+
+    expect(rightNow).toHaveBeenCalledWith({ loaded: false, voice: [], wordle: null }, undefined);
+    expect(leaderboards).not.toHaveBeenCalled();
+    expect(screen.getByTestId("playlist-widget")).toBeInTheDocument();
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
   });
 });

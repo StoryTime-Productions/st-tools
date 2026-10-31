@@ -712,6 +712,8 @@ model DiscordVoiceSession {
   channelId String
   // The channel name when the session started, for "who is on a call now".
   channelName String
+  // The person's Discord avatar URL, as sent by the bot.
+  avatarUrl   String?
   joinedAt  DateTime
   leftAt    DateTime?
 
@@ -726,6 +728,7 @@ model DiscordMessageDay {
   // Toronto day, YYYY-MM-DD.
   day       String
   count     Int
+  avatarUrl String?
 
   @@id([discordId, day])
   @@index([day])

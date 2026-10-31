@@ -41,7 +41,14 @@ describe("applyVoiceEvent", () => {
     prisma.discordVoiceSession.updateMany.mockResolvedValueOnce({ count: 1 });
 
     const result = await applyVoiceEvent(
-      { type: "join", discordId: "1", name: "Kiara", channelId: "10", channelName: "D&D" },
+      {
+        type: "join",
+        discordId: "1",
+        name: "Kiara",
+        channelId: "10",
+        channelName: "D&D",
+        avatarUrl: "https://cdn.discordapp.com/avatars/1/a.png",
+      },
       NOW
     );
 
@@ -51,7 +58,14 @@ describe("applyVoiceEvent", () => {
       data: { leftAt: NOW },
     });
     expect(prisma.discordVoiceSession.create).toHaveBeenCalledWith({
-      data: { discordId: "1", name: "Kiara", channelId: "10", channelName: "D&D", joinedAt: NOW },
+      data: {
+        discordId: "1",
+        name: "Kiara",
+        channelId: "10",
+        channelName: "D&D",
+        avatarUrl: "https://cdn.discordapp.com/avatars/1/a.png",
+        joinedAt: NOW,
+      },
     });
   });
 
@@ -88,9 +102,17 @@ describe("applyVoiceEvent", () => {
           name: "Abisan",
           channelId: "12",
           channelName: "Tsujiri 2.0",
+          avatarUrl: null,
           joinedAt: NOW,
         },
-        { discordId: "4", name: "Denmar", channelId: "10", channelName: "D&D", joinedAt: NOW },
+        {
+          discordId: "4",
+          name: "Denmar",
+          channelId: "10",
+          channelName: "D&D",
+          avatarUrl: null,
+          joinedAt: NOW,
+        },
       ],
     });
   });
@@ -122,16 +144,33 @@ describe("recordMessages", () => {
     expect(await recordMessages(messagesSchema.parse({ entries: [entry] }))).toBe(1);
     expect(prisma.discordMessageDay.upsert).toHaveBeenLastCalledWith({
       where: { discordId_day: { discordId: "1", day: "2026-10-30" } },
-      create: entry,
+      create: { ...entry, avatarUrl: null },
       update: { name: "Kiara", count: { increment: 3 } },
     });
 
     await recordMessages(messagesSchema.parse({ mode: "set", entries: [entry] }));
     expect(prisma.discordMessageDay.upsert).toHaveBeenLastCalledWith({
       where: { discordId_day: { discordId: "1", day: "2026-10-30" } },
-      create: entry,
+      create: { ...entry, avatarUrl: null },
       update: { name: "Kiara", count: 3 },
     });
+  });
+
+  it("remembers the Discord avatar when the bot sends one, and keeps the old one when it does not", async () => {
+    const { recordMessages, messagesSchema, prisma } = await load();
+    const entry = { discordId: "1", name: "Kiara", day: "2026-10-30", count: 3 };
+    const avatarUrl = "https://cdn.discordapp.com/avatars/1/a.png";
+
+    await recordMessages(messagesSchema.parse({ entries: [{ ...entry, avatarUrl }] }));
+    expect(prisma.discordMessageDay.upsert).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        create: { ...entry, avatarUrl },
+        update: { name: "Kiara", avatarUrl, count: { increment: 3 } },
+      })
+    );
+    expect(
+      messagesSchema.safeParse({ entries: [{ ...entry, avatarUrl: "not a url" }] }).success
+    ).toBe(false);
   });
 
   it("rejects bad days, empty batches and zero counts", async () => {
