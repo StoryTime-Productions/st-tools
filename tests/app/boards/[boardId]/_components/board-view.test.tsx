@@ -269,8 +269,6 @@ describe("BoardView", () => {
       return supabaseMocks.channel;
     });
 
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -290,7 +288,7 @@ describe("BoardView", () => {
     renderBoard();
 
     expect(screen.getByText("Roadmap")).toBeInTheDocument();
-    expect(screen.getByText("Board canvas")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Members \(/ })).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("button", { name: /add column/i })[0]);
     await waitFor(() => {
@@ -336,7 +334,11 @@ describe("BoardView", () => {
   it("removes a board member", async () => {
     renderBoard();
 
-    fireEvent.click(screen.getByRole("button", { name: /^remove$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Members \(/ }));
+    const members = await screen.findByRole("dialog");
+    expect(within(members).getByLabelText("Invite teammate")).toBeInTheDocument();
+    expect(within(members).getByText("Pick a teammate to enable Invite.")).toBeInTheDocument();
+    fireEvent.click(within(members).getByRole("button", { name: /^Remove / }));
     await waitFor(() => {
       expect(actionMocks.removeBoardMemberAction).toHaveBeenCalledWith(IDS.board, IDS.member);
     });
@@ -346,6 +348,7 @@ describe("BoardView", () => {
     renderBoard();
 
     fireEvent.click(screen.getByRole("button", { name: /delete board/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete board", hidden: false }));
 
     await waitFor(() => {
       expect(actionMocks.deleteBoardAction).toHaveBeenCalledWith(IDS.board);
@@ -366,10 +369,10 @@ describe("BoardView", () => {
   });
 
   it("does not delete board when confirmation is cancelled", async () => {
-    vi.mocked(window.confirm).mockReturnValueOnce(false);
     renderBoard();
 
     fireEvent.click(screen.getByRole("button", { name: /delete board/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
 
     await waitFor(() => {
       expect(actionMocks.deleteBoardAction).not.toHaveBeenCalled();
@@ -382,8 +385,10 @@ describe("BoardView", () => {
       canManage: false,
     });
 
-    expect(screen.queryByText("Invite teammate")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^remove$/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Members \(/ }));
+    const members = await screen.findByRole("dialog");
+    expect(within(members).queryByText("Invite teammate")).not.toBeInTheDocument();
+    expect(within(members).queryByRole("button", { name: /^Remove / })).not.toBeInTheDocument();
     expect(supabaseMocks.createClient).toHaveBeenCalled();
   });
 
