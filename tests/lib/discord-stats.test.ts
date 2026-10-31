@@ -64,11 +64,20 @@ describe("getDiscordStats", () => {
     prisma.discordMessageDay.findMany.mockResolvedValueOnce([
       { discordId: "1", name: "Old Kiara", day: "2026-10-26", count: 5 },
       { discordId: "1", name: "Kiara", day: "2026-10-28", count: 5 },
-      { discordId: "2", name: "Denmar", day: "2026-10-27", count: 10 },
+      {
+        discordId: "2",
+        name: "Denmar",
+        day: "2026-10-27",
+        count: 10,
+        avatarUrl: "https://cdn.discordapp.com/avatars/2/d.png",
+      },
       { discordId: "3", name: "Abisan", day: "2026-10-27", count: 4 },
       { discordId: "4", name: "Annika", day: "2026-10-27", count: 4 },
     ]);
-    prisma.user.findMany.mockResolvedValueOnce([{ discordId: "1", avatarUrl: "https://a/k.png" }]);
+    prisma.user.findMany.mockResolvedValueOnce([
+      { discordId: "1", avatarUrl: "https://a/k.png" },
+      { discordId: "2", avatarUrl: "https://a/account-d.png" },
+    ]);
 
     const stats = await getDiscordStats("week", WED_NIGHT, 3);
 
@@ -78,8 +87,10 @@ describe("getDiscordStats", () => {
       ["Kiara", 10],
       ["Abisan", 4],
     ]);
+    // The Discord avatar the bot sent wins; without one the St-tools account avatar is used.
+    expect(stats.messages[0].avatarUrl).toBe("https://cdn.discordapp.com/avatars/2/d.png");
     expect(stats.messages[1].avatarUrl).toBe("https://a/k.png");
-    expect(stats.messages[0].avatarUrl).toBeNull();
+    expect(stats.messages[2].avatarUrl).toBeNull();
     expect(prisma.discordMessageDay.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { day: { gte: "2026-10-26", lt: "2026-11-02" } } })
     );
@@ -142,13 +153,26 @@ describe("getVoiceNow and getWordleStreak", () => {
     const { getVoiceNow, prisma } = await load();
     const joinedAt = new Date("2026-10-30T20:00:00Z");
     prisma.discordVoiceSession.findMany.mockResolvedValueOnce([
-      { discordId: "1", name: "Kiara", channelName: "D&D", joinedAt },
-      { discordId: "2", name: "Denmar", channelName: "D&D", joinedAt },
+      {
+        discordId: "1",
+        name: "Kiara",
+        channelName: "D&D",
+        joinedAt,
+        avatarUrl: "https://cdn.discordapp.com/avatars/1/k.png",
+      },
+      { discordId: "2", name: "Denmar", channelName: "D&D", joinedAt, avatarUrl: null },
+      { discordId: "3", name: "Abisan", channelName: "D&D", joinedAt, avatarUrl: null },
     ]);
     prisma.user.findMany.mockResolvedValueOnce([{ discordId: "2", avatarUrl: "https://a/d.png" }]);
 
     expect(await getVoiceNow()).toEqual([
-      { discordId: "1", name: "Kiara", channelName: "D&D", joinedAt, avatarUrl: null },
+      {
+        discordId: "1",
+        name: "Kiara",
+        channelName: "D&D",
+        joinedAt,
+        avatarUrl: "https://cdn.discordapp.com/avatars/1/k.png",
+      },
       {
         discordId: "2",
         name: "Denmar",
@@ -156,6 +180,7 @@ describe("getVoiceNow and getWordleStreak", () => {
         joinedAt,
         avatarUrl: "https://a/d.png",
       },
+      { discordId: "3", name: "Abisan", channelName: "D&D", joinedAt, avatarUrl: null },
     ]);
   });
 

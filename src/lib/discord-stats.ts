@@ -1,19 +1,11 @@
 import { addDays, todayKey, torontoToUtc } from "@/lib/calendar";
 import { prisma } from "@/lib/prisma";
-
-export type StatsRange = "week" | "month" | "year";
-
-export const STATS_RANGES: ReadonlyArray<{ value: StatsRange; label: string }> = [
-  { value: "week", label: "Week" },
-  { value: "month", label: "Month" },
-  { value: "year", label: "Year" },
-];
-
-const RANGE_TITLE: Record<StatsRange, string> = {
-  week: "This week",
-  month: "This month",
-  year: "This year",
-};
+import {
+  RANGE_TITLE,
+  type DiscordStats,
+  type LeaderboardRow,
+  type StatsRange,
+} from "@/lib/discord-stats-format";
 
 export interface RangeBounds {
   /** First Toronto day (YYYY-MM-DD) in the range. */
@@ -53,23 +45,6 @@ export function rangeBounds(range: StatsRange, now: Date = new Date()): RangeBou
   };
 }
 
-export interface LeaderboardRow {
-  discordId: string;
-  name: string;
-  /** Messages, or whole minutes in voice. */
-  total: number;
-  avatarUrl: string | null;
-}
-
-export interface DiscordStats {
-  range: StatsRange;
-  title: string;
-  messages: LeaderboardRow[];
-  voice: LeaderboardRow[];
-  /** When the first voice session was recorded: earlier voice time is unknown (Discord keeps none). */
-  voiceTrackedSince: string | null;
-}
-
 export interface VoiceNowRow {
   discordId: string;
   name: string;
@@ -105,14 +80,14 @@ export async function getDiscordStats(
   const [days, sessions, first] = await Promise.all([
     prisma.discordMessageDay.findMany({
       where: { day: { gte: bounds.startDay, lt: bounds.endDay } },
-      select: { discordId: true, name: true, day: true, count: true },
+      select: { discordId: true, name: true, day: true, count: true, avatarUrl: true },
     }),
     prisma.discordVoiceSession.findMany({
       where: {
         joinedAt: { lt: bounds.end },
         OR: [{ leftAt: null }, { leftAt: { gt: bounds.start } }],
       },
-      select: { discordId: true, name: true, joinedAt: true, leftAt: true },
+      select: { discordId: true, name: true, joinedAt: true, leftAt: true, avatarUrl: true },
       orderBy: { joinedAt: "asc" },
     }),
     prisma.discordVoiceSession.findFirst({
@@ -121,10 +96,12 @@ export async function getDiscordStats(
     }),
   ]);
 
+  const discordAvatars = new Map<string, string>();
   const messageTotals = new Map<string, { name: string; total: number; day: string }>();
   for (const row of days) {
     const entry = messageTotals.get(row.discordId) ?? { name: row.name, total: 0, day: "" };
     entry.total += row.count;
+    if (row.avatarUrl) discordAvatars.set(row.discordId, row.avatarUrl);
     if (row.day >= entry.day) {
       entry.day = row.day;
       entry.name = row.name;
@@ -140,6 +117,7 @@ export async function getDiscordStats(
     const to = Math.min(session.leftAt?.getTime() ?? upTo, upTo);
     const entry = voiceMs.get(session.discordId) ?? { name: session.name, ms: 0 };
     entry.name = session.name;
+    if (session.avatarUrl) discordAvatars.set(session.discordId, session.avatarUrl);
     entry.ms += Math.max(0, to - from);
     voiceMs.set(session.discordId, entry);
   }
@@ -157,7 +135,7 @@ export async function getDiscordStats(
   ]);
   const withAvatar = (row: Omit<LeaderboardRow, "avatarUrl">): LeaderboardRow => ({
     ...row,
-    avatarUrl: avatars.get(row.discordId) ?? null,
+    avatarUrl: discordAvatars.get(row.discordId) ?? avatars.get(row.discordId) ?? null,
   });
 
   return {
@@ -174,10 +152,19 @@ export async function getVoiceNow(): Promise<VoiceNowRow[]> {
   const open = await prisma.discordVoiceSession.findMany({
     where: { leftAt: null },
     orderBy: { joinedAt: "asc" },
-    select: { discordId: true, name: true, channelName: true, joinedAt: true },
+    select: {
+      discordId: true,
+      name: true,
+      channelName: true,
+      joinedAt: true,
+      avatarUrl: true,
+    },
   });
   const avatars = await avatarsFor(open.map((session) => session.discordId));
-  return open.map((session) => ({ ...session, avatarUrl: avatars.get(session.discordId) ?? null }));
+  return open.map((session) => ({
+    ...session,
+    avatarUrl: session.avatarUrl ?? avatars.get(session.discordId) ?? null,
+  }));
 }
 
 export async function getWordleStreak() {

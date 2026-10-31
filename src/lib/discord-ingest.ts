@@ -4,17 +4,28 @@ import { prisma } from "@/lib/prisma";
 const id = z.string().regex(/^\d{1,32}$/);
 const name = z.string().trim().min(1).max(100);
 const at = z.coerce.date().optional();
+const avatarUrl = z.string().url().max(300).nullish();
 
 export const voiceEventSchema = z.discriminatedUnion("type", [
   // A join always ends any session still open for that person, so a move between voice channels
   // splits the session instead of double counting.
-  z.object({ type: z.literal("join"), discordId: id, name, channelId: id, channelName: name, at }),
+  z.object({
+    type: z.literal("join"),
+    discordId: id,
+    name,
+    channelId: id,
+    channelName: name,
+    avatarUrl,
+    at,
+  }),
   z.object({ type: z.literal("leave"), discordId: id, at }),
   // The full list of people in counted voice channels right now. Used on bot start to close
   // sessions that ended while it was down and open the ones already in progress.
   z.object({
     type: z.literal("snapshot"),
-    members: z.array(z.object({ discordId: id, name, channelId: id, channelName: name })).max(200),
+    members: z
+      .array(z.object({ discordId: id, name, channelId: id, channelName: name, avatarUrl }))
+      .max(200),
     at,
   }),
 ]);
@@ -43,6 +54,7 @@ export async function applyVoiceEvent(event: VoiceEvent, now: Date = new Date())
         name: event.name,
         channelId: event.channelId,
         channelName: event.channelName,
+        avatarUrl: event.avatarUrl ?? null,
         joinedAt: when,
       },
     });
@@ -78,6 +90,7 @@ export async function applyVoiceEvent(event: VoiceEvent, now: Date = new Date())
         name: member.name,
         channelId: member.channelId,
         channelName: member.channelName,
+        avatarUrl: member.avatarUrl ?? null,
         joinedAt: when,
       })),
     });
@@ -95,6 +108,7 @@ export const messagesSchema = z.object({
         name,
         day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
         count: z.number().int().min(1).max(100000),
+        avatarUrl,
       })
     )
     .min(1)
@@ -111,9 +125,11 @@ export async function recordMessages(input: z.infer<typeof messagesSchema>) {
           name: entry.name,
           day: entry.day,
           count: entry.count,
+          avatarUrl: entry.avatarUrl ?? null,
         },
         update: {
           name: entry.name,
+          ...(entry.avatarUrl ? { avatarUrl: entry.avatarUrl } : {}),
           count: input.mode === "add" ? { increment: entry.count } : entry.count,
         },
       })
