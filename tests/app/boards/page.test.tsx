@@ -135,8 +135,7 @@ describe("BoardsPage", () => {
 
     expect(getAccessibleBoardWhere).toHaveBeenCalledWith({ id: user.id, role: user.role });
     expect(getUserDisplayName).toHaveBeenCalled();
-    expect(screen.getByText("Your boards")).toBeInTheDocument();
-    expect(screen.getByText("2 total")).toBeInTheDocument();
+    expect(screen.getByText("2 boards · 6 cards")).toBeInTheDocument();
 
     expect(boardList).toHaveBeenCalledTimes(1);
     const mappedBoards = boardList.mock.calls[0][0].boards as Array<Record<string, unknown>>;

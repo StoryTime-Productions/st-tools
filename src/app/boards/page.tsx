@@ -2,8 +2,7 @@ import { redirect } from "next/navigation";
 import { FolderKanban } from "lucide-react";
 import { CreateBoardDialog } from "@/app/boards/_components/create-board-dialog";
 import { BoardList, type BoardListItem } from "@/app/boards/_components/board-list";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { getAccessibleBoardWhere, getUserDisplayName } from "@/lib/boards";
 import { prisma } from "@/lib/prisma";
@@ -14,9 +13,10 @@ export const dynamic = "force-dynamic";
 
 function formatDate(value: Date): string {
   return value.toLocaleDateString("en-US", {
-    year: "numeric",
+    ...(value.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }),
     month: "short",
     day: "numeric",
+    timeZone: "America/Toronto",
   });
 }
 
@@ -70,43 +70,15 @@ export default async function BoardsPage() {
   });
 
   const totalCards = boards.reduce((total, board) => total + board.cardCount, 0);
-  const ownedBoards = boardRows.filter((board) => board.ownerId === user.id).length;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <h2 className="text-2xl font-semibold tracking-tight">Boards</h2>
-
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-muted-foreground text-sm">
+          {boards.length} {boards.length === 1 ? "board" : "boards"} · {totalCards}{" "}
+          {totalCards === 1 ? "card" : "cards"}
+        </p>
         <CreateBoardDialog />
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-3 xl:max-w-4xl">
-        <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
-          <CardHeader className="space-y-2">
-            <CardDescription className="text-xs tracking-[0.24em] uppercase">
-              Accessible boards
-            </CardDescription>
-            <CardTitle className="text-3xl tracking-tight">{boards.length}</CardTitle>
-          </CardHeader>
-        </Card>
-
-        <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
-          <CardHeader className="space-y-2">
-            <CardDescription className="text-xs tracking-[0.24em] uppercase">
-              Owned by you
-            </CardDescription>
-            <CardTitle className="text-3xl tracking-tight">{ownedBoards}</CardTitle>
-          </CardHeader>
-        </Card>
-
-        <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
-          <CardHeader className="space-y-2">
-            <CardDescription className="text-xs tracking-[0.24em] uppercase">
-              Cards across boards
-            </CardDescription>
-            <CardTitle className="text-3xl tracking-tight">{totalCards}</CardTitle>
-          </CardHeader>
-        </Card>
       </div>
 
       {boards.length === 0 ? (
@@ -116,7 +88,7 @@ export default async function BoardsPage() {
               <FolderKanban className="text-muted-foreground size-7" />
             </div>
             <div className="space-y-2">
-              <h3 className="text-xl font-semibold tracking-tight">No boards yet</h3>
+              <h2 className="text-xl font-semibold tracking-tight">No boards yet</h2>
               <p className="text-muted-foreground max-w-md text-sm leading-6">
                 Create your first board to start organising work with columns and cards.
               </p>
@@ -125,11 +97,7 @@ export default async function BoardsPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card className="border-border/70 bg-background/85 overflow-hidden rounded-3xl shadow-none">
-          <CardHeader className="border-border/60 flex flex-col gap-2 border-b sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle>Your boards</CardTitle>
-            <Badge variant="outline">{boards.length} total</Badge>
-          </CardHeader>
+        <Card className="border-border/70 bg-background/85 rounded-3xl p-0 shadow-none">
           <CardContent className="p-0">
             <BoardList boards={boards} />
           </CardContent>

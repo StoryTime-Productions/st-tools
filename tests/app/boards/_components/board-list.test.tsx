@@ -56,7 +56,6 @@ describe("BoardList", () => {
     vi.clearAllMocks();
     actionMocks.renameBoardAction.mockResolvedValue({ success: true });
     actionMocks.deleteBoardAction.mockResolvedValue({ success: true });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
   });
 
   afterEach(() => {
@@ -68,17 +67,18 @@ describe("BoardList", () => {
 
     expect(screen.getByRole("link", { name: "Project Alpha" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Read-only Board" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /rename/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /delete/i })).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: /open/i })).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Rename Project Alpha" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete Project Alpha" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Read-only Board/ })).not.toBeInTheDocument();
+    expect(document.body).toHaveTextContent("Owned by you · 4 members · 5 cards · Created Today");
   });
 
   it("renames a board and refreshes the page on success", async () => {
     const managedBoard = makeBoards()[0];
     render(<BoardList boards={[managedBoard]} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /rename/i }));
-    fireEvent.change(screen.getByLabelText("Board title"), {
+    fireEvent.click(screen.getByRole("button", { name: "Rename Project Alpha" }));
+    fireEvent.change(screen.getByLabelText("New title for Project Alpha"), {
       target: { value: "Project Beta" },
     });
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
@@ -89,43 +89,53 @@ describe("BoardList", () => {
 
     expect(toastMocks.success).toHaveBeenCalledWith("Board renamed");
     expect(routerMocks.refresh).toHaveBeenCalled();
-    expect(screen.queryByLabelText("Board title")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("New title for Project Alpha")).not.toBeInTheDocument();
   });
 
   it("exits edit mode without calling rename when title is unchanged", () => {
     const managedBoard = makeBoards()[0];
     render(<BoardList boards={[managedBoard]} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /rename/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Rename Project Alpha" }));
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
 
     expect(actionMocks.renameBoardAction).not.toHaveBeenCalled();
-    expect(screen.queryByLabelText("Board title")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("New title for Project Alpha")).not.toBeInTheDocument();
   });
 
-  it("shows an error toast when rename fails", async () => {
+  it("shows rename errors inline", async () => {
     const managedBoard = makeBoards()[0];
     actionMocks.renameBoardAction.mockResolvedValueOnce({ error: "Cannot rename board" });
     render(<BoardList boards={[managedBoard]} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /rename/i }));
-    fireEvent.change(screen.getByLabelText("Board title"), {
+    fireEvent.click(screen.getByRole("button", { name: "Rename Project Alpha" }));
+    fireEvent.change(screen.getByLabelText("New title for Project Alpha"), {
       target: { value: "Broken rename" },
     });
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Cannot rename board");
+    expect(toastMocks.error).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent("Cannot rename board");
+  });
 
-    await waitFor(() => {
-      expect(toastMocks.error).toHaveBeenCalledWith("Cannot rename board");
-    });
-    expect(routerMocks.refresh).toHaveBeenCalled();
+  it("cancels renaming with Escape and returns focus to Rename", async () => {
+    render(<BoardList boards={[makeBoards()[0]]} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Rename Project Alpha" }));
+    fireEvent.keyDown(screen.getByLabelText("New title for Project Alpha"), { key: "Escape" });
+
+    expect(screen.queryByLabelText("New title for Project Alpha")).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Rename Project Alpha" })).toHaveFocus()
+    );
   });
 
   it("does not delete when confirmation is cancelled", () => {
     const managedBoard = makeBoards()[0];
-    vi.spyOn(window, "confirm").mockReturnValue(false);
     render(<BoardList boards={[managedBoard]} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /delete/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete Project Alpha" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(actionMocks.deleteBoardAction).not.toHaveBeenCalled();
   });
@@ -138,7 +148,8 @@ describe("BoardList", () => {
 
     const { rerender } = render(<BoardList boards={[managedBoard]} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /delete/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete Project Alpha" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete board" }));
 
     await waitFor(() => {
       expect(actionMocks.deleteBoardAction).toHaveBeenCalledWith(managedBoard.id);
@@ -146,7 +157,8 @@ describe("BoardList", () => {
     });
 
     rerender(<BoardList boards={[managedBoard]} />);
-    fireEvent.click(screen.getByRole("button", { name: /delete/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete Project Alpha" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete board" }));
 
     await waitFor(() => {
       expect(toastMocks.error).toHaveBeenCalledWith("Cannot delete board");
