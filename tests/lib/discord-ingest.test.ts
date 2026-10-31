@@ -41,7 +41,7 @@ describe("applyVoiceEvent", () => {
     prisma.discordVoiceSession.updateMany.mockResolvedValueOnce({ count: 1 });
 
     const result = await applyVoiceEvent(
-      { type: "join", discordId: "1", name: "Kiara", channelId: "10" },
+      { type: "join", discordId: "1", name: "Kiara", channelId: "10", channelName: "D&D" },
       NOW
     );
 
@@ -51,7 +51,7 @@ describe("applyVoiceEvent", () => {
       data: { leftAt: NOW },
     });
     expect(prisma.discordVoiceSession.create).toHaveBeenCalledWith({
-      data: { discordId: "1", name: "Kiara", channelId: "10", joinedAt: NOW },
+      data: { discordId: "1", name: "Kiara", channelId: "10", channelName: "D&D", joinedAt: NOW },
     });
   });
 
@@ -68,9 +68,9 @@ describe("applyVoiceEvent", () => {
       {
         type: "snapshot",
         members: [
-          { discordId: "1", name: "Kiara", channelId: "10" },
-          { discordId: "3", name: "Abisan", channelId: "12" },
-          { discordId: "4", name: "Denmar", channelId: "10" },
+          { discordId: "1", name: "Kiara", channelId: "10", channelName: "D&D" },
+          { discordId: "3", name: "Abisan", channelId: "12", channelName: "Tsujiri 2.0" },
+          { discordId: "4", name: "Denmar", channelId: "10", channelName: "D&D" },
         ],
       },
       NOW
@@ -83,8 +83,14 @@ describe("applyVoiceEvent", () => {
     });
     expect(prisma.discordVoiceSession.createMany).toHaveBeenCalledWith({
       data: [
-        { discordId: "3", name: "Abisan", channelId: "12", joinedAt: NOW },
-        { discordId: "4", name: "Denmar", channelId: "10", joinedAt: NOW },
+        {
+          discordId: "3",
+          name: "Abisan",
+          channelId: "12",
+          channelName: "Tsujiri 2.0",
+          joinedAt: NOW,
+        },
+        { discordId: "4", name: "Denmar", channelId: "10", channelName: "D&D", joinedAt: NOW },
       ],
     });
   });

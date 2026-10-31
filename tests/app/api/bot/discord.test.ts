@@ -27,7 +27,7 @@ function post(body: unknown, auth: string | null = "Bearer s3cret") {
   });
 }
 
-const VOICE = { type: "join", discordId: "1", name: "Kiara", channelId: "10" };
+const VOICE = { type: "join", discordId: "1", name: "Kiara", channelId: "10", channelName: "D&D" };
 const MESSAGES = { entries: [{ discordId: "1", name: "Kiara", day: "2026-10-30", count: 2 }] };
 const WORDLE = { streak: 80, postedOn: "2026-10-30" };
 

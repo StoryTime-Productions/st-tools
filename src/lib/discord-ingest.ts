@@ -8,13 +8,13 @@ const at = z.coerce.date().optional();
 export const voiceEventSchema = z.discriminatedUnion("type", [
   // A join always ends any session still open for that person, so a move between voice channels
   // splits the session instead of double counting.
-  z.object({ type: z.literal("join"), discordId: id, name, channelId: id, at }),
+  z.object({ type: z.literal("join"), discordId: id, name, channelId: id, channelName: name, at }),
   z.object({ type: z.literal("leave"), discordId: id, at }),
   // The full list of people in counted voice channels right now. Used on bot start to close
   // sessions that ended while it was down and open the ones already in progress.
   z.object({
     type: z.literal("snapshot"),
-    members: z.array(z.object({ discordId: id, name, channelId: id })).max(200),
+    members: z.array(z.object({ discordId: id, name, channelId: id, channelName: name })).max(200),
     at,
   }),
 ]);
@@ -42,6 +42,7 @@ export async function applyVoiceEvent(event: VoiceEvent, now: Date = new Date())
         discordId: event.discordId,
         name: event.name,
         channelId: event.channelId,
+        channelName: event.channelName,
         joinedAt: when,
       },
     });
@@ -76,6 +77,7 @@ export async function applyVoiceEvent(event: VoiceEvent, now: Date = new Date())
         discordId: member.discordId,
         name: member.name,
         channelId: member.channelId,
+        channelName: member.channelName,
         joinedAt: when,
       })),
     });

@@ -710,6 +710,8 @@ model DiscordVoiceSession {
   discordId String
   name      String
   channelId String
+  // The channel name when the session started, for "who is on a call now".
+  channelName String
   joinedAt  DateTime
   leftAt    DateTime?
 

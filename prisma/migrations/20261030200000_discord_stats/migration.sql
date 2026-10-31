@@ -4,6 +4,7 @@ CREATE TABLE "discord_voice_sessions" (
     "discordId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "channelId" TEXT NOT NULL,
+    "channelName" TEXT NOT NULL,
     "joinedAt" TIMESTAMP(3) NOT NULL,
     "leftAt" TIMESTAMP(3),
 
