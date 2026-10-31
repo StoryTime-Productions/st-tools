@@ -125,6 +125,7 @@ function renderSheet({
   onAddComment = vi.fn(async () => true),
   onSetGithubIssue = vi.fn(async () => true),
   onDelete = vi.fn(),
+  onMoveToColumn = vi.fn(),
 }: {
   card?: BoardCardData | null;
   canCreateTags?: boolean;
@@ -142,6 +143,7 @@ function renderSheet({
   onAddComment?: (values: { cardId: string; content: string }) => Promise<boolean>;
   onSetGithubIssue?: (cardId: string, url: string | null) => Promise<boolean>;
   onDelete?: (cardId: string) => void;
+  onMoveToColumn?: (cardId: string, columnId: string) => void;
 }) {
   render(
     <CardDetailSheet
@@ -149,6 +151,8 @@ function renderSheet({
       onOpenChange={onOpenChange}
       card={card}
       columnLookup={COLUMN_LOOKUP}
+      currentColumnId="col-todo"
+      onMoveToColumn={onMoveToColumn}
       members={MEMBERS}
       tagOptions={TAG_OPTIONS}
       canCreateTags={canCreateTags}
@@ -160,13 +164,23 @@ function renderSheet({
     />
   );
 
-  return { onOpenChange, onSave, onAddComment, onSetGithubIssue, onDelete };
+  return { onOpenChange, onSave, onAddComment, onSetGithubIssue, onDelete, onMoveToColumn };
 }
 
 describe("CardDetailSheet", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Element.prototype.scrollIntoView = vi.fn();
     vi.spyOn(window, "confirm").mockReturnValue(true);
+  });
+
+  it("moves the card to another column from a labelled select", async () => {
+    const { onMoveToColumn } = renderSheet({});
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Move to column" }));
+    fireEvent.click(await screen.findByRole("option", { name: COLUMN_LOOKUP["col-done"] }));
+
+    expect(onMoveToColumn).toHaveBeenCalledWith("33333333-3333-4333-8333-333333333333", "col-done");
   });
 
   it("renders header fallback when card is null", () => {
@@ -218,6 +232,8 @@ describe("CardDetailSheet", () => {
         onOpenChange={vi.fn()}
         card={makeCard({ labels: [] })}
         columnLookup={COLUMN_LOOKUP}
+        currentColumnId="col-todo"
+        onMoveToColumn={vi.fn()}
         members={MEMBERS}
         tagOptions={[]}
         canCreateTags={canCreateTags}
@@ -382,6 +398,8 @@ describe("CardDetailSheet", () => {
         onOpenChange={vi.fn()}
         card={fallbackCard}
         columnLookup={COLUMN_LOOKUP}
+        currentColumnId="col-todo"
+        onMoveToColumn={vi.fn()}
         members={fallbackMembers}
         tagOptions={[]}
         canCreateTags={false}

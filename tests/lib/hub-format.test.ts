@@ -4,6 +4,7 @@ import {
   formatQuarterRange,
   groupByInitiative,
   groupByQuarter,
+  formatDueLabel,
   isPastDue,
   projectInitials,
   quarterOptions,
@@ -99,5 +100,15 @@ describe("isPastDue", () => {
 
   it("defaults to the current time", () => {
     expect(isPastDue(new Date("2000-01-01T00:00:00Z"))).toBe(true);
+  });
+});
+
+describe("formatDueLabel", () => {
+  const now = new Date("2026-10-30T15:00:00Z");
+
+  it("labels upcoming and past due days", () => {
+    expect(formatDueLabel("2026-11-03", now)).toBe("Due Nov 3");
+    expect(formatDueLabel("2026-10-30", now)).toBe("Due Oct 30");
+    expect(formatDueLabel("2026-10-03T00:00:00.000Z", now)).toBe("Overdue · Oct 3");
   });
 });

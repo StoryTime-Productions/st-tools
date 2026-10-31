@@ -109,3 +109,14 @@ export function groupByInitiative<T extends Groupable>(projects: T[]): ProjectGr
 export function isPastDue(due: Date, now: Date = new Date()): boolean {
   return due.getTime() < Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
 }
+
+/** "Due Oct 3", or "Overdue · Oct 3" when the day has passed. `due` is a YYYY-MM-DD day key. */
+export function formatDueLabel(due: string, now: Date = new Date()): string {
+  const date = new Date(`${due.slice(0, 10)}T00:00:00Z`);
+  const label = date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+  return isPastDue(date, now) ? `Overdue · ${label}` : `Due ${label}`;
+}

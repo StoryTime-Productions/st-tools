@@ -17,6 +17,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 interface EditableChecklistItem {
@@ -30,6 +37,8 @@ interface CardDetailSheetProps {
   onOpenChange: (open: boolean) => void;
   card: BoardCardData | null;
   columnLookup: Record<string, string>;
+  currentColumnId: string | null;
+  onMoveToColumn: (cardId: string, columnId: string) => void;
   members: BoardMemberSummary[];
   tagOptions: string[];
   canCreateTags: boolean;
@@ -180,6 +189,8 @@ function getActivitySummary(
 function CardDetailSheetBody({
   card,
   columnLookup,
+  currentColumnId,
+  onMoveToColumn,
   members,
   tagOptions,
   canCreateTags,
@@ -192,6 +203,8 @@ function CardDetailSheetBody({
 }: {
   card: BoardCardData;
   columnLookup: Record<string, string>;
+  currentColumnId: string | null;
+  onMoveToColumn: (cardId: string, columnId: string) => void;
   members: BoardMemberSummary[];
   tagOptions: string[];
   canCreateTags: boolean;
@@ -315,6 +328,28 @@ function CardDetailSheetBody({
             disabled={isPending}
           />
         </div>
+
+        {currentColumnId ? (
+          <div className="space-y-2">
+            <Label htmlFor="card-column">Move to column</Label>
+            <Select
+              value={currentColumnId}
+              onValueChange={(value) => onMoveToColumn(card.id, value)}
+              disabled={isPending}
+            >
+              <SelectTrigger id="card-column" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(columnLookup).map(([id, title]) => (
+                  <SelectItem key={id} value={id}>
+                    {title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
@@ -490,9 +525,11 @@ function CardDetailSheetBody({
                         )
                       )
                     }
-                    className="mt-1 h-4 w-4 rounded border"
+                    aria-label={`Checklist item ${index + 1} done`}
+                    className="mt-1 size-4 rounded border max-md:mt-3.5"
                   />
                   <Input
+                    aria-label={`Checklist item ${index + 1}`}
                     value={item.content}
                     onChange={(event) =>
                       setChecklistItems((current) =>
@@ -510,6 +547,7 @@ function CardDetailSheetBody({
                     type="button"
                     size="icon-sm"
                     variant="ghost"
+                    aria-label={`Remove checklist item ${index + 1}`}
                     onClick={() =>
                       setChecklistItems((current) =>
                         current.filter((_, currentIndex) => currentIndex !== index)
@@ -644,6 +682,8 @@ export function CardDetailSheet({
   onOpenChange,
   card,
   columnLookup,
+  currentColumnId,
+  onMoveToColumn,
   members,
   tagOptions,
   canCreateTags,
@@ -668,6 +708,8 @@ export function CardDetailSheet({
             key={card.id}
             card={card}
             columnLookup={columnLookup}
+            currentColumnId={currentColumnId}
+            onMoveToColumn={onMoveToColumn}
             members={members}
             tagOptions={tagOptions}
             canCreateTags={canCreateTags}
