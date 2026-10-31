@@ -74,10 +74,10 @@ export function RightNow({
                           {person.name}
                         </p>
                         <p className="text-muted-foreground text-xs break-words">
-                          {person.channelName} ·{" "}
-                          <span className="whitespace-nowrap">
-                            since {person.joinedAt.toLocaleTimeString("en-US", SINCE)}
-                          </span>
+                          {person.channelName}
+                        </p>
+                        <p className="text-muted-foreground text-xs">
+                          Since {person.joinedAt.toLocaleTimeString("en-US", SINCE)}
                         </p>
                       </div>
                     </li>
@@ -110,9 +110,7 @@ export function RightNow({
                   </p>
                 </>
               ) : (
-                <p className="text-muted-foreground text-sm">
-                  The streak shows up after the next Wordle post.
-                </p>
+                <p className="text-muted-foreground text-sm">No streak yet.</p>
               )}
             </CardContent>
           </Card>

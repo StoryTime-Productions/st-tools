@@ -107,7 +107,7 @@ describe("RightNow", () => {
     );
 
     expect(screen.getByRole("heading", { name: /On a call/ })).toHaveTextContent("· 2");
-    expect(screen.getAllByText("since 4:00 PM")).toHaveLength(2);
+    expect(screen.getAllByText("Since 4:00 PM")).toHaveLength(2);
     expect(screen.getAllByText(/^D&D/)).toHaveLength(2);
     expect(screen.getByText("80")).toBeInTheDocument();
     expect(screen.getByText("Posted Oct 30.")).toBeInTheDocument();
@@ -139,7 +139,7 @@ describe("RightNow", () => {
     render(<RightNow today="2026-10-30" loaded voice={[]} wordle={null} />);
 
     expect(screen.getByText("Nobody is on a call right now.")).toBeInTheDocument();
-    expect(screen.getByText("The streak shows up after the next Wordle post.")).toBeInTheDocument();
+    expect(screen.getByText("No streak yet.")).toBeInTheDocument();
   });
 
   it("uses the singular for a one day streak", () => {
