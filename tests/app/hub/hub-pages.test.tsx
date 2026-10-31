@@ -363,7 +363,7 @@ describe("hub pages", () => {
     expect(screen.getByTestId("project-boards")).toHaveTextContent("member");
     expect(lib.getProjectWork).toHaveBeenCalledWith("p1", member);
     expect(screen.getByText(/Members of this project/)).toBeInTheDocument();
-    expect(screen.getByText("No unassigned cards.")).toBeInTheDocument();
+    expect(screen.getByText(/No unassigned cards\./)).toBeInTheDocument();
 
     lib.getProjectDetail.mockResolvedValueOnce(null);
     await expect(ProjectPage({ params: Promise.resolve({ projectId: "nope" }) })).rejects.toThrow(
@@ -392,8 +392,8 @@ describe("hub pages", () => {
 
     expect(screen.getByTestId("admin-controls")).toHaveTextContent("web");
     expect(screen.getByText("No initiative")).toBeInTheDocument();
-    expect(screen.getByText("No phases yet.")).toBeInTheDocument();
-    expect(screen.getByText("No links yet.")).toBeInTheDocument();
+    expect(screen.getByText("No phases yet. Add them from Edit project.")).toBeInTheDocument();
+    expect(screen.getByText("No links yet. Add them from Edit project.")).toBeInTheDocument();
     expect(screen.getByTestId("project-boards")).toHaveTextContent("admin");
   });
 
@@ -412,6 +412,13 @@ describe("hub pages", () => {
           dueDate: new Date("2026-10-01T16:00:00Z"),
         },
         { id: "c2", title: "Undated", boardId: "b1", boardTitle: "Art", dueDate: null },
+        {
+          id: "c3",
+          title: "Far ahead",
+          boardId: "b1",
+          boardTitle: "Art",
+          dueDate: new Date("2099-01-05T16:00:00Z"),
+        },
       ],
       accessRequests: [],
     });
@@ -424,7 +431,8 @@ describe("hub pages", () => {
       "href",
       "/boards/b1?card=c1"
     );
-    expect(screen.getByText("Due Oct 1")).toBeInTheDocument();
+    expect(screen.getByText("Overdue · Oct 1")).toBeInTheDocument();
+    expect(screen.getByText("Due Jan 5")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Undated/ })).not.toHaveTextContent("Due");
   });
 

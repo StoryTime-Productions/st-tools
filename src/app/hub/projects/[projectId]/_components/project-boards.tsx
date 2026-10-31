@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, Lock, Plus, Unlink, X } from "lucide-react";
+import { Check, Kanban, Lock, Plus, Unlink, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   approveBoardAccessAction,
@@ -12,6 +12,8 @@ import {
   setBoardProjectAction,
   type HubActionResult,
 } from "@/app/actions/hub";
+import { EmptyNote } from "@/app/hub/_components/empty-note";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -60,12 +62,12 @@ export function ProjectBoards({
     <div className="space-y-3">
       {accessRequests.length > 0 ? (
         <section aria-label="Access requests" className="space-y-2">
-          <h3 className="text-sm font-medium">Access requests</h3>
+          <h4 className="text-sm font-medium">Access requests</h4>
           <ul className="space-y-2">
             {accessRequests.map((request) => (
               <li
                 key={request.id}
-                className="bg-muted/40 flex items-center justify-between gap-3 rounded-2xl px-4 py-2 text-sm"
+                className="bg-muted/40 flex flex-col items-start gap-2 rounded-2xl px-4 py-2 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3"
               >
                 <span className="min-w-0">
                   <span className="font-medium">{request.userName}</span> wants to join{" "}
@@ -105,7 +107,11 @@ export function ProjectBoards({
       ) : null}
 
       {boards.length === 0 ? (
-        <p className="text-muted-foreground text-sm">No boards yet.</p>
+        <EmptyNote icon={Kanban}>
+          {standaloneBoards
+            ? "No boards yet. Attach a standalone board below."
+            : "No boards yet. An admin can attach one."}
+        </EmptyNote>
       ) : (
         <ul className="space-y-2">
           {boards.map((board) => (
@@ -113,18 +119,25 @@ export function ProjectBoards({
               key={board.id}
               className="flex items-center justify-between gap-3 rounded-2xl border px-4 py-2 text-sm"
             >
-              <div className="min-w-0">
+              <div className="min-w-0 break-words">
                 {board.accessible ? (
-                  <Link href={`/boards/${board.id}`} className="font-medium hover:underline">
+                  <Link
+                    href={`/boards/${board.id}`}
+                    className="focus-visible:ring-ring/50 inline-flex min-h-11 items-center rounded-md font-medium break-words outline-none hover:underline focus-visible:ring-[3px] sm:min-h-0"
+                  >
                     {board.title}
                   </Link>
                 ) : (
                   <span className="inline-flex items-center gap-2 font-medium">
-                    <Lock className="text-muted-foreground size-3.5" aria-label="No access" />
+                    <Lock aria-hidden="true" className="text-muted-foreground size-3.5" />
+                    <span className="sr-only">No access: </span>
                     {board.title}
                   </span>
                 )}
-                <p className="text-muted-foreground text-xs">{cardCountLabel(board.cardCount)}</p>
+                <p className="text-muted-foreground text-xs">
+                  {cardCountLabel(board.cardCount)}
+                  {board.accessible ? "" : " · Members only"}
+                </p>
               </div>
               {standaloneBoards ? (
                 <Button
@@ -138,7 +151,7 @@ export function ProjectBoards({
                   <Unlink className="size-4" />
                 </Button>
               ) : board.accessible ? null : board.requested ? (
-                <span className="text-muted-foreground text-xs">Requested</span>
+                <Badge variant="outline">Requested</Badge>
               ) : (
                 <Button
                   type="button"
@@ -157,13 +170,13 @@ export function ProjectBoards({
       )}
 
       {standaloneBoards ? (
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <Select
             value={boardToAttach}
             onValueChange={(value) => value && setBoardToAttach(value)}
             disabled={isPending || standaloneBoards.length === 0}
           >
-            <SelectTrigger className="w-full" aria-label="Board to attach">
+            <SelectTrigger className="w-full min-w-0 flex-1" aria-label="Board to attach">
               <SelectValue
                 placeholder={
                   standaloneBoards.length === 0 ? "No standalone boards" : "Attach a board…"
@@ -181,6 +194,7 @@ export function ProjectBoards({
           <Button
             type="button"
             variant="outline"
+            className="w-full sm:w-auto"
             disabled={isPending || !boardToAttach}
             onClick={() =>
               run(() => setBoardProjectAction(boardToAttach, projectId), "Board attached")
