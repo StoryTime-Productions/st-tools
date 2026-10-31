@@ -201,6 +201,7 @@ export function ProjectOverview({
           <section aria-label="Projects" className="space-y-3">
             <h2 className="text-xl font-semibold tracking-tight">Projects</h2>
             <ItemGroups
+              nested
               groups={groupItems(projectItems, view, "No quarter")}
               empty={
                 showPast
@@ -215,13 +216,22 @@ export function ProjectOverview({
   );
 }
 
-function ItemGroups({ groups, empty }: { groups: ProjectGroup<Item>[]; empty: string }) {
+function ItemGroups({
+  groups,
+  empty,
+  nested = false,
+}: {
+  groups: ProjectGroup<Item>[];
+  empty: string;
+  nested?: boolean;
+}) {
+  const Heading = nested ? "h3" : "h2";
   if (groups.every((group) => group.projects.length === 0)) {
     return <p className="text-muted-foreground text-sm">{empty}</p>;
   }
   return groups.map((group) => (
     <section key={group.label || "all"} aria-label={group.label || undefined} className="space-y-3">
-      {group.label ? <h3 className="text-sm font-medium">{group.label}</h3> : null}
+      {group.label ? <Heading className="text-sm font-medium">{group.label}</Heading> : null}
       <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {group.projects.map((item) => (
           <li key={`${item.kind}-${item.id}`}>
