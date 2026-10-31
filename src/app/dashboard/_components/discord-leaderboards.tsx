@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Mic, MessageSquare } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { SegmentedToggle } from "@/components/ui/segmented-toggle";
 import {
   STATS_RANGES,
+  formatDay,
   formatMinutes,
   type DiscordStats,
   type LeaderboardRow,
@@ -31,7 +32,7 @@ function Leaderboard({
   heading: string;
   icon: typeof Mic;
   rows: LeaderboardRow[];
-  unit: (total: number) => string;
+  unit: (total: number) => ReactNode;
   empty: string;
   note?: string | null;
 }) {
@@ -53,7 +54,7 @@ function Leaderboard({
             {rows.map((row, index) => (
               <li
                 key={row.discordId}
-                className="grid grid-cols-[1.5rem_2rem_minmax(0,1fr)_auto] items-center gap-3"
+                className="grid grid-cols-[1.5rem_2rem_minmax(0,1fr)] items-center gap-3"
               >
                 <span className="text-muted-foreground text-center text-sm font-semibold tabular-nums">
                   {index + 1}
@@ -65,9 +66,14 @@ function Leaderboard({
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium" title={row.name}>
-                    {row.name}
-                  </p>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="min-w-0 truncate text-sm font-medium" title={row.name}>
+                      {row.name}
+                    </p>
+                    <span className="shrink-0 text-sm font-semibold tabular-nums">
+                      {unit(row.total)}
+                    </span>
+                  </div>
                   <div
                     className="bg-muted mt-1 h-1.5 overflow-hidden rounded-full"
                     aria-hidden="true"
@@ -78,7 +84,6 @@ function Leaderboard({
                     />
                   </div>
                 </div>
-                <span className="text-sm font-semibold tabular-nums">{unit(row.total)}</span>
               </li>
             ))}
           </ol>
@@ -90,8 +95,8 @@ function Leaderboard({
 }
 
 function voiceNote(stats: DiscordStats) {
-  if (!stats.voiceTrackedSince) return "Voice time starts counting when the bot is switched on.";
-  return `Voice time counted since ${stats.voiceTrackedSince}. Earlier time is not available.`;
+  if (!stats.voiceTrackedSince) return "Voice time starts counting once voice tracking is on.";
+  return `Voice time counted since ${formatDay(stats.voiceTrackedSince)}. Earlier time is not available.`;
 }
 
 export function DiscordLeaderboards({ stats }: { stats: Record<StatsRange, DiscordStats> }) {
@@ -101,7 +106,7 @@ export function DiscordLeaderboards({ stats }: { stats: Record<StatsRange, Disco
   return (
     <section aria-labelledby="discord-stats-heading" className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="discord-stats-heading" className="text-2xl font-semibold tracking-tight">
+        <h2 id="discord-stats-heading" className="text-xl font-semibold tracking-tight">
           {current.title} on Discord
         </h2>
         <SegmentedToggle
@@ -112,12 +117,22 @@ export function DiscordLeaderboards({ stats }: { stats: Record<StatsRange, Disco
         />
       </div>
 
-      <div aria-live="polite" className="grid items-start gap-4 md:grid-cols-2">
+      <p role="status" className="sr-only">
+        Showing {current.title.toLowerCase()}
+      </p>
+
+      <div className="grid items-start gap-4 md:grid-cols-2">
         <Leaderboard
           heading="Top senders"
           icon={MessageSquare}
           rows={current.messages}
-          unit={(total) => `${total.toLocaleString("en-US")} msgs`}
+          unit={(total) => (
+            <>
+              {total.toLocaleString("en-US")}
+              <span className="sr-only"> messages</span>
+              <span aria-hidden="true"> msgs</span>
+            </>
+          )}
           empty={`No messages counted ${TRACKING_NOTE_RANGE[range]} yet.`}
         />
         <Leaderboard

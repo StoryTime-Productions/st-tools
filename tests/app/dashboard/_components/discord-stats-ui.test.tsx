@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { AutoRefresh } from "@/app/dashboard/_components/auto-refresh";
 import { DiscordLeaderboards } from "@/app/dashboard/_components/discord-leaderboards";
 import { RightNow } from "@/app/dashboard/_components/right-now";
-import { formatMinutes, type DiscordStats } from "@/lib/discord-stats-format";
+import { formatDay, formatMinutes, type DiscordStats } from "@/lib/discord-stats-format";
 
 const routerMocks = vi.hoisted(() => ({ refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => routerMocks }));
@@ -24,6 +24,13 @@ function stats(range: DiscordStats["range"], overrides: Partial<DiscordStats> = 
 
 const ALL = { week: stats("week"), month: stats("month"), year: stats("year") };
 
+describe("formatDay", () => {
+  it("formats a Toronto day key as month and day", () => {
+    expect(formatDay("2026-10-30")).toBe("Oct 30");
+    expect(formatDay("2027-01-05")).toBe("Jan 5");
+  });
+});
+
 describe("formatMinutes", () => {
   it("formats minutes as hours and minutes", () => {
     expect(formatMinutes(0)).toBe("0m");
@@ -38,6 +45,7 @@ describe("DiscordLeaderboards", () => {
     render(<DiscordLeaderboards stats={ALL} />);
 
     expect(screen.getByRole("heading", { level: 2, name: "This week on Discord" })).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent("Showing this week");
     const senders = screen
       .getByRole("heading", { name: "Top senders" })
       .closest("div")!.parentElement!;
@@ -45,11 +53,13 @@ describe("DiscordLeaderboards", () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]).toHaveTextContent("1");
     expect(rows[0]).toHaveTextContent("Kiara");
-    expect(rows[0]).toHaveTextContent("142 msgs");
+    expect(rows[0]).toHaveTextContent("142");
+    expect(within(rows[0]).getByText("messages")).toHaveClass("sr-only");
     expect(screen.getByText("9h 40m")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Year" }));
     expect(screen.getByRole("heading", { level: 2, name: "This year on Discord" })).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent("Showing this year");
     expect(screen.getByRole("button", { name: "Year" })).toHaveAttribute("aria-pressed", "true");
   });
 
@@ -68,14 +78,14 @@ describe("DiscordLeaderboards", () => {
     expect(screen.getByText("No messages counted this week yet.")).toBeInTheDocument();
     expect(screen.getByText("No voice time counted this week yet.")).toBeInTheDocument();
     expect(
-      screen.getByText("Voice time starts counting when the bot is switched on.")
+      screen.getByText("Voice time starts counting once voice tracking is on.")
     ).toBeInTheDocument();
   });
 
   it("notes the date voice tracking began", () => {
     render(<DiscordLeaderboards stats={ALL} />);
     expect(
-      screen.getByText("Voice time counted since 2026-10-30. Earlier time is not available.")
+      screen.getByText("Voice time counted since Oct 30. Earlier time is not available.")
     ).toBeInTheDocument();
   });
 });
@@ -86,6 +96,7 @@ describe("RightNow", () => {
   it("lists who is on a call with the channel and start time, and the streak", () => {
     render(
       <RightNow
+        today="2026-10-30"
         loaded
         voice={[
           { discordId: "1", name: "Kiara", channelName: "D&D", joinedAt, avatarUrl: null },
@@ -96,27 +107,60 @@ describe("RightNow", () => {
     );
 
     expect(screen.getByRole("heading", { name: /On a call/ })).toHaveTextContent("· 2");
-    expect(screen.getAllByText(/D&D · since 4:00 PM/)).toHaveLength(2);
+    expect(screen.getAllByText("since 4:00 PM")).toHaveLength(2);
+    expect(screen.getAllByText(/^D&D/)).toHaveLength(2);
     expect(screen.getByText("80")).toBeInTheDocument();
-    expect(screen.getByText("Group streak as of 2026-10-30.")).toBeInTheDocument();
+    expect(screen.getByText("Posted Oct 30.")).toBeInTheDocument();
+  });
+
+  it("says plainly when the streak post is stale, but not for yesterday's post", () => {
+    const { rerender } = render(
+      <RightNow
+        today="2026-10-31"
+        loaded
+        voice={[]}
+        wordle={{ streak: 80, postedOn: "2026-10-30" }}
+      />
+    );
+    expect(screen.getByText("Posted Oct 30.")).toBeInTheDocument();
+
+    rerender(
+      <RightNow
+        today="2026-11-02"
+        loaded
+        voice={[]}
+        wordle={{ streak: 80, postedOn: "2026-10-30" }}
+      />
+    );
+    expect(screen.getByText("Last post Oct 30. The streak may have ended.")).toBeInTheDocument();
   });
 
   it("covers the empty cases", () => {
-    render(<RightNow loaded voice={[]} wordle={null} />);
+    render(<RightNow today="2026-10-30" loaded voice={[]} wordle={null} />);
 
     expect(screen.getByText("Nobody is on a call right now.")).toBeInTheDocument();
     expect(screen.getByText("The streak shows up after the next Wordle post.")).toBeInTheDocument();
   });
 
   it("uses the singular for a one day streak", () => {
-    render(<RightNow loaded voice={[]} wordle={{ streak: 1, postedOn: "2026-10-30" }} />);
+    render(
+      <RightNow
+        today="2026-10-30"
+        loaded
+        voice={[]}
+        wordle={{ streak: 1, postedOn: "2026-10-30" }}
+      />
+    );
     expect(screen.getByText("day")).toBeInTheDocument();
   });
 
   it("shows an alert instead of the cards when the stats could not load", () => {
-    render(<RightNow loaded={false} voice={[]} wordle={null} />);
+    render(<RightNow today="2026-10-30" loaded={false} voice={[]} wordle={null} />);
 
     expect(screen.getByRole("alert")).toHaveTextContent("Couldn't load the Discord stats");
+    routerMocks.refresh.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(routerMocks.refresh).toHaveBeenCalledTimes(1);
     expect(screen.queryByText("Nobody is on a call right now.")).not.toBeInTheDocument();
   });
 });

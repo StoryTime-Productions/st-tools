@@ -114,6 +114,7 @@ describe("DashboardPage", () => {
     expect(rightNow).toHaveBeenCalledWith(
       {
         loaded: true,
+        today: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
         voice: [{ discordId: "1" }],
         wordle: { streak: 80, postedOn: "2026-10-30" },
       },
@@ -159,7 +160,10 @@ describe("DashboardPage", () => {
 
     render(await DashboardPage());
 
-    expect(rightNow).toHaveBeenCalledWith({ loaded: false, voice: [], wordle: null }, undefined);
+    expect(rightNow).toHaveBeenCalledWith(
+      { loaded: false, today: expect.any(String), voice: [], wordle: null },
+      undefined
+    );
     expect(leaderboards).not.toHaveBeenCalled();
     expect(screen.getByTestId("playlist-widget")).toBeInTheDocument();
     expect(log).toHaveBeenCalled();

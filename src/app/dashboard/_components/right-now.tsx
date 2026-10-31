@@ -2,7 +2,14 @@ import { Flame, Headphones } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import type { VoiceNowRow } from "@/lib/discord-stats";
+import { formatDay } from "@/lib/discord-stats-format";
 import { projectInitials } from "@/lib/hub-format";
+import { RetryButton } from "./retry-button";
+
+/** The day before a YYYY-MM-DD day key. */
+function previousDay(key: string) {
+  return new Date(new Date(`${key}T00:00:00Z`).getTime() - 86_400_000).toISOString().slice(0, 10);
+}
 
 const SINCE = {
   timeZone: "America/Toronto",
@@ -14,21 +21,27 @@ export function RightNow({
   voice,
   wordle,
   loaded,
+  today,
 }: {
   voice: VoiceNowRow[];
   wordle: { streak: number; postedOn: string } | null;
   loaded: boolean;
+  /** Today's Toronto day (YYYY-MM-DD), to tell when the streak post is stale. */
+  today: string;
 }) {
   return (
     <section aria-labelledby="right-now-heading" className="space-y-4">
-      <h2 id="right-now-heading" className="text-2xl font-semibold tracking-tight">
+      <h2 id="right-now-heading" className="text-xl font-semibold tracking-tight">
         Right now
       </h2>
 
       {!loaded ? (
         <Card role="alert" className="border-border/70 bg-background/85 rounded-3xl shadow-none">
-          <CardContent className="text-muted-foreground text-sm">
-            Couldn&apos;t load the Discord stats. Try refreshing in a moment.
+          <CardContent className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-muted-foreground text-sm">
+              Couldn&apos;t load the Discord stats. Something went wrong on our side.
+            </p>
+            <RetryButton />
           </CardContent>
         </Card>
       ) : (
@@ -61,8 +74,10 @@ export function RightNow({
                           {person.name}
                         </p>
                         <p className="text-muted-foreground text-xs break-words">
-                          {person.channelName} · since{" "}
-                          {person.joinedAt.toLocaleTimeString("en-US", SINCE)}
+                          {person.channelName} ·{" "}
+                          <span className="whitespace-nowrap">
+                            since {person.joinedAt.toLocaleTimeString("en-US", SINCE)}
+                          </span>
                         </p>
                       </div>
                     </li>
@@ -89,7 +104,9 @@ export function RightNow({
                     </span>
                   </p>
                   <p className="text-muted-foreground mt-2 text-xs">
-                    Group streak as of {wordle.postedOn}.
+                    {wordle.postedOn < previousDay(today)
+                      ? `Last post ${formatDay(wordle.postedOn)}. The streak may have ended.`
+                      : `Posted ${formatDay(wordle.postedOn)}.`}
                   </p>
                 </>
               ) : (

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { Card, CardContent } from "@/components/ui/card";
 import { WorkspaceShell } from "@/components/layout/workspace-shell";
+import { todayKey } from "@/lib/calendar";
 import { getDiscordStats, getVoiceNow, getWordleStreak } from "@/lib/discord-stats";
 import type { DiscordStats, StatsRange } from "@/lib/discord-stats-format";
 import { AutoRefresh } from "./_components/auto-refresh";
@@ -46,13 +47,14 @@ export default async function DashboardPage() {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-6">
           <Card className="overflow-hidden rounded-4xl border-0 bg-slate-950 text-white shadow-xl shadow-slate-950/10">
-            <CardContent className="p-6 md:p-8">
+            <CardContent className="p-5 md:p-8">
               <LiveTimeWeather firstName={firstName} />
             </CardContent>
           </Card>
 
           <RightNow
             loaded={discord.loaded}
+            today={todayKey()}
             voice={discord.loaded ? discord.voice : []}
             wordle={discord.loaded ? discord.wordle : null}
           />

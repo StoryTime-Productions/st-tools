@@ -35,3 +35,12 @@ export function formatMinutes(minutes: number): string {
   const rest = minutes % 60;
   return hours > 0 ? `${hours}h ${rest}m` : `${rest}m`;
 }
+
+/** "2026-10-30" -> "Oct 30". The day key is already a Toronto day, so it is read as plain calendar text. */
+export function formatDay(key: string): string {
+  return new Date(`${key}T00:00:00Z`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
