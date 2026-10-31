@@ -6,6 +6,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { deleteInitiativeAction, renameInitiativeAction } from "@/app/actions/hub";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,7 @@ function InitiativeRow({ initiative }: { initiative: InitiativeOption }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(initiative.name);
   const [isPending, startTransition] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
 
   function handleRename() {
     startTransition(async () => {
@@ -37,12 +39,13 @@ function InitiativeRow({ initiative }: { initiative: InitiativeOption }) {
     });
   }
 
-  function handleDelete() {
-    if (
-      !window.confirm(
-        `Delete "${initiative.name}"? Its projects stay, but will no longer have an initiative.`
-      )
-    ) {
+  async function handleDelete() {
+    const confirmed = await confirm(`Its projects stay, but will no longer have an initiative.`, {
+      title: `Delete "${initiative.name}"?`,
+      confirmLabel: "Delete initiative",
+      destructive: true,
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -108,6 +111,7 @@ function InitiativeRow({ initiative }: { initiative: InitiativeOption }) {
           <Trash2 className="size-4" />
         </Button>
       </div>
+      {confirmDialog}
     </li>
   );
 }

@@ -227,14 +227,16 @@ describe("ManageInitiativesDialog", () => {
     render(<ManageInitiativesDialog initiatives={INITIATIVES} />);
     fireEvent.click(screen.getByRole("button", { name: "Manage initiatives" }));
 
-    vi.mocked(window.confirm).mockReturnValueOnce(false);
     fireEvent.click(screen.getByRole("button", { name: "Delete Game Dev" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
     expect(actionMocks.deleteInitiativeAction).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Delete Game Dev" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete initiative" }));
     await waitFor(() => expect(toastMocks.error).toHaveBeenCalledWith("Initiative not found"));
 
     fireEvent.click(screen.getByRole("button", { name: "Delete Game Dev" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete initiative" }));
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Initiative deleted"));
   });
 });

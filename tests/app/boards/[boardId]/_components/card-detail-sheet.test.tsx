@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { CardDetailSheet } from "@/app/boards/[boardId]/_components/card-detail-sheet";
 import type { BoardCardData, BoardMemberSummary } from "@/app/boards/types";
 
@@ -340,8 +340,6 @@ describe("CardDetailSheet", () => {
 
   it("shows timeline summaries and handles delete confirmation", async () => {
     const onDelete = vi.fn();
-    vi.mocked(window.confirm).mockReturnValueOnce(false).mockReturnValueOnce(true);
-
     renderSheet({ onDelete });
 
     expect(screen.getByText("Card created")).toBeInTheDocument();
@@ -354,9 +352,12 @@ describe("CardDetailSheet", () => {
     expect(screen.getByText(/System \u00b7 Unknown time/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Delete card" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
     expect(onDelete).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Delete card" }));
+    const dialog = await screen.findByRole("dialog", { name: "Delete this card?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete card" }));
 
     await waitFor(() => {
       expect(onDelete).toHaveBeenCalledWith("33333333-3333-4333-8333-333333333333");
