@@ -102,7 +102,9 @@ describe("RoleSelect", () => {
       expect(actionMocks.updateUserRoleAction).toHaveBeenCalledWith(OTHER, "ADMIN");
     });
     expect(toastMocks.success).toHaveBeenCalledWith("Bob Member is now an admin");
-    expect(screen.getByRole("combobox", { name: "Role for Bob Member" })).toHaveValue("ADMIN");
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Role for Bob Member" })).toHaveValue("ADMIN")
+    );
   });
 
   it("does nothing when the admin confirmation is cancelled", async () => {
