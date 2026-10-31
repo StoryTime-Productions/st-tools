@@ -5,6 +5,7 @@ import { Plus, Trash2 } from "lucide-react";
 import type { BoardCardActivityData, BoardCardData, BoardMemberSummary } from "@/app/boards/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CardGithubIssue } from "@/app/boards/[boardId]/_components/card-github-issue";
@@ -215,6 +216,7 @@ function CardDetailSheetBody({
   onSetGithubIssue: CardDetailSheetProps["onSetGithubIssue"];
   onDelete: CardDetailSheetProps["onDelete"];
 }) {
+  const [confirm, confirmDialog] = useConfirm();
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description ?? "");
   const [labels, setLabels] = useState<string[]>(card.labels);
@@ -275,8 +277,13 @@ function CardDetailSheetBody({
     });
   }
 
-  function handleDelete() {
-    if (!window.confirm(`Delete "${card.title}"?`)) {
+  async function handleDelete() {
+    const confirmed = await confirm(`Delete "${card.title}"? This cannot be undone.`, {
+      title: "Delete this card?",
+      confirmLabel: "Delete card",
+      destructive: true,
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -673,6 +680,7 @@ function CardDetailSheetBody({
           </Button>
         </div>
       </SheetFooter>
+      {confirmDialog}
     </>
   );
 }
