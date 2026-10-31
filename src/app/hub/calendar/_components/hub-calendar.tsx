@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SegmentedToggle } from "@/components/ui/segmented-toggle";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -33,17 +34,33 @@ const VIEWS: Array<{ value: CalendarView; label: string }> = [
   { value: "agenda", label: "Agenda" },
 ];
 
-// ponytail: 6 colours cycle by project title order; add more if projects collide visibly.
+// A project's colour comes from its id, so it does not move when another project is added. The legend always
+// shows the real colour, so a rare collision between two projects stays readable.
 const PALETTE = [
-  "bg-sky-100 text-sky-950 dark:bg-sky-950 dark:text-sky-100",
-  "bg-emerald-100 text-emerald-950 dark:bg-emerald-950 dark:text-emerald-100",
-  "bg-amber-100 text-amber-950 dark:bg-amber-950 dark:text-amber-100",
-  "bg-violet-100 text-violet-950 dark:bg-violet-950 dark:text-violet-100",
-  "bg-rose-100 text-rose-950 dark:bg-rose-950 dark:text-rose-100",
-  "bg-teal-100 text-teal-950 dark:bg-teal-950 dark:text-teal-100",
+  { chip: "bg-sky-100 text-sky-950 dark:bg-sky-950 dark:text-sky-100", dot: "bg-sky-500" },
+  {
+    chip: "bg-emerald-100 text-emerald-950 dark:bg-emerald-950 dark:text-emerald-100",
+    dot: "bg-emerald-500",
+  },
+  {
+    chip: "bg-amber-100 text-amber-950 dark:bg-amber-950 dark:text-amber-100",
+    dot: "bg-amber-500",
+  },
+  {
+    chip: "bg-violet-100 text-violet-950 dark:bg-violet-950 dark:text-violet-100",
+    dot: "bg-violet-500",
+  },
+  { chip: "bg-rose-100 text-rose-950 dark:bg-rose-950 dark:text-rose-100", dot: "bg-rose-500" },
+  { chip: "bg-teal-100 text-teal-950 dark:bg-teal-950 dark:text-teal-100", dot: "bg-teal-500" },
 ];
 
+function paletteFor(projectId: string) {
+  const sum = [...projectId].reduce((total, character) => total + character.charCodeAt(0), 0);
+  return PALETTE[sum % PALETTE.length];
+}
+
 const HANGOUT_COLOUR = "bg-fuchsia-100 text-fuchsia-950 dark:bg-fuchsia-950 dark:text-fuchsia-100";
+const MARKERS_PER_DAY = 3;
 
 const MONTH_CHIPS = 3;
 // Month and week fill the screen below the toolbar instead of stopping after the last row.
@@ -53,6 +70,16 @@ const ALL = "all";
 const HANGOUTS = "hangouts";
 
 type Entry = { kind: "card"; card: CalendarCard } | { kind: "hangout"; hangout: CalendarHangout };
+
+/** Confirmed hangouts first (earliest first), then cards, then possible dates, so real events are never pushed out. */
+function rank(entry: Entry) {
+  if (entry.kind === "card") return "1";
+  return entry.hangout.startSlot ? `0${entry.hangout.startSlot}` : "2";
+}
+
+function entryTitle(entry: Entry) {
+  return entry.kind === "card" ? entry.card.title : entry.hangout.title;
+}
 
 export function HubCalendar({
   cards,
@@ -66,13 +93,12 @@ export function HubCalendar({
   const [view, setView] = useState<CalendarView>("month");
   const [anchor, setAnchor] = useState(today);
   const [projectId, setProjectId] = useState(ALL);
+  const [selectedDay, setSelectedDay] = useState(today);
 
   const projects = [...new Map(cards.map((card) => [card.projectId, card.projectTitle]))]
     .map(([id, title]) => ({ id, title }))
     .sort((a, b) => a.title.localeCompare(b.title));
-  const colourOf = new Map(
-    projects.map((project, index) => [project.id, PALETTE[index % PALETTE.length]])
-  );
+  const colourOf = new Map(projects.map((project) => [project.id, paletteFor(project.id)]));
 
   const byDay = new Map<string, Entry[]>();
   const add = (day: string, entry: Entry) => byDay.set(day, [...(byDay.get(day) ?? []), entry]);
@@ -85,6 +111,15 @@ export function HubCalendar({
       add(card.dueDate, { kind: "card", card });
   }
 
+  for (const [day, entries] of byDay) {
+    byDay.set(
+      day,
+      [...entries].sort(
+        (a, b) => rank(a).localeCompare(rank(b)) || entryTitle(a).localeCompare(entryTitle(b))
+      )
+    );
+  }
+
   const days = visibleDays(view, anchor);
   const month = anchor.slice(0, 7);
   const item = (entry: Entry) =>
@@ -92,11 +127,17 @@ export function HubCalendar({
       <CalendarItem
         key={entry.card.id}
         card={entry.card}
-        colour={colourOf.get(entry.card.projectId)!}
+        colour={colourOf.get(entry.card.projectId)!.chip}
       />
     ) : (
       <HangoutItem key={entry.hangout.id} hangout={entry.hangout} />
     );
+
+  const step = (direction: 1 | -1) => {
+    const next = stepAnchor(view, anchor, direction);
+    setAnchor(next);
+    setSelectedDay(next);
+  };
 
   const openDay = (day: string) => {
     setAnchor(day);
@@ -112,11 +153,19 @@ export function HubCalendar({
             size="icon"
             variant="outline"
             aria-label="Previous"
-            onClick={() => setAnchor(stepAnchor(view, anchor, -1))}
+            onClick={() => step(-1)}
           >
             <ChevronLeft />
           </Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => setAnchor(today)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setAnchor(today);
+              setSelectedDay(today);
+            }}
+          >
             Today
           </Button>
           <Button
@@ -124,7 +173,7 @@ export function HubCalendar({
             size="icon"
             variant="outline"
             aria-label="Next"
-            onClick={() => setAnchor(stepAnchor(view, anchor, 1))}
+            onClick={() => step(1)}
           >
             <ChevronRight />
           </Button>
@@ -145,30 +194,31 @@ export function HubCalendar({
               ))}
             </SelectContent>
           </Select>
-          <div role="group" aria-label="View" className="bg-muted inline-flex rounded-xl p-1">
-            {VIEWS.map((option) => (
-              <Button
-                key={option.value}
-                type="button"
-                size="sm"
-                variant={view === option.value ? "default" : "ghost"}
-                aria-pressed={view === option.value}
-                onClick={() => setView(option.value)}
-              >
-                {option.label}
-              </Button>
-            ))}
-          </div>
+          <SegmentedToggle label="View" options={VIEWS} value={view} onChange={setView} />
         </div>
       </div>
 
       {projects.length > 0 || hangouts.length > 0 ? (
-        <ul aria-label="Projects" className="flex flex-wrap gap-2 text-xs">
+        <ul
+          aria-label="Legend"
+          className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs"
+        >
           {hangouts.length > 0 ? (
-            <li className={cn("rounded-md px-2 py-0.5", HANGOUT_COLOUR)}>Hangouts</li>
+            <>
+              <li className="flex items-center gap-1.5">
+                <Marker kind="hangout" /> Confirmed hangout
+              </li>
+              <li className="flex items-center gap-1.5">
+                <Marker kind="candidate" /> Possible date
+              </li>
+            </>
           ) : null}
           {projects.map((project) => (
-            <li key={project.id} className={cn("rounded-md px-2 py-0.5", colourOf.get(project.id))}>
+            <li key={project.id} className="flex items-center gap-1.5">
+              <span
+                aria-hidden="true"
+                className={cn("size-2.5 shrink-0 rounded-[3px]", colourOf.get(project.id)!.dot)}
+              />
               {project.title}
             </li>
           ))}
@@ -178,51 +228,62 @@ export function HubCalendar({
       <div>
         <div className="min-w-0">
           {view === "month" ? (
-            <div
-              className={cn(
-                "border-border/70 flex flex-col overflow-hidden rounded-2xl border text-xs",
-                FILL
-              )}
-            >
-              <div className="grid grid-cols-7">
-                {days.slice(0, 7).map((day) => (
-                  <div
-                    key={day}
-                    className="text-muted-foreground bg-muted/40 px-2 py-1 font-medium"
-                  >
-                    {dayLabel(day, { weekday: "short" })}
-                  </div>
-                ))}
-              </div>
-              <div className="grid flex-1 auto-rows-fr grid-cols-7">
-                {days.map((day) => {
-                  const entries = byDay.get(day) ?? [];
-                  const hidden = entries.length - MONTH_CHIPS;
-                  return (
+            <>
+              <MonthDots
+                days={days}
+                month={month}
+                today={today}
+                byDay={byDay}
+                selectedDay={selectedDay}
+                onSelect={setSelectedDay}
+                colourOf={colourOf}
+              />
+              <div
+                className={cn(
+                  "border-border/70 hidden flex-col overflow-hidden rounded-2xl border text-xs md:flex",
+                  FILL
+                )}
+              >
+                <div className="grid grid-cols-7">
+                  {days.slice(0, 7).map((day) => (
                     <div
                       key={day}
-                      aria-label={dayLabel(day, { month: "long", day: "numeric" })}
-                      className={cn(
-                        "border-border/70 min-h-20 min-w-0 space-y-1 border-t border-l p-1 first:border-l-0 [&:nth-child(7n+1)]:border-l-0",
-                        !day.startsWith(month) && "bg-muted/30"
-                      )}
+                      className="text-muted-foreground bg-muted/40 px-2 py-1 font-medium"
                     >
-                      <DayNumber day={day} today={today} muted={!day.startsWith(month)} />
-                      {entries.slice(0, MONTH_CHIPS).map(item)}
-                      {hidden > 0 ? (
-                        <button
-                          type="button"
-                          onClick={() => openDay(day)}
-                          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring w-full rounded-md px-1.5 py-0.5 text-left text-xs focus-visible:ring-2 focus-visible:outline-none"
-                        >
-                          +{hidden} more
-                        </button>
-                      ) : null}
+                      {dayLabel(day, { weekday: "short" })}
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
+                <div className="grid flex-1 auto-rows-fr grid-cols-7">
+                  {days.map((day) => {
+                    const entries = byDay.get(day) ?? [];
+                    const hidden = entries.length - MONTH_CHIPS;
+                    return (
+                      <div
+                        key={day}
+                        aria-label={dayLabel(day, { month: "long", day: "numeric" })}
+                        className={cn(
+                          "border-border/70 min-h-20 min-w-0 space-y-1 border-t border-l p-1 first:border-l-0 [&:nth-child(7n+1)]:border-l-0",
+                          !day.startsWith(month) && "bg-muted/30"
+                        )}
+                      >
+                        <DayNumber day={day} today={today} muted={!day.startsWith(month)} />
+                        {entries.slice(0, MONTH_CHIPS).map(item)}
+                        {hidden > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => openDay(day)}
+                            className="text-muted-foreground hover:text-foreground focus-visible:ring-ring w-full rounded-md px-1.5 py-0.5 text-left text-xs focus-visible:ring-2 focus-visible:outline-none"
+                          >
+                            +{hidden} more
+                          </button>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            </>
           ) : view === "agenda" ? (
             <AgendaList days={days.filter((day) => byDay.has(day))} byDay={byDay} item={item} />
           ) : (
@@ -263,6 +324,179 @@ export function HubCalendar({
         </div>
       </div>
     </div>
+  );
+}
+
+function kindOf(entry: Entry): "card" | "hangout" | "candidate" {
+  if (entry.kind === "card") return "card";
+  return entry.hangout.startSlot ? "hangout" : "candidate";
+}
+
+/** The marker's meaning is always written next to it (legend and day sheet), never carried by shape or colour alone. */
+function Marker({ kind, dot }: { kind: "card" | "hangout" | "candidate"; dot?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "inline-block size-2.5 shrink-0",
+        kind === "card" && cn("rounded-[3px]", dot ?? "bg-muted-foreground"),
+        kind === "hangout" && "rounded-full bg-fuchsia-500",
+        kind === "candidate" && "rounded-full border-2 border-dashed border-fuchsia-500"
+      )}
+    />
+  );
+}
+
+function MonthDots({
+  days,
+  month,
+  today,
+  byDay,
+  selectedDay,
+  onSelect,
+  colourOf,
+}: {
+  days: string[];
+  month: string;
+  today: string;
+  byDay: Map<string, Entry[]>;
+  selectedDay: string;
+  onSelect: (day: string) => void;
+  colourOf: Map<string, { chip: string; dot: string }>;
+}) {
+  const entries = byDay.get(selectedDay) ?? [];
+
+  return (
+    <div className="space-y-4 md:hidden">
+      <div className="grid grid-cols-7 gap-1">
+        {days.slice(0, 7).map((day) => (
+          <div key={day} className="text-muted-foreground py-1 text-center text-xs font-medium">
+            {dayLabel(day, { weekday: "narrow" })}
+          </div>
+        ))}
+        {days.map((day) => {
+          const dayEntries = byDay.get(day) ?? [];
+          const extra = dayEntries.length - MARKERS_PER_DAY;
+          const isSelected = day === selectedDay;
+          return (
+            <button
+              key={day}
+              type="button"
+              aria-pressed={isSelected}
+              aria-label={`${dayLabel(day, { month: "long", day: "numeric" })}, ${
+                dayEntries.length === 0
+                  ? "nothing planned"
+                  : `${dayEntries.length} ${dayEntries.length === 1 ? "item" : "items"}`
+              }`}
+              onClick={() => onSelect(day)}
+              className={cn(
+                "border-border/70 focus-visible:ring-ring flex min-h-14 flex-col items-center gap-1.5 rounded-xl border px-0.5 pt-1.5 pb-1 text-sm focus-visible:ring-2 focus-visible:outline-none",
+                !day.startsWith(month) && "text-muted-foreground bg-muted/30",
+                isSelected && "bg-muted ring-foreground ring-2"
+              )}
+            >
+              <span
+                className={cn(
+                  "flex size-6 items-center justify-center rounded-full",
+                  day === today && "bg-primary text-primary-foreground"
+                )}
+              >
+                {Number(day.slice(8))}
+              </span>
+              <span className="flex h-3 items-center gap-0.5" aria-hidden="true">
+                {dayEntries.slice(0, MARKERS_PER_DAY).map((entry, index) => (
+                  <Marker
+                    key={index}
+                    kind={kindOf(entry)}
+                    dot={
+                      entry.kind === "card" ? colourOf.get(entry.card.projectId)?.dot : undefined
+                    }
+                  />
+                ))}
+                {extra > 0 ? <span className="text-[10px] leading-none">+{extra}</span> : null}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <section
+        aria-labelledby="day-sheet-title"
+        aria-live="polite"
+        className="border-border/70 bg-background/85 rounded-2xl border p-4"
+      >
+        <h3 id="day-sheet-title" className="text-sm font-medium">
+          {dayLabel(selectedDay, { weekday: "short", month: "short", day: "numeric" })}
+          {" · "}
+          {entries.length === 0
+            ? "nothing planned"
+            : `${entries.length} ${entries.length === 1 ? "item" : "items"}`}
+        </h3>
+        {entries.length > 0 ? (
+          <ul className="divide-border/70 mt-2 divide-y">
+            {entries.map((entry) => (
+              <li key={entry.kind === "card" ? entry.card.id : `${entry.hangout.id}`}>
+                <SheetRow entry={entry} colourOf={colourOf} />
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
+function SheetRow({
+  entry,
+  colourOf,
+}: {
+  entry: Entry;
+  colourOf: Map<string, { chip: string; dot: string }>;
+}) {
+  if (entry.kind === "card") {
+    const { card } = entry;
+    return (
+      <Link
+        href={`/boards/${card.boardId}?card=${card.id}`}
+        className="focus-visible:ring-ring flex min-h-11 items-start gap-3 py-2 focus-visible:ring-2 focus-visible:outline-none"
+      >
+        <span className="text-muted-foreground w-16 shrink-0 pt-0.5 text-xs">Due</span>
+        <span className="min-w-0 flex-1 text-sm">
+          <span className="flex items-center gap-2">
+            <Marker kind="card" dot={colourOf.get(card.projectId)?.dot} />
+            <span className={cn("break-words", card.finished && "line-through")}>{card.title}</span>
+          </span>
+          <span className="text-muted-foreground block text-xs">
+            Card due · {card.projectTitle}
+            {card.finished ? " · Finished" : ""}
+          </span>
+        </span>
+      </Link>
+    );
+  }
+
+  const { hangout } = entry;
+  const time = hangout.startSlot?.slice(11);
+  return (
+    <Link
+      href={`/hub/hangouts/${hangout.id}`}
+      className="focus-visible:ring-ring flex min-h-11 items-start gap-3 py-2 focus-visible:ring-2 focus-visible:outline-none"
+    >
+      <span className="text-muted-foreground w-16 shrink-0 pt-0.5 text-xs">
+        {time ? timeLabel(time) : "Possible"}
+      </span>
+      <span className="min-w-0 flex-1 text-sm">
+        <span className="flex items-center gap-2">
+          <Marker kind={time ? "hangout" : "candidate"} />
+          <span className="break-words">{hangout.title}</span>
+        </span>
+        <span className="text-muted-foreground block text-xs">
+          {time
+            ? `Confirmed hangout · ${hangout.goingCount} going`
+            : `Possible date · one of ${hangout.days.length}`}
+        </span>
+      </span>
+    </Link>
   );
 }
 
@@ -314,10 +548,11 @@ function CalendarItem({ card, colour }: { card: CalendarCard; colour: string }) 
           className={cn(
             "focus-visible:ring-ring block w-full truncate rounded-md px-1.5 py-0.5 text-left text-xs focus-visible:ring-2 focus-visible:outline-none md:break-words md:whitespace-normal",
             colour,
-            card.finished && "line-through opacity-75"
+            card.finished && "line-through"
           )}
         >
           {card.title}
+          {card.finished ? <span className="sr-only"> (finished)</span> : null}
         </button>
       </PopoverTrigger>
       <PopoverContent aria-label={card.title} className="w-72 space-y-2 text-sm">

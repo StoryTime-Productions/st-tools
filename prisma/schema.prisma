@@ -702,3 +702,45 @@ model HangoutPendingUpdate {
   @@index([hangoutId, createdAt])
   @@map("hangout_pending_updates")
 }
+
+// ─── Discord stats (counts and minutes only, never message text) ─────────────
+
+model DiscordVoiceSession {
+  id        String    @id @default(uuid())
+  discordId String
+  name      String
+  channelId String
+  // The channel name when the session started, for "who is on a call now".
+  channelName String
+  // The person's Discord avatar URL, as sent by the bot.
+  avatarUrl   String?
+  joinedAt  DateTime
+  leftAt    DateTime?
+
+  @@index([discordId, joinedAt])
+  @@index([leftAt])
+  @@map("discord_voice_sessions")
+}
+
+model DiscordMessageDay {
+  discordId String
+  name      String
+  // Toronto day, YYYY-MM-DD.
+  day       String
+  count     Int
+  avatarUrl String?
+
+  @@id([discordId, day])
+  @@index([day])
+  @@map("discord_message_days")
+}
+
+model DiscordWordleStreak {
+  // Singleton row (id is always 1).
+  id        Int      @id @default(1)
+  streak    Int
+  postedOn  String
+  updatedAt DateTime @updatedAt
+
+  @@map("discord_wordle_streak")
+}

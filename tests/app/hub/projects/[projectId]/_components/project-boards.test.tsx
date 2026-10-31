@@ -38,7 +38,7 @@ describe("ProjectBoards", () => {
     expect(screen.getByRole("link", { name: "Art" })).toHaveAttribute("href", "/boards/b1");
     expect(screen.getByText("1 card")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Secret/ })).not.toBeInTheDocument();
-    expect(screen.getByText("4 cards")).toBeInTheDocument();
+    expect(screen.getByText(/4 cards · Members only/)).toBeInTheDocument();
     expect(screen.getByText("Requested")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Vault/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Access requests" })).not.toBeInTheDocument();
@@ -116,7 +116,7 @@ describe("ProjectBoards", () => {
   it("explains empty states", () => {
     render(<ProjectBoards projectId="p1" boards={[]} standaloneBoards={[]} accessRequests={[]} />);
 
-    expect(screen.getByText("No boards yet.")).toBeInTheDocument();
+    expect(screen.getByText(/No boards yet\./)).toBeInTheDocument();
     expect(screen.getByRole("combobox")).toBeDisabled();
   });
 });

@@ -4,9 +4,12 @@ import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { ProjectCover } from "@/app/hub/_components/project-cover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { SegmentedToggle } from "@/components/ui/segmented-toggle";
 import { Button } from "@/components/ui/button";
-import type { HangoutSummary } from "@/lib/hangouts";
+import { dayLabel, timeLabel } from "@/lib/calendar";
+import type { HangoutCardInfo } from "@/lib/hangouts";
 import type { ProjectSummary } from "@/lib/hub";
 import {
   groupByInitiative,
@@ -16,7 +19,7 @@ import {
   sortBySoonestEnd,
   type ProjectGroup,
 } from "@/lib/hub-format";
-import { linkIcon } from "@/lib/hub-links";
+import { linkIcon, linkLabel } from "@/lib/hub-links";
 
 const VIEWS = [
   { value: "list", label: "List" },
@@ -87,10 +90,10 @@ type Item =
       startQuarter: string | null;
       endQuarter: string | null;
       initiativeName: string;
-      hangout: HangoutSummary;
+      hangout: HangoutCardInfo;
     };
 
-function hangoutItem(hangout: HangoutSummary): Item {
+function hangoutItem(hangout: HangoutCardInfo): Item {
   const quarter = hangout.startSlot
     ? `${hangout.startSlot.slice(0, 4)}-Q${Math.ceil(Number(hangout.startSlot.slice(5, 7)) / 3)}`
     : null;
@@ -117,41 +120,12 @@ function isPast(item: Item) {
     : item.hangout.phase === "CANCELLED" || item.hangout.phase === "DONE";
 }
 
-function Toggle<T extends string>({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: ReadonlyArray<{ value: T; label: string }>;
-  value: T;
-  onChange: (next: T) => void;
-}) {
-  return (
-    <div role="group" aria-label={label} className="bg-muted inline-flex rounded-xl p-1">
-      {options.map((option) => (
-        <Button
-          key={option.value}
-          type="button"
-          size="sm"
-          variant={value === option.value ? "default" : "ghost"}
-          aria-pressed={value === option.value}
-          onClick={() => onChange(option.value)}
-        >
-          {option.label}
-        </Button>
-      ))}
-    </div>
-  );
-}
-
 export function ProjectOverview({
   projects,
   hangouts = [],
 }: {
   projects: ProjectSummary[];
-  hangouts?: HangoutSummary[];
+  hangouts?: HangoutCardInfo[];
 }) {
   const view = usePersisted(viewStore);
   const mode = usePersisted(modeStore);
@@ -164,18 +138,18 @@ export function ProjectOverview({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
-          <Toggle label="Layout" options={MODES} value={mode} onChange={modeStore.choose} />
-          <Toggle label="View" options={VIEWS} value={view} onChange={viewStore.choose} />
-        </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <SegmentedToggle label="Layout" options={MODES} value={mode} onChange={modeStore.choose} />
+        <SegmentedToggle label="View" options={VIEWS} value={view} onChange={viewStore.choose} />
         <Button
           type="button"
           size="sm"
+          className="sm:ml-auto"
           variant={showPast ? "default" : "outline"}
           aria-pressed={showPast}
           onClick={() => setShowPast((current) => !current)}
         >
+          {showPast ? <Check aria-hidden="true" className="size-3.5" /> : null}
           Past
         </Button>
       </div>
@@ -201,6 +175,7 @@ export function ProjectOverview({
           <section aria-label="Projects" className="space-y-3">
             <h2 className="text-xl font-semibold tracking-tight">Projects</h2>
             <ItemGroups
+              nested
               groups={groupItems(projectItems, view, "No quarter")}
               empty={
                 showPast
@@ -215,13 +190,22 @@ export function ProjectOverview({
   );
 }
 
-function ItemGroups({ groups, empty }: { groups: ProjectGroup<Item>[]; empty: string }) {
+function ItemGroups({
+  groups,
+  empty,
+  nested = false,
+}: {
+  groups: ProjectGroup<Item>[];
+  empty: string;
+  nested?: boolean;
+}) {
+  const Heading = nested ? "h3" : "h2";
   if (groups.every((group) => group.projects.length === 0)) {
     return <p className="text-muted-foreground text-sm">{empty}</p>;
   }
   return groups.map((group) => (
     <section key={group.label || "all"} aria-label={group.label || undefined} className="space-y-3">
-      {group.label ? <h3 className="text-sm font-medium">{group.label}</h3> : null}
+      {group.label ? <Heading className="text-sm font-medium">{group.label}</Heading> : null}
       <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {group.projects.map((item) => (
           <li key={`${item.kind}-${item.id}`}>
@@ -237,7 +221,40 @@ function ItemGroups({ groups, empty }: { groups: ProjectGroup<Item>[]; empty: st
   ));
 }
 
-function HangoutCard({ hangout }: { hangout: HangoutSummary }) {
+const DEADLINE = {
+  timeZone: "America/Toronto",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+} as const;
+
+/** The one line that says what a hangout needs from you: when it is, or whether to fill in availability. */
+function hangoutWhen(hangout: HangoutCardInfo) {
+  if (hangout.phase === "COLLECTING") {
+    const due = hangout.availabilityDeadline ? new Date(hangout.availabilityDeadline) : null;
+    const deadline =
+      due && due.getTime() >= Date.now()
+        ? ` · fill in by ${due.toLocaleString("en-US", DEADLINE)}`
+        : "";
+    return `${hangout.responded ? "You've responded" : "You haven't responded"}${deadline}`;
+  }
+  if (hangout.startSlot) {
+    const [day, time] = hangout.startSlot.split("T");
+    return `${dayLabel(day, { weekday: "short", month: "short", day: "numeric" })} · ${timeLabel(time)}`;
+  }
+  return null;
+}
+
+function deadlinePassed(hangout: HangoutCardInfo) {
+  return (
+    hangout.phase === "COLLECTING" &&
+    hangout.availabilityDeadline !== null &&
+    new Date(hangout.availabilityDeadline).getTime() < Date.now()
+  );
+}
+
+function HangoutCard({ hangout }: { hangout: HangoutCardInfo }) {
   return (
     <Link
       href={`/hub/hangouts/${hangout.id}`}
@@ -254,9 +271,15 @@ function HangoutCard({ hangout }: { hangout: HangoutSummary }) {
             {HANGOUT_STATUS_LABEL[hangout.phase]}
           </Badge>
           {hangout.phase === "SETTLING_UP" ? (
-            <Badge variant="outline">{hangout.unpaid} unpaid</Badge>
+            <Badge variant="outline">
+              {hangout.toConfirm > 0
+                ? `${hangout.unpaid - hangout.toConfirm} unpaid · ${hangout.toConfirm} to confirm`
+                : `${hangout.unpaid} unpaid`}
+            </Badge>
           ) : null}
+          {deadlinePassed(hangout) ? <Badge variant="outline">Deadline passed</Badge> : null}
         </div>
+        {hangoutWhen(hangout) ? <p className="text-sm">{hangoutWhen(hangout)}</p> : null}
       </div>
     </Link>
   );
@@ -274,7 +297,7 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
       <div className="min-w-0 flex-1 space-y-2">
         <div className="space-y-1">
           <p className="truncate font-medium">{project.title}</p>
-          <p className="text-muted-foreground truncate text-xs">
+          <p className="text-muted-foreground line-clamp-2 text-xs">
             {project.initiativeName ?? "No initiative"}
             {project.quarterLabel ? ` · ${project.quarterLabel}` : ""}
           </p>
@@ -282,20 +305,34 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
         <div className="flex flex-wrap items-center gap-2">
           {project.currentPhase ? <Badge variant="secondary">{project.currentPhase}</Badge> : null}
           {project.finished ? <Badge variant="outline">Finished</Badge> : null}
-          {project.linkUrls.map((url) => {
-            const Icon = linkIcon(url);
-            return <Icon key={url} className="text-muted-foreground size-4" aria-hidden="true" />;
-          })}
+          {project.linkUrls.length > 0 ? (
+            <span className="flex items-center gap-2">
+              <span className="sr-only">
+                Links: {project.linkUrls.map((url) => linkLabel(url)).join(", ")}
+              </span>
+              {project.linkUrls.map((url, index) => {
+                const Icon = linkIcon(url);
+                return (
+                  <Icon
+                    key={`${url}-${index}`}
+                    className="text-muted-foreground size-4"
+                    aria-hidden="true"
+                  />
+                );
+              })}
+            </span>
+          ) : null}
         </div>
         {project.participants.length > 0 ? (
           <div
+            role="img"
             className="flex items-center -space-x-2"
-            aria-label={`${project.participants.length} participants`}
+            aria-label={`${project.participants.length} ${project.participants.length === 1 ? "participant" : "participants"}: ${project.participants.map((participant) => participant.name).join(", ")}`}
           >
             {project.participants.slice(0, MAX_AVATARS).map((participant) => (
               <Avatar key={participant.id} className="border-background size-7 border-2">
                 <AvatarImage src={participant.avatarUrl ?? undefined} alt="" />
-                <AvatarFallback className="text-[10px]" title={participant.name}>
+                <AvatarFallback className="text-[10px]">
                   {projectInitials(participant.name)}
                 </AvatarFallback>
               </Avatar>

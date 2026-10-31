@@ -64,7 +64,7 @@ describe("FocusTimerCard", () => {
     renderCard({ phase: "shortBreak", secondsLeft: 300, sessionNumber: 3 });
 
     expect(screen.getByText("Up next: Focus · 25 min")).toBeInTheDocument();
-    expect(screen.getByText("Session 3 of 4 next")).toBeInTheDocument();
+    expect(screen.getByText("Up next: session 3 of 4")).toBeInTheDocument();
     expect(screen.getByRole("timer", { name: "Short break" })).toHaveTextContent("05:00");
   });
 
@@ -95,10 +95,44 @@ describe("FocusTimerCard", () => {
     expect(screen.queryByRole("button", { name: "Start" })).not.toBeInTheDocument();
   });
 
+  it("announces running, paused and ready states through a status region", () => {
+    const base = {
+      phase: "shortBreak" as const,
+      secondsLeft: 200,
+      progressValue: 10,
+      sessionNumber: 2,
+      durations: { workMinutes: 25, shortBreakMinutes: 5, longBreakMinutes: 15 },
+      isSaving: false,
+      controlledBy: null,
+      style: {},
+      onStart: vi.fn(),
+      onPause: vi.fn(),
+      onResume: vi.fn(),
+      onSkip: vi.fn(),
+      onReset: vi.fn(),
+    };
+    const { rerender } = render(<FocusTimerCard {...base} isRunning canResume={false} />);
+    expect(screen.getByText("Short break running")).toBeInTheDocument();
+
+    rerender(<FocusTimerCard {...base} isRunning={false} canResume />);
+    expect(screen.getByText("Short break paused")).toBeInTheDocument();
+
+    rerender(<FocusTimerCard {...base} isRunning={false} canResume={false} />);
+    expect(screen.getByText("Short break ready")).toBeInTheDocument();
+  });
+
+  it("gives every control a 44px minimum tap target", () => {
+    renderCard();
+    for (const name of ["Start", "Skip", "Reset"]) {
+      expect(screen.getByRole("button", { name })).toHaveClass("min-h-11");
+    }
+  });
+
   it("explains who controls the timer instead of silently hiding the controls", () => {
     renderCard({ controlledBy: "Alex" });
 
-    expect(screen.getByText("Controlled by Alex")).toBeInTheDocument();
+    expect(screen.getByText(/Controlled by Alex/)).toBeInTheDocument();
+    expect(screen.getByText(/Only the host can start, pause, skip or reset/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Skip" })).not.toBeInTheDocument();
   });

@@ -52,7 +52,6 @@ function openEditor() {
 describe("ProjectAdminControls", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     actionMocks.updateProjectAction.mockResolvedValue({ success: true });
     actionMocks.setProjectFinishedAction.mockResolvedValue({ success: true });
     actionMocks.deleteProjectAction.mockResolvedValue({ success: true });
@@ -81,14 +80,16 @@ describe("ProjectAdminControls", () => {
     actionMocks.deleteProjectAction.mockResolvedValueOnce({ error: "Project not found" });
     renderControls();
 
-    vi.mocked(window.confirm).mockReturnValueOnce(false);
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
     expect(actionMocks.deleteProjectAction).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete project" }));
     await waitFor(() => expect(toastMocks.error).toHaveBeenCalledWith("Project not found"));
 
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete project" }));
     await waitFor(() => expect(routerMocks.push).toHaveBeenCalledWith("/hub"));
   });
 

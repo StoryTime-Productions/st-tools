@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { HangoutDetail } from "@/lib/hangouts";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 type EditableHangout = Pick<HangoutDetail, "id" | "title" | "description" | "discordThreadUrl">;
 
@@ -77,18 +78,18 @@ export function HangoutDialog({ hangout }: { hangout?: EditableHangout }) {
     >
       <DialogTrigger asChild>
         {hangout ? (
-          <Button className="gap-2">
+          <Button className="gap-2 max-sm:h-11">
             <Pencil className="size-4" />
             Edit hangout
           </Button>
         ) : (
-          <Button className="gap-2">
+          <Button className="gap-2 max-sm:h-11 max-sm:w-full">
             <Plus className="size-4" />
             New hangout
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{hangout ? "Edit hangout" : "Create a hangout"}</DialogTitle>
           <DialogDescription>
@@ -133,7 +134,10 @@ export function HangoutDialog({ hangout }: { hangout?: EditableHangout }) {
             />
           </div>
 
-          <DialogFooter showCloseButton>
+          <DialogFooter
+            showCloseButton
+            className="bg-background before:from-background sticky bottom-0 -mx-6 -mb-6 border-t px-6 py-4 before:pointer-events-none before:absolute before:inset-x-0 before:-top-8 before:h-8 before:bg-gradient-to-t before:to-transparent"
+          >
             <Button type="submit" disabled={isPending || title.trim().length === 0}>
               {isPending ? "Saving..." : hangout ? "Save changes" : "Create hangout"}
             </Button>
@@ -147,9 +151,15 @@ export function HangoutDialog({ hangout }: { hangout?: EditableHangout }) {
 export function CancelHangoutButton({ hangoutId, title }: { hangoutId: string; title: string }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
 
-  function handleCancel() {
-    if (!window.confirm(`Cancel "${title}"? The hangout is kept as a record.`)) return;
+  async function handleCancel() {
+    const ok = await confirm("The hangout is kept as a record.", {
+      title: `Cancel "${title}"?`,
+      confirmLabel: "Cancel hangout",
+      cancelLabel: "Keep it",
+    });
+    if (!ok) return;
 
     startTransition(async () => {
       const result = await cancelHangoutAction(hangoutId);
@@ -163,9 +173,18 @@ export function CancelHangoutButton({ hangoutId, title }: { hangoutId: string; t
   }
 
   return (
-    <Button type="button" variant="ghost" onClick={handleCancel} disabled={isPending}>
-      <Ban className="size-4" />
-      Cancel hangout
-    </Button>
+    <>
+      <Button
+        type="button"
+        variant="ghost"
+        className="max-sm:h-11"
+        onClick={handleCancel}
+        disabled={isPending}
+      >
+        <Ban className="size-4" />
+        Cancel hangout
+      </Button>
+      {confirmDialog}
+    </>
   );
 }

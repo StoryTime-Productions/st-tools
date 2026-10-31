@@ -73,12 +73,25 @@ export async function updateHomeAddressAction(input: string): Promise<HomeAddres
 }
 
 // ─── Update appearance ────────────────────────────────────────────────────────
+/** An empty value means "use the theme color" (null); a non-empty invalid value is kept so validation rejects it. */
+function optionalHexColor(value: FormDataEntryValue | null): string | null {
+  if (typeof value !== "string" || value.trim() === "") {
+    return null;
+  }
+
+  return normalizeHexColor(value) ?? value;
+}
+
 const appearanceSchema = z
   .object({
-    primaryColor: z.string().regex(HEX_COLOR_PATTERN, "Primary color must be a valid hex color"),
+    primaryColor: z
+      .string()
+      .regex(HEX_COLOR_PATTERN, "Primary color must be a valid hex color")
+      .nullable(),
     secondaryColor: z
       .string()
-      .regex(HEX_COLOR_PATTERN, "Secondary color must be a valid hex color"),
+      .regex(HEX_COLOR_PATTERN, "Secondary color must be a valid hex color")
+      .nullable(),
     backgroundMode: z.enum(["NONE", "COLOR", "IMAGE"]),
     backgroundImageStyle: z.enum(["STRETCH", "PATTERN"]),
     backgroundPatternScale: z
@@ -177,16 +190,8 @@ export async function updateAppearanceAction(formData: FormData): Promise<Profil
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
 
-  const primaryColor = normalizeHexColor(
-    typeof formData.get("primaryColor") === "string"
-      ? (formData.get("primaryColor") as string)
-      : null
-  );
-  const secondaryColor = normalizeHexColor(
-    typeof formData.get("secondaryColor") === "string"
-      ? (formData.get("secondaryColor") as string)
-      : null
-  );
+  const primaryColor = optionalHexColor(formData.get("primaryColor"));
+  const secondaryColor = optionalHexColor(formData.get("secondaryColor"));
 
   const modeRaw = formData.get("backgroundMode");
   const backgroundMode =

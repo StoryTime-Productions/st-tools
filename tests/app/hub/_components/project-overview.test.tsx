@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import type { HangoutSummary } from "@/lib/hangouts";
+import type { HangoutCardInfo } from "@/lib/hangouts";
 import type { ProjectSummary } from "@/lib/hub";
 
 function summary(overrides: Partial<ProjectSummary>): ProjectSummary {
@@ -50,7 +50,7 @@ const PROJECTS = [
   summary({ id: "p4", title: "Shipped", finished: true }),
 ];
 
-const HANGOUTS: HangoutSummary[] = [
+const HANGOUTS: HangoutCardInfo[] = [
   {
     id: "h1",
     title: "Beach day",
@@ -59,6 +59,9 @@ const HANGOUTS: HangoutSummary[] = [
     startSlot: null,
     phase: "COLLECTING",
     unpaid: 0,
+    availabilityDeadline: "2026-10-01T22:00:00.000Z",
+    responded: false,
+    toConfirm: 0,
   },
   {
     id: "h2",
@@ -68,10 +71,13 @@ const HANGOUTS: HangoutSummary[] = [
     startSlot: null,
     phase: "CANCELLED",
     unpaid: 0,
+    availabilityDeadline: null,
+    responded: false,
+    toConfirm: 0,
   },
 ];
 
-async function renderOverview(projects = PROJECTS, hangouts: HangoutSummary[] = []) {
+async function renderOverview(projects = PROJECTS, hangouts: HangoutCardInfo[] = []) {
   const { ProjectOverview } = await import("@/app/hub/_components/project-overview");
   render(<ProjectOverview projects={projects} hangouts={hangouts} />);
 }
@@ -101,7 +107,7 @@ describe("ProjectOverview", () => {
     expect(within(card).getByText("Internal Tools · Q3 2026 – Q4 2026")).toBeInTheDocument();
     expect(within(card).getByText("Build")).toBeInTheDocument();
     expect(card.querySelectorAll("svg")).toHaveLength(2);
-    expect(within(card).getByLabelText("7 participants")).toBeInTheDocument();
+    expect(within(card).getByRole("img", { name: /^7 participants: / })).toBeInTheDocument();
     expect(within(card).getByText("+2")).toBeInTheDocument();
     expect(within(card).getAllByText(/^P[0-9]$/)).toHaveLength(5);
     expect(screen.getByRole("link", { name: /Someday/ })).toHaveTextContent("No initiative");
@@ -177,6 +183,37 @@ describe("ProjectOverview", () => {
     expect(screen.getByText("Nothing finished or cancelled yet.")).toBeInTheDocument();
   });
 
+  it("tells each hangout card what it needs from you", async () => {
+    await renderOverview(
+      [],
+      [
+        HANGOUTS[0],
+        { ...HANGOUTS[0], id: "h6", title: "Picnic", responded: true, availabilityDeadline: null },
+        {
+          ...HANGOUTS[0],
+          id: "h7",
+          title: "Hike",
+          availabilityDeadline: new Date(Date.now() + 86_400_000).toISOString(),
+        },
+        {
+          ...HANGOUTS[0],
+          id: "h3",
+          title: "Dinner",
+          status: "SCHEDULED",
+          phase: "SCHEDULED",
+          startSlot: "2026-10-30T18:00",
+        },
+      ]
+    );
+
+    const beach = screen.getByRole("link", { name: /Beach day/ });
+    expect(beach).toHaveTextContent("You haven't responded");
+    expect(within(beach).getByText("Deadline passed")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Picnic/ })).toHaveTextContent("You've responded");
+    expect(screen.getByRole("link", { name: /Hike/ })).toHaveTextContent(/fill in by/);
+    expect(screen.getByRole("link", { name: /Dinner/ })).toHaveTextContent("Fri, Oct 30 · 6:00 PM");
+  });
+
   it("mixes hangouts into every view by default", async () => {
     await renderOverview(PROJECTS, HANGOUTS);
 
@@ -209,6 +246,9 @@ describe("ProjectOverview", () => {
         phase: "SCHEDULED",
         unpaid: 0,
         startSlot: "2026-08-15T12:00",
+        availabilityDeadline: null,
+        responded: false,
+        toConfirm: 0,
       },
     ]);
 
@@ -226,18 +266,39 @@ describe("ProjectOverview", () => {
         phase: "SETTLING_UP",
         unpaid: 2,
       },
+      {
+        ...HANGOUTS[0],
+        id: "h8",
+        title: "Cookout",
+        status: "SCHEDULED",
+        phase: "SETTLING_UP",
+        unpaid: 3,
+        toConfirm: 1,
+      },
       { ...HANGOUTS[0], id: "h5", title: "Arcade", status: "SCHEDULED", phase: "DONE" },
     ]);
 
     expect(titles()).toContain("Bonfire");
     expect(titles()).not.toContain("Arcade");
-    expect(screen.getByText("Settling up")).toBeInTheDocument();
+    expect(screen.getAllByText("Settling up")).toHaveLength(2);
     expect(screen.getByText("2 unpaid")).toBeInTheDocument();
+    expect(screen.getByText("2 unpaid · 1 to confirm")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Past" }));
     expect(titles()).toContain("Arcade");
     expect(screen.getByText("Done")).toBeInTheDocument();
     expect(screen.queryByText(/unpaid/)).not.toBeInTheDocument();
+  });
+
+  it("keeps group headings in outline order in both layouts", async () => {
+    await renderOverview(PROJECTS, HANGOUTS);
+
+    fireEvent.click(screen.getByRole("button", { name: "By quarter" }));
+    expect(screen.getByRole("heading", { level: 2, name: "Q4 2026" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Separate" }));
+    expect(screen.getByRole("heading", { level: 2, name: "Projects" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: "Q4 2026" })).toBeInTheDocument();
   });
 
   it("separates hangouts from projects and remembers the layout", async () => {

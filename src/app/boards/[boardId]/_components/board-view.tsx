@@ -2,7 +2,9 @@
 
 import {
   DndContext,
+  KeyboardSensor,
   PointerSensor,
+  TouchSensor,
   closestCorners,
   useSensor,
   useSensors,
@@ -12,6 +14,7 @@ import {
   SortableContext,
   arrayMove,
   horizontalListSortingStrategy,
+  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
@@ -19,7 +22,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { type QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Github, GripVertical, Plus, Trash2, UserPlus, Users } from "lucide-react";
+import { Github, GripVertical, Pencil, Plus, Trash2, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import {
   addBoardMemberAction,
@@ -38,16 +41,10 @@ import {
 } from "@/app/actions/boards";
 import { CardDetailSheet } from "@/app/boards/[boardId]/_components/card-detail-sheet";
 import type { BoardCardData, BoardColumnData, BoardDetailsData } from "@/app/boards/types";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarGroup,
-  AvatarGroupCount,
-  AvatarImage,
-} from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -58,6 +55,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { formatDueLabel } from "@/lib/hub-format";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -327,7 +333,9 @@ function CardItem({
                 {label}
               </Badge>
             ))}
-            {card.dueDate ? <Badge variant="secondary">Due {card.dueDate}</Badge> : null}
+            {card.dueDate ? (
+              <Badge variant="secondary">{formatDueLabel(card.dueDate)}</Badge>
+            ) : null}
             {card.githubIssue ? (
               <Badge variant="outline" className="gap-1">
                 <Github className="size-3" aria-hidden="true" />
@@ -341,7 +349,7 @@ function CardItem({
             <div className="text-muted-foreground text-xs">
               {card.checklistItems.length > 0
                 ? `${card.checklistItems.filter((item) => item.completed).length}/${card.checklistItems.length} checklist done`
-                : "No checklist items"}
+                : null}
             </div>
             {card.assignee ? (
               <Avatar className="h-7 w-7">
@@ -359,7 +367,7 @@ function CardItem({
 
         <button
           type="button"
-          className="text-muted-foreground hover:text-foreground mt-0.5 rounded-md p-1"
+          className="text-muted-foreground hover:text-foreground flex touch-none items-center justify-center rounded-md max-md:size-11 md:mt-0.5 md:p-1"
           aria-label="Drag card"
           {...attributes}
           {...listeners}
@@ -442,6 +450,7 @@ function ColumnContainer({
         <div className="min-w-0 flex-1">
           {isEditingTitle ? (
             <Input
+              aria-label={`Column title for ${column.title}`}
               value={draftTitle}
               onChange={(event) => setDraftTitle(event.target.value)}
               onBlur={commitTitle}
@@ -462,11 +471,18 @@ function ColumnContainer({
           ) : (
             <button
               type="button"
-              className="w-full text-left"
+              className="group focus-visible:ring-ring/50 flex w-full items-center gap-2 rounded-md text-left outline-none focus-visible:ring-[3px] max-md:min-h-11"
+              aria-label={`Rename column ${column.title}`}
               onClick={() => setIsEditingTitle(true)}
               disabled={isPending}
             >
-              <div className="truncate text-sm font-semibold">{column.title}</div>
+              <span className="truncate text-sm font-semibold group-hover:underline">
+                {column.title}
+              </span>
+              <Pencil
+                aria-hidden="true"
+                className="text-muted-foreground size-3 shrink-0 opacity-60 group-hover:opacity-100"
+              />
             </button>
           )}
           <p className="text-muted-foreground mt-1 text-xs">
@@ -477,7 +493,7 @@ function ColumnContainer({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            className="text-muted-foreground hover:text-foreground rounded-md p-1"
+            className="text-muted-foreground hover:text-foreground flex touch-none items-center justify-center rounded-md max-md:size-11 md:p-1"
             aria-label="Drag column"
             {...attributes}
             {...listeners}
@@ -577,14 +593,27 @@ function ColumnContainer({
   );
 }
 
+export const dragAnnouncements = {
+  onDragStart: () => "Picked up. Use the arrow keys to move, space to drop.",
+  onDragOver: () => undefined,
+  onDragEnd: ({ over }: { over: { id: string | number } | null }) =>
+    over ? "Dropped in its new place." : "Dropped. Nothing changed.",
+  onDragCancel: () => "Move cancelled.",
+};
+
 export function BoardView({ board, initialCardId }: BoardViewProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const boardQueryKey = getBoardQueryKey(board.id);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
   const [selectedCardId, setSelectedCardId] = useState<string | null>(initialCardId ?? null);
   const [inviteMemberId, setInviteMemberId] = useState<string | undefined>(undefined);
   const [isPending, startTransition] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
 
   const boardQuery = useQuery({
     queryKey: boardQueryKey,
@@ -767,18 +796,19 @@ export function BoardView({ board, initialCardId }: BoardViewProps) {
     });
   }
 
-  function handleDeleteColumn(columnId: string) {
+  async function handleDeleteColumn(columnId: string) {
     const column = columns.find((item) => item.id === columnId);
     if (!column) {
       return;
     }
 
-    const message =
+    const confirmed = await confirm(
       column.cards.length > 0
-        ? `Delete "${column.title}" and its ${column.cards.length} cards?`
-        : `Delete "${column.title}"?`;
-
-    if (!window.confirm(message)) {
+        ? `This removes the column and its ${column.cards.length} ${column.cards.length === 1 ? "card" : "cards"}.`
+        : "This removes the empty column.",
+      { title: `Delete ${column.title}?`, confirmLabel: "Delete column", destructive: true }
+    );
+    if (!confirmed) {
       return;
     }
 
@@ -981,12 +1011,16 @@ export function BoardView({ board, initialCardId }: BoardViewProps) {
     });
   }
 
-  function handleDeleteBoard() {
-    if (
-      !window.confirm(
-        `Delete "${board.title}"? This removes the whole board and every column and card inside it.`
-      )
-    ) {
+  async function handleDeleteBoard() {
+    const confirmed = await confirm(
+      "This removes the whole board and every column and card inside it.",
+      {
+        title: `Delete ${board.title}?`,
+        confirmLabel: "Delete board",
+        destructive: true,
+      }
+    );
+    if (!confirmed) {
       return;
     }
 
@@ -1054,202 +1088,227 @@ export function BoardView({ board, initialCardId }: BoardViewProps) {
     }
 
     if (activeData.kind === "card" && activeData.columnId && overData.columnId) {
-      const previousBoard = queryClient.getQueryData<BoardDetailsData>(boardQueryKey);
-      const nextColumns = moveCardBetweenColumns(
-        columns,
+      applyCardMove(
         String(active.id),
         String(over.id),
         activeData.columnId,
         overData.columnId,
         overData.kind
       );
-
-      const before = JSON.stringify(
-        columns.map((column) => ({ id: column.id, cards: column.cards.map((card) => card.id) }))
-      );
-      const after = JSON.stringify(
-        nextColumns.map((column) => ({ id: column.id, cards: column.cards.map((card) => card.id) }))
-      );
-      if (before === after) {
-        return;
-      }
-
-      updateBoardCache((current) => ({
-        ...current,
-        columns: nextColumns,
-      }));
-
-      startTransition(async () => {
-        const result = await moveCardsAction(
-          board.id,
-          nextColumns.map((column) => ({
-            columnId: column.id,
-            cardIds: column.cards.map((card) => card.id),
-          }))
-        );
-        if ("error" in result) {
-          toast.error(result.error);
-          restoreBoardCache(previousBoard);
-          return;
-        }
-
-        void invalidateBoardQuery(queryClient, board.id);
-      });
     }
   }
 
+  function applyCardMove(
+    cardId: string,
+    overId: string,
+    fromColumnId: string,
+    toColumnId: string,
+    overKind: "card" | "column"
+  ) {
+    const previousBoard = queryClient.getQueryData<BoardDetailsData>(boardQueryKey);
+    const nextColumns = moveCardBetweenColumns(
+      columns,
+      cardId,
+      overId,
+      fromColumnId,
+      toColumnId,
+      overKind
+    );
+
+    const before = JSON.stringify(
+      columns.map((column) => ({ id: column.id, cards: column.cards.map((card) => card.id) }))
+    );
+    const after = JSON.stringify(
+      nextColumns.map((column) => ({ id: column.id, cards: column.cards.map((card) => card.id) }))
+    );
+    if (before === after) {
+      return;
+    }
+
+    updateBoardCache((current) => ({
+      ...current,
+      columns: nextColumns,
+    }));
+
+    startTransition(async () => {
+      const result = await moveCardsAction(
+        board.id,
+        nextColumns.map((column) => ({
+          columnId: column.id,
+          cardIds: column.cards.map((card) => card.id),
+        }))
+      );
+      if ("error" in result) {
+        toast.error(result.error);
+        restoreBoardCache(previousBoard);
+        return;
+      }
+
+      void invalidateBoardQuery(queryClient, board.id);
+    });
+  }
+
+  function handleMoveToColumn(cardId: string, columnId: string) {
+    const fromColumn = columns.find((column) => column.cards.some((card) => card.id === cardId));
+    if (!fromColumn || fromColumn.id === columnId) {
+      return;
+    }
+    applyCardMove(cardId, columnId, fromColumn.id, columnId, "column");
+  }
+
+  const memberCount = board.activeMembers.length;
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-        <h2 className="text-2xl font-semibold tracking-tight">{board.title}</h2>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="min-w-0 text-2xl font-semibold tracking-tight break-words">{board.title}</h2>
 
-        {board.canManage ? (
-          <Button type="button" variant="ghost" onClick={handleDeleteBoard} disabled={isPending}>
-            <Trash2 className="size-4" />
-            Delete board
-          </Button>
-        ) : null}
-      </div>
-
-      <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
-        <CardHeader className="flex flex-col gap-3 border-b sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Users className="size-4" />
-            Active members
-          </CardTitle>
-
-          <AvatarGroup>
-            {board.activeMembers.slice(0, 5).map((member) => (
-              <Avatar key={member.id} size="sm">
-                <AvatarImage
-                  src={member.avatarUrl ?? undefined}
-                  alt={member.name ?? member.email}
-                />
-                <AvatarFallback>{getInitials(member.name, member.email)}</AvatarFallback>
-              </Avatar>
-            ))}
-            {board.activeMembers.length > 5 ? (
-              <AvatarGroupCount>+{board.activeMembers.length - 5}</AvatarGroupCount>
-            ) : null}
-          </AvatarGroup>
-        </CardHeader>
-        <CardContent className={cn("space-y-4", showInviteControls ? "pt-6" : "pt-3")}>
-          {showInviteControls ? (
-            <div className="grid gap-3 rounded-2xl border px-4 py-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-              <div className="space-y-2">
-                <Label>Invite teammate</Label>
-                <Select value={inviteMemberId} onValueChange={setInviteMemberId}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Choose someone to add" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {inviteableMembers.length === 0 ? (
-                      <SelectItem value="__none__" disabled>
-                        Everyone already has access
-                      </SelectItem>
-                    ) : (
-                      inviteableMembers.map((member) => (
-                        <SelectItem key={member.id} value={member.id}>
-                          {member.name ?? member.email}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button
-                type="button"
-                onClick={handleInviteMember}
-                disabled={!inviteMemberId || isPending}
-              >
-                <UserPlus className="size-4" />
-                Invite
+        <div className="flex flex-wrap items-center gap-2">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button type="button" variant="outline">
+                <Users className="size-4" />
+                Members ({memberCount})
               </Button>
-            </div>
-          ) : null}
+            </SheetTrigger>
+            <SheetContent className="w-full overflow-y-auto sm:max-w-md">
+              <SheetHeader>
+                <SheetTitle>Members</SheetTitle>
+                <SheetDescription>
+                  {showInviteControls
+                    ? "People with access to this board. Invite a teammate or remove someone."
+                    : "People with access to this board."}
+                </SheetDescription>
+              </SheetHeader>
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {board.activeMembers.map((member) => (
-              <div
-                key={member.id}
-                className="flex items-center justify-between gap-3 rounded-2xl border px-4 py-3"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <Avatar className="h-9 w-9">
-                    <AvatarImage
-                      src={member.avatarUrl ?? undefined}
-                      alt={member.name ?? member.email}
-                    />
-                    <AvatarFallback>{getInitials(member.name, member.email)}</AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{member.name ?? member.email}</p>
-                    <p className="text-muted-foreground truncate text-xs">{member.email}</p>
+              <div className="space-y-4 px-4 pb-4">
+                {showInviteControls ? (
+                  <div className="space-y-2 rounded-2xl border px-4 py-4">
+                    <Label htmlFor="invite-member">Invite teammate</Label>
+                    <Select value={inviteMemberId} onValueChange={setInviteMemberId}>
+                      <SelectTrigger
+                        id="invite-member"
+                        className="w-full"
+                        aria-label="Choose someone to add"
+                      >
+                        <SelectValue placeholder="Choose someone to add" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {inviteableMembers.length === 0 ? (
+                          <SelectItem value="__none__" disabled>
+                            Everyone already has access
+                          </SelectItem>
+                        ) : (
+                          inviteableMembers.map((member) => (
+                            <SelectItem key={member.id} value={member.id}>
+                              {member.name ?? member.email}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      className="w-full"
+                      onClick={handleInviteMember}
+                      disabled={!inviteMemberId || isPending}
+                    >
+                      <UserPlus className="size-4" />
+                      Invite
+                    </Button>
+                    {!inviteMemberId ? (
+                      <p className="text-muted-foreground text-xs">
+                        Pick a teammate to enable Invite.
+                      </p>
+                    ) : null}
                   </div>
-                </div>
-                {member.isOwner ? (
-                  <Badge variant="secondary">Owner</Badge>
-                ) : board.canManage ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleRemoveMember(member.id)}
-                  >
-                    Remove
-                  </Button>
                 ) : null}
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
 
-      <div className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="text-lg font-semibold tracking-tight">Board canvas</h3>
+                <ul className="space-y-2">
+                  {board.activeMembers.map((member) => (
+                    <li
+                      key={member.id}
+                      className="flex items-center justify-between gap-3 rounded-2xl border px-4 py-3"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <Avatar className="h-9 w-9">
+                          <AvatarImage src={member.avatarUrl ?? undefined} alt="" />
+                          <AvatarFallback>{getInitials(member.name, member.email)}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">
+                            {member.name ?? member.email}
+                          </p>
+                          <p className="text-muted-foreground truncate text-xs">{member.email}</p>
+                        </div>
+                      </div>
+                      {member.isOwner ? (
+                        <Badge variant="secondary">Owner</Badge>
+                      ) : board.canManage ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          aria-label={`Remove ${member.name ?? member.email}`}
+                          onClick={() => handleRemoveMember(member.id)}
+                        >
+                          Remove
+                        </Button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </SheetContent>
+          </Sheet>
+
           <Button type="button" onClick={handleAddColumn} disabled={isPending}>
             <Plus className="size-4" />
             Add column
           </Button>
-        </div>
 
-        <ScrollArea className="w-full rounded-3xl">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCorners}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={columns.map((column) => column.id)}
-              strategy={horizontalListSortingStrategy}
+          {board.canManage ? (
+            <Button
+              type="button"
+              variant="ghost"
+              className="text-destructive hover:text-destructive"
+              onClick={handleDeleteBoard}
+              disabled={isPending}
             >
-              <div className="flex min-h-120 w-max min-w-full gap-4 pb-4">
-                {columns.map((column) => (
-                  <ColumnContainer
-                    key={`${column.id}:${column.title}`}
-                    column={column}
-                    isPending={isPending}
-                    onRename={handleRenameColumn}
-                    onDelete={handleDeleteColumn}
-                    onCreateCard={handleCreateCard}
-                    onOpenCard={setSelectedCardId}
-                  />
-                ))}
-                <button
-                  type="button"
-                  onClick={handleAddColumn}
-                  disabled={isPending}
-                  className="border-border/70 text-muted-foreground hover:text-foreground hover:border-border bg-background/60 flex h-120 w-70 shrink-0 items-center justify-center rounded-3xl border border-dashed px-6 text-sm font-medium transition-colors"
-                >
-                  <Plus className="mr-2 size-4" />
-                  Add column
-                </button>
-              </div>
-            </SortableContext>
-          </DndContext>
-        </ScrollArea>
+              <Trash2 className="size-4" />
+              Delete board
+            </Button>
+          ) : null}
+        </div>
       </div>
+
+      <ScrollArea className="w-full rounded-3xl">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragEnd={handleDragEnd}
+          accessibility={{ announcements: dragAnnouncements }}
+        >
+          <SortableContext
+            items={columns.map((column) => column.id)}
+            strategy={horizontalListSortingStrategy}
+          >
+            <div className="flex min-h-120 w-max min-w-full snap-x gap-4 pb-4">
+              {columns.map((column) => (
+                <ColumnContainer
+                  key={`${column.id}:${column.title}`}
+                  column={column}
+                  isPending={isPending}
+                  onRename={handleRenameColumn}
+                  onDelete={handleDeleteColumn}
+                  onCreateCard={handleCreateCard}
+                  onOpenCard={setSelectedCardId}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+      </ScrollArea>
 
       <CardDetailSheet
         open={Boolean(selectedCard)}
@@ -1260,6 +1319,13 @@ export function BoardView({ board, initialCardId }: BoardViewProps) {
         }}
         card={selectedCard}
         columnLookup={columnLookup}
+        currentColumnId={
+          selectedCard
+            ? (columns.find((column) => column.cards.some((card) => card.id === selectedCard.id))
+                ?.id ?? null)
+            : null
+        }
+        onMoveToColumn={handleMoveToColumn}
         members={board.activeMembers}
         tagOptions={boardState.tagOptions}
         canCreateTags={boardState.canCreateTags}
@@ -1269,6 +1335,7 @@ export function BoardView({ board, initialCardId }: BoardViewProps) {
         onSetGithubIssue={handleSetGithubIssue}
         onDelete={handleDeleteCard}
       />
+      {confirmDialog}
     </div>
   );
 }

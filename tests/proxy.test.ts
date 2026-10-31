@@ -105,6 +105,27 @@ describe("proxy", () => {
     expect(redirect).toHaveBeenCalled();
   });
 
+  it("keeps the reset password page reachable for the signed-in recovery session", async () => {
+    const { proxy, getSupabaseConfig, createServerClient, next, redirect } =
+      await loadProxyModule();
+
+    const request = createRequest("/auth/reset-password");
+    const nextResponse = { cookies: { set: vi.fn() } };
+
+    getSupabaseConfig.mockReturnValue({ url: "https://example.supabase.co", anonKey: "anon" });
+    next.mockReturnValue(nextResponse);
+    createServerClient.mockReturnValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "u-1" } } }),
+      },
+    });
+
+    const result = await proxy(request as never);
+
+    expect(result).toBe(nextResponse);
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
   it("returns next response for public unauthenticated route and syncs cookies", async () => {
     const { proxy, getSupabaseConfig, createServerClient, next } = await loadProxyModule();
 

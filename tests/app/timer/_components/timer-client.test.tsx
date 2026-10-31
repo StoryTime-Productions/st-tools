@@ -8,6 +8,7 @@ type TimerClientTestProps = React.ComponentProps<typeof TimerClient>;
 
 const actionMocks = vi.hoisted(() => ({
   addUserToFocusSessionAction: vi.fn(),
+  cancelFocusSessionRequestAction: vi.fn(),
   joinFocusSessionAction: vi.fn(),
   kickFocusSessionMemberAction: vi.fn(),
   leaveFocusSessionAction: vi.fn(),
@@ -116,14 +117,14 @@ function makeProps(): TimerClientTestProps {
       todayCount: 2,
       weekCount: 6,
       totalCount: 11,
-      last7Days: [
-        { dateKey: "2026-03-15", label: "Sun", count: 0 },
-        { dateKey: "2026-03-16", label: "Mon", count: 1 },
-        { dateKey: "2026-03-17", label: "Tue", count: 2 },
-        { dateKey: "2026-03-18", label: "Wed", count: 1 },
-        { dateKey: "2026-03-19", label: "Thu", count: 1 },
-        { dateKey: "2026-03-20", label: "Fri", count: 0 },
-        { dateKey: "2026-03-21", label: "Sat", count: 1 },
+      weekDays: [
+        { dateKey: "2026-03-15", label: "Sun", count: 0, isToday: false },
+        { dateKey: "2026-03-16", label: "Mon", count: 1, isToday: false },
+        { dateKey: "2026-03-17", label: "Tue", count: 2, isToday: false },
+        { dateKey: "2026-03-18", label: "Wed", count: 1, isToday: false },
+        { dateKey: "2026-03-19", label: "Thu", count: 1, isToday: false },
+        { dateKey: "2026-03-20", label: "Fri", count: 0, isToday: false },
+        { dateKey: "2026-03-21", label: "Sat", count: 1, isToday: true },
       ],
     },
     initialCollaboration: {
@@ -201,6 +202,45 @@ describe("TimerClient", () => {
       });
     });
     expect(toastMocks.success).toHaveBeenCalledWith("Timer settings updated");
+  });
+
+  it("turns browser notifications on only when permission is granted", async () => {
+    window.localStorage.clear();
+    const requestPermission = vi.fn().mockResolvedValue("granted");
+    vi.stubGlobal(
+      "Notification",
+      Object.assign(vi.fn(), { permission: "default", requestPermission })
+    );
+
+    render(<TimerClient {...makeProps()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Timer settings/ }));
+    fireEvent.click(screen.getByLabelText("Browser notifications"));
+
+    await waitFor(() => expect(screen.getByLabelText("Browser notifications")).toBeChecked());
+    expect(requestPermission).toHaveBeenCalled();
+    expect(toastMocks.error).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByLabelText("Browser notifications"));
+    await waitFor(() => expect(screen.getByLabelText("Browser notifications")).not.toBeChecked());
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps browser notifications off and explains when permission is blocked", async () => {
+    window.localStorage.clear();
+    vi.stubGlobal(
+      "Notification",
+      Object.assign(vi.fn(), { permission: "denied", requestPermission: vi.fn() })
+    );
+
+    render(<TimerClient {...makeProps()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Timer settings/ }));
+    fireEvent.click(screen.getByLabelText("Browser notifications"));
+
+    await waitFor(() =>
+      expect(toastMocks.error).toHaveBeenCalledWith("Notifications are blocked", expect.anything())
+    );
+    expect(screen.getByLabelText("Browser notifications")).not.toBeChecked();
+    vi.unstubAllGlobals();
   });
 
   it("shows an error toast when timer settings save fails", async () => {
@@ -304,17 +344,58 @@ describe("TimerClient", () => {
     });
 
     expect(screen.getAllByText("Deep Work").length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    fireEvent.click(screen.getByRole("button", { name: "Invite someone" }));
     expect(screen.getByRole("button", { name: "Send request" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Manage Teammate" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Accept" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Join" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Accept invite to/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Join / })).toBeInTheDocument();
 
     const toggle = screen.getByRole("button", { name: /Timer settings/ });
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("lets the owner cancel a pending invite and reports failures", async () => {
+    const props = makeProps();
+    const owned = makeOwnedSessionCollaboration(props.currentUserId);
+    props.initialCollaboration = makeCollaboration({
+      ...owned,
+      outgoingRequests: [
+        {
+          id: "req-out-1",
+          sessionId: "session-1",
+          sessionTitle: "Deep Work",
+          requesterId: props.currentUserId,
+          requesterName: "Nirav",
+          requesterEmail: "nirav@example.com",
+          targetUserId: "invite-1",
+          targetName: "Invitee",
+          targetEmail: "invitee@example.com",
+          createdAt: "2026-03-21T12:01:00.000Z",
+        },
+      ],
+    });
+    actionMocks.refreshPomodoroCollaborationAction.mockResolvedValue({
+      snapshot: props.initialCollaboration,
+    });
+    actionMocks.cancelFocusSessionRequestAction
+      .mockResolvedValueOnce({ error: "Request not found" })
+      .mockResolvedValueOnce({ success: true, snapshot: owned });
+
+    render(<TimerClient {...props} />);
+
+    expect(screen.getByText("Pending invites")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Cancel invite to Invitee" }));
+    await waitFor(() => expect(toastMocks.error).toHaveBeenCalledWith("Request not found"));
+
+    await userEvent.click(screen.getByRole("button", { name: "Cancel invite to Invitee" }));
+    await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Invite cancelled"));
+    expect(actionMocks.cancelFocusSessionRequestAction).toHaveBeenCalledWith({
+      requestId: "req-out-1",
+    });
+    expect(screen.queryByText("Pending invites")).not.toBeInTheDocument();
   });
 
   it("responds to incoming collaboration requests", async () => {
@@ -343,7 +424,7 @@ describe("TimerClient", () => {
 
     render(<TimerClient {...props} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Accept invite to/ }));
     await waitFor(() => {
       expect(actionMocks.respondToFocusSessionRequestAction).toHaveBeenCalledWith({
         requestId: "req-in-1",
@@ -373,7 +454,7 @@ describe("TimerClient", () => {
 
     render(<TimerClient {...props} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Join" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Join / }));
     await waitFor(() => {
       expect(actionMocks.joinFocusSessionAction).toHaveBeenCalledWith({ sessionId: "session-2" });
     });
@@ -431,7 +512,7 @@ describe("TimerClient", () => {
 
     render(<TimerClient {...props} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Join" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Join / }));
     await waitFor(() => {
       expect(toastMocks.error).toHaveBeenCalledWith("Unable to join session");
     });
@@ -463,7 +544,7 @@ describe("TimerClient", () => {
 
     render(<TimerClient {...props} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    fireEvent.click(screen.getByRole("button", { name: "Invite someone" }));
     fireEvent.click(screen.getByRole("button", { name: "Send request" }));
 
     await waitFor(() => {
@@ -486,10 +567,29 @@ describe("TimerClient", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Manage Teammate" }));
     await userEvent.click(await screen.findByRole("menuitem", { name: "Remove from session" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Remove" }));
 
     await waitFor(() => {
       expect(toastMocks.error).toHaveBeenCalledWith("Unable to remove member");
     });
+  });
+
+  it("asks before removing a member and keeps them when cancelled", async () => {
+    const props = makeProps();
+    props.initialCollaboration = makeOwnedSessionCollaboration(props.currentUserId);
+    actionMocks.refreshPomodoroCollaborationAction.mockResolvedValue({
+      snapshot: props.initialCollaboration,
+    });
+
+    render(<TimerClient {...props} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Manage Teammate" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Remove from session" }));
+    expect(await screen.findByText(/Remove Teammate from the session\?/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Keep" }));
+
+    expect(actionMocks.kickFocusSessionMemberAction).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Remove Teammate from the session\?/)).not.toBeInTheDocument();
   });
 
   it("shows an error toast when responding to a collaboration request fails", async () => {
@@ -502,7 +602,7 @@ describe("TimerClient", () => {
 
     render(<TimerClient {...props} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Accept invite to/ }));
 
     await waitFor(() => {
       expect(toastMocks.error).toHaveBeenCalledWith("Unable to respond to request");
@@ -607,7 +707,12 @@ describe("TimerClient", () => {
       expect(actionMocks.refreshPomodoroCollaborationAction).toHaveBeenCalled();
     });
 
-    expect(screen.queryByText("Timer settings")).not.toBeInTheDocument();
+    expect(screen.getByText("Timer settings")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Timer settings/ }));
+    expect(
+      screen.getByText(/Only the host \(Another User\) can change timer settings/)
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Work")).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Start" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Manage / })).not.toBeInTheDocument();
   });

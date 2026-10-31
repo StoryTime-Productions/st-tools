@@ -1,4 +1,4 @@
-export const SLOT_MINUTES = 15;
+export const SLOT_MINUTES = 30;
 
 export interface AvailabilityWindow {
   dates: string[];

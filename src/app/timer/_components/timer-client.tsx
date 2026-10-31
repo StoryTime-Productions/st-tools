@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   addUserToFocusSessionAction,
   joinFocusSessionAction,
+  cancelFocusSessionRequestAction,
   kickFocusSessionMemberAction,
   leaveFocusSessionAction,
   recordPomodoroSessionAction,
@@ -29,7 +30,8 @@ import {
   toRgba,
 } from "./timer-utils";
 import { playCompletionTone, playUiCue } from "./timer-audio";
-import { useTimerPrefs, writeTimerPrefs } from "./timer-prefs";
+import { notifyPhaseComplete, requestNotificationPermission } from "./timer-notify";
+import { readTimerPrefs, useTimerPrefs, writeTimerPrefs } from "./timer-prefs";
 import { FocusTimerCard } from "./focus-timer-card";
 import { SessionCollaborationCard } from "./session-collaboration-card";
 import { SessionStatsCard } from "./session-stats-card";
@@ -403,6 +405,12 @@ export function TimerClient({
     });
 
     void playCompletionTone();
+    notifyPhaseComplete(
+      `${phaseLabel(lastCompletedPhase)} complete`,
+      lastCompletedPhase === "work"
+        ? "Great work. Time for a break."
+        : "Break finished. Time to focus again."
+    );
 
     if (lastCompletedPhase === "work" && lastCompletedDurationMin) {
       startPersistingSession(async () => {
@@ -472,6 +480,12 @@ export function TimerClient({
       });
 
       void playCompletionTone();
+      notifyPhaseComplete(
+        `${phaseLabel(completedPhase)} complete`,
+        completedPhase === "work"
+          ? "Great work. Time for a break."
+          : "Break finished. Time to focus again."
+      );
 
       if (completedPhase === "work") {
         const durationMin = sharedTimer.lastCompletedDurationMin ?? sharedTimer.workMinutes;
@@ -547,6 +561,17 @@ export function TimerClient({
   }
 
   function onTimerPrefsChange(patch: Partial<TimerPrefs>) {
+    if (patch.notificationsEnabled) {
+      void requestNotificationPermission().then((granted) => {
+        if (!granted) {
+          toast.error("Notifications are blocked", {
+            description: "Allow notifications for this site in your browser settings.",
+          });
+        }
+        writeTimerPrefs({ ...readTimerPrefs(), ...patch, notificationsEnabled: granted });
+      });
+      return;
+    }
     writeTimerPrefs({ ...timerPrefs, ...patch });
   }
 
@@ -693,6 +718,20 @@ export function TimerClient({
     });
   }
 
+  function onCancelRequest(requestId: string) {
+    startUpdatingCollaboration(async () => {
+      const result = await cancelFocusSessionRequestAction({ requestId });
+
+      if ("error" in result) {
+        toast.error(result.error);
+        return;
+      }
+
+      applyCollaborationSnapshot(result.snapshot);
+      toast.success("Invite cancelled");
+    });
+  }
+
   function onRespondToRequest(requestId: string, decision: "accept" | "decline") {
     startUpdatingCollaboration(async () => {
       const result = await respondToFocusSessionRequestAction({
@@ -779,14 +818,13 @@ export function TimerClient({
 
   const shouldResume = !isRunning && displaySecondsLeft < totalPhaseSeconds;
   const nextSessionNumber = (sessionCount % LONG_BREAK_CYCLE) + 1;
-  const shouldRenderSettingsCard = !isLockedBySharedSession;
 
   const joinableSessions = collaboration.activeSessions.filter(
     (session) => session.id !== currentSession?.id
   );
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="space-y-6">
         <FocusTimerCard
           phase={phase}
@@ -806,25 +844,26 @@ export function TimerClient({
           onReset={onResetTimer}
         />
 
-        {shouldRenderSettingsCard ? (
-          <TimerSettingsCard
-            saved={durations}
-            draft={{
-              workMinutes: workMinutesInput,
-              shortBreakMinutes: shortBreakMinutesInput,
-              longBreakMinutes: longBreakMinutesInput,
-            }}
-            onDraftChange={(field, value) => {
-              if (field === "workMinutes") setWorkMinutesInput(value);
-              else if (field === "shortBreakMinutes") setShortBreakMinutesInput(value);
-              else setLongBreakMinutesInput(value);
-            }}
-            onSave={onSaveTimerPreferences}
-            isSaving={isSavingPreferences}
-            prefs={timerPrefs}
-            onPrefsChange={onTimerPrefsChange}
-          />
-        ) : null}
+        <TimerSettingsCard
+          durationsLockedBy={
+            isLockedBySharedSession ? (currentSession?.ownerName ?? "the host") : null
+          }
+          saved={durations}
+          draft={{
+            workMinutes: workMinutesInput,
+            shortBreakMinutes: shortBreakMinutesInput,
+            longBreakMinutes: longBreakMinutesInput,
+          }}
+          onDraftChange={(field, value) => {
+            if (field === "workMinutes") setWorkMinutesInput(value);
+            else if (field === "shortBreakMinutes") setShortBreakMinutesInput(value);
+            else setLongBreakMinutesInput(value);
+          }}
+          onSave={onSaveTimerPreferences}
+          isSaving={isSavingPreferences}
+          prefs={timerPrefs}
+          onPrefsChange={onTimerPrefsChange}
+        />
       </div>
 
       <div className="space-y-6">
@@ -844,6 +883,7 @@ export function TimerClient({
           onLeave={onLeaveSession}
           onAddMember={onAddMemberToSession}
           onKick={onKickMember}
+          onCancelRequest={onCancelRequest}
           onRespond={onRespondToRequest}
         />
 

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
 import { formatClock, isBreakPhase, phaseLabel } from "./timer-utils";
 
 interface FocusTimerCardProps {
@@ -89,25 +90,48 @@ export function FocusTimerCard({
   }, []);
 
   const next = describeNext(phase, sessionNumber, durations);
+  const announcement = `${phaseLabel(phase)} ${isRunning ? "running" : canResume ? "paused" : "ready"}`;
   const sessionText = isBreakPhase(phase)
-    ? `Session ${sessionNumber} of ${LONG_BREAK_CYCLE} next`
+    ? `Up next: session ${sessionNumber} of ${LONG_BREAK_CYCLE}`
     : `Session ${sessionNumber} of ${LONG_BREAK_CYCLE}`;
 
   return (
     <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none" style={style}>
       <CardHeader className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <CardTitle id="timer-phase-label" className="text-2xl tracking-tight">
-            {phaseLabel(phase)}
-          </CardTitle>
+          <div className="flex items-center gap-2.5">
+            <CardTitle id="timer-phase-label" className="text-2xl tracking-tight">
+              {phaseLabel(phase)}
+            </CardTitle>
+            {isRunning ? (
+              <span
+                aria-hidden="true"
+                className="bg-primary size-2.5 rounded-full motion-safe:animate-pulse"
+              />
+            ) : null}
+          </div>
           <div className="flex items-center gap-3">
-            {isSaving ? <Badge variant="outline">Saving session…</Badge> : null}
-            <span className="text-muted-foreground text-xs">{sessionText}</span>
+            <Badge
+              variant="outline"
+              role="status"
+              className={cn(!isSaving && "invisible max-sm:hidden")}
+              aria-hidden={!isSaving}
+            >
+              Saving session…
+            </Badge>
+            <span className="text-foreground/80 text-xs sm:text-sm">{sessionText}</span>
             <div aria-hidden="true" className="flex items-center gap-1.5">
               {Array.from({ length: LONG_BREAK_CYCLE }, (_, index) => (
                 <div
                   key={index}
-                  className={`size-2.5 rounded-full transition-colors ${index < sessionNumber ? "bg-primary" : "bg-muted-foreground/25"}`}
+                  className={cn(
+                    "size-2.5 rounded-full transition-colors",
+                    index < sessionNumber - 1
+                      ? "bg-primary"
+                      : index === sessionNumber - 1
+                        ? "ring-primary ring-2 ring-inset"
+                        : "bg-muted-foreground/25"
+                  )}
                 />
               ))}
             </div>
@@ -119,23 +143,33 @@ export function FocusTimerCard({
           <div
             role="timer"
             aria-labelledby="timer-phase-label"
-            className="text-center text-6xl font-semibold tabular-nums"
+            className="text-center text-6xl font-semibold tabular-nums sm:text-7xl lg:text-8xl"
           >
             {formatClock(secondsLeft)}
           </div>
-          <Progress value={progressValue} aria-label="Phase progress" className="h-3" />
+          <p role="status" className="sr-only">
+            {announcement}
+          </p>
+          <Progress
+            value={progressValue}
+            aria-label="Phase progress"
+            className="bg-foreground/15 ring-foreground/25 h-3 ring-1 ring-inset"
+          />
         </div>
 
         {controlledBy ? (
-          <p className="text-muted-foreground text-center text-sm">Controlled by {controlledBy}</p>
+          <p className="text-muted-foreground text-center text-sm">
+            Controlled by {controlledBy}. Only the host can start, pause, skip or reset.
+          </p>
         ) : (
-          <div className="flex flex-wrap justify-center gap-2">
+          <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:justify-center">
             {isRunning ? (
               <Button
                 type="button"
                 size="lg"
                 onClick={onPause}
-                className="gap-2"
+                title="Shortcut: Space"
+                className="min-h-11 w-full gap-2 sm:w-auto sm:min-w-28"
                 aria-keyshortcuts="Space"
               >
                 <Pause className="size-4" />
@@ -146,7 +180,8 @@ export function FocusTimerCard({
                 type="button"
                 size="lg"
                 onClick={onResume}
-                className="gap-2"
+                title="Shortcut: Space"
+                className="min-h-11 w-full gap-2 sm:w-auto sm:min-w-28"
                 aria-keyshortcuts="Space"
               >
                 <Play className="size-4" />
@@ -157,7 +192,8 @@ export function FocusTimerCard({
                 type="button"
                 size="lg"
                 onClick={onStart}
-                className="gap-2"
+                title="Shortcut: Space"
+                className="min-h-11 w-full gap-2 sm:w-auto sm:min-w-28"
                 aria-keyshortcuts="Space"
               >
                 <Play className="size-4" />
@@ -165,19 +201,31 @@ export function FocusTimerCard({
               </Button>
             )}
 
-            <Button type="button" size="lg" variant="outline" onClick={onSkip} className="gap-2">
+            <Button
+              type="button"
+              size="lg"
+              variant="outline"
+              onClick={onSkip}
+              className="min-h-11 w-full gap-2 sm:w-auto"
+            >
               <SkipForward className="size-4" />
               Skip
             </Button>
 
-            <Button type="button" size="lg" variant="ghost" onClick={onReset} className="gap-2">
+            <Button
+              type="button"
+              size="lg"
+              variant="ghost"
+              onClick={onReset}
+              className="min-h-11 w-full gap-2 sm:w-auto"
+            >
               <RotateCcw className="size-4" />
               Reset
             </Button>
           </div>
         )}
 
-        <p className="text-muted-foreground text-center text-sm">
+        <p className="text-muted-foreground mt-2 text-center text-sm">
           Up next: {next.label} · {next.minutes} min
         </p>
       </CardContent>

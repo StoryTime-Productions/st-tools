@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { LockedIn, RankedSlots } from "@/app/hub/hangouts/[hangoutId]/_components/lock-in";
+import {
+  LockedIn,
+  RankedSlots,
+  ReopenAvailability,
+} from "@/app/hub/hangouts/[hangoutId]/_components/lock-in";
 
 const actionMocks = vi.hoisted(() => ({
   lockInHangoutAction: vi.fn(),
@@ -19,10 +23,16 @@ const RUNS = [
   { day: "2026-10-04", start: "10:00", end: "10:15", free: ["a"] },
 ];
 
+/** Answers the in-app confirm dialog by clicking one of its buttons. */
+async function answer(label: string) {
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: label }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+}
+
 describe("RankedSlots", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
   });
 
   it("lists the best times and locks one in after confirming", async () => {
@@ -32,13 +42,17 @@ describe("RankedSlots", () => {
     render(<RankedSlots hangoutId="h1" runs={RUNS} total={3} canLock />);
 
     expect(screen.getByText(/Sat, Oct 3, 2:00 PM – 4:30 PM/)).toHaveTextContent("2 of 3 free");
+    expect(screen.getByText("1.")).toBeInTheDocument();
+    expect(screen.getByText("2.")).toBeInTheDocument();
+    expect(screen.getByText(/Lock one in to schedule/)).toBeInTheDocument();
     const [first] = screen.getAllByRole("button", { name: "Lock in" });
 
-    vi.mocked(window.confirm).mockReturnValueOnce(false);
     fireEvent.click(first);
+    await answer("Cancel");
     expect(actionMocks.lockInHangoutAction).not.toHaveBeenCalled();
 
     fireEvent.click(first);
+    await answer("Lock in");
     await waitFor(() =>
       expect(toastMocks.error).toHaveBeenCalledWith("That time is no longer a top option")
     );
@@ -48,6 +62,7 @@ describe("RankedSlots", () => {
     });
 
     fireEvent.click(first);
+    await answer("Lock in");
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Hangout scheduled"));
     expect(routerMocks.refresh).toHaveBeenCalled();
   });
@@ -58,6 +73,8 @@ describe("RankedSlots", () => {
     );
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
 
+    expect(screen.getByText(/Admins lock in the final time/)).toBeInTheDocument();
+
     rerender(<RankedSlots hangoutId="h1" runs={[]} total={0} canLock />);
     expect(container).toBeEmptyDOMElement();
   });
@@ -66,11 +83,9 @@ describe("RankedSlots", () => {
 describe("LockedIn", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
   });
 
-  it("shows the locked time and attendees, and reopens for admins", async () => {
-    actionMocks.reopenAvailabilityAction.mockResolvedValue({ success: true });
+  it("shows the locked time hero and a roster with counts and chips", () => {
     render(
       <LockedIn
         hangoutId="h1"
@@ -80,37 +95,17 @@ describe("LockedIn", () => {
           { userId: "b", name: "Bob", status: "GOING" },
         ]}
         userId="a"
-        canReopen
       />
     );
 
-    expect(screen.getByText("Sat, Oct 3, 2:00 PM EST")).toBeInTheDocument();
-    expect(screen.getByText("Alice, Bob")).toBeInTheDocument();
+    expect(screen.getByText("Locked in")).toBeInTheDocument();
+    expect(screen.getByText("Your response: Going")).toBeInTheDocument();
+    expect(screen.getByText("Sat, Oct 3 · 2:00 PM EST")).toBeInTheDocument();
+    expect(screen.getByText("Going (2)")).toBeInTheDocument();
+    expect(screen.getByText("Maybe (0)")).toBeInTheDocument();
+    expect(screen.getByText("Alice")).toBeInTheDocument();
+    expect(screen.getByText("Bob")).toBeInTheDocument();
     expect(screen.getAllByText("Nobody yet")).toHaveLength(2);
-
-    fireEvent.click(screen.getByRole("button", { name: "Reopen availability" }));
-    await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Availability reopened"));
-    expect(actionMocks.reopenAvailabilityAction).toHaveBeenCalledWith("h1");
-  });
-
-  it("does not reopen when cancelled or for members", () => {
-    const { rerender } = render(
-      <LockedIn hangoutId="h1" startSlot="2026-10-03T14:00" attendees={[]} userId="a" canReopen />
-    );
-    vi.mocked(window.confirm).mockReturnValueOnce(false);
-    fireEvent.click(screen.getByRole("button", { name: "Reopen availability" }));
-    expect(actionMocks.reopenAvailabilityAction).not.toHaveBeenCalled();
-
-    rerender(
-      <LockedIn
-        hangoutId="h1"
-        startSlot="2026-10-03T14:00"
-        attendees={[]}
-        userId="a"
-        canReopen={false}
-      />
-    );
-    expect(screen.queryByRole("button", { name: "Reopen availability" })).not.toBeInTheDocument();
   });
 
   it("sets the viewer's own attendance", async () => {
@@ -123,7 +118,6 @@ describe("LockedIn", () => {
         startSlot="2026-10-03T14:00"
         attendees={[{ userId: "b", name: "Bob", status: "MAYBE" }]}
         userId="b"
-        canReopen={false}
       />
     );
 
@@ -147,5 +141,26 @@ describe("LockedIn", () => {
     fireEvent.click(within(group).getByRole("button", { name: "Going" }));
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Attendance saved"));
     expect(routerMocks.refresh).toHaveBeenCalled();
+  });
+});
+
+describe("ReopenAvailability", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("reopens after confirming and stays put when cancelled", async () => {
+    actionMocks.reopenAvailabilityAction.mockResolvedValue({ success: true });
+    render(<ReopenAvailability hangoutId="h1" />);
+    const button = screen.getByRole("button", { name: "Reopen availability" });
+
+    fireEvent.click(button);
+    await answer("Cancel");
+    expect(actionMocks.reopenAvailabilityAction).not.toHaveBeenCalled();
+
+    fireEvent.click(button);
+    await answer("Reopen");
+    await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Availability reopened"));
+    expect(actionMocks.reopenAvailabilityAction).toHaveBeenCalledWith("h1");
   });
 });

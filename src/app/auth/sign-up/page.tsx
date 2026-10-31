@@ -6,6 +6,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { signUpAction, signInWithGoogleAction, signInWithDiscordAction } from "@/app/actions/auth";
+import { AuthError } from "../_components/auth-error";
+import { OrDivider } from "../_components/or-divider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,6 +21,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -40,7 +43,7 @@ type FormValues = z.infer<typeof schema>;
 
 export default function SignUpPage() {
   const [serverError, setServerError] = useState<string | null>(null);
-  const [emailSent, setEmailSent] = useState(false);
+  const [emailSent, setEmailSent] = useState<string | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -53,7 +56,7 @@ export default function SignUpPage() {
     if (result && "error" in result) {
       setServerError(result.error);
     } else if (result && "confirmEmail" in result) {
-      setEmailSent(true);
+      setEmailSent(values.email);
     }
   }
 
@@ -61,12 +64,30 @@ export default function SignUpPage() {
     return (
       <Card className="border-border/70 bg-background/95 w-full max-w-md rounded-3xl text-center shadow-none">
         <CardHeader>
-          <CardTitle className="text-2xl">Check your email</CardTitle>
-          <CardDescription>
-            We&apos;ve sent you a confirmation link. Click it to activate your account and be taken
-            to your dashboard.
+          <CardTitle className="text-2xl" role="heading" aria-level={1}>
+            Check your email
+          </CardTitle>
+          <CardDescription role="status">
+            We&apos;ve sent a confirmation link to{" "}
+            <span className="text-foreground font-medium break-all">{emailSent}</span>. Click it to
+            activate your account and be taken to your dashboard.
           </CardDescription>
         </CardHeader>
+        <CardFooter className="text-muted-foreground border-border/60 flex-col justify-center gap-1 border-t text-sm">
+          <button
+            type="button"
+            onClick={() => setEmailSent(null)}
+            className="text-foreground inline-flex min-h-11 items-center underline underline-offset-4 hover:no-underline"
+          >
+            Use a different email
+          </button>
+          <Link
+            href="/auth/sign-in"
+            className="text-foreground inline-flex min-h-11 items-center underline underline-offset-4 hover:no-underline"
+          >
+            Back to sign in
+          </Link>
+        </CardFooter>
       </Card>
     );
   }
@@ -74,7 +95,9 @@ export default function SignUpPage() {
   return (
     <Card className="border-border/70 bg-background/95 w-full max-w-md rounded-3xl shadow-none">
       <CardHeader>
-        <CardTitle className="text-2xl">Create an account</CardTitle>
+        <CardTitle className="text-2xl" role="heading" aria-level={1}>
+          Create an account
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -86,7 +109,12 @@ export default function SignUpPage() {
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder="you@example.com" {...field} />
+                    <Input
+                      type="email"
+                      autoComplete="email"
+                      placeholder="you@example.com"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -99,8 +127,14 @@ export default function SignUpPage() {
                 <FormItem>
                   <FormLabel>Password</FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder="Min. 8 characters" {...field} />
+                    <Input
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder="Min. 8 characters"
+                      {...field}
+                    />
                   </FormControl>
+                  <FormDescription>Use at least 8 characters.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -112,27 +146,25 @@ export default function SignUpPage() {
                 <FormItem>
                   <FormLabel>Confirm password</FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder="Repeat your password" {...field} />
+                    <Input
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder="Repeat your password"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            {serverError && <p className="text-destructive text-sm">{serverError}</p>}
+            <AuthError message={serverError} />
             <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
               {form.formState.isSubmitting ? "Creating account…" : "Sign up"}
             </Button>
           </form>
         </Form>
 
-        <div className="relative my-4">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t" />
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-card text-muted-foreground px-2">or</span>
-          </div>
-        </div>
+        <OrDivider />
 
         <form
           action={async () => {
@@ -177,7 +209,10 @@ export default function SignUpPage() {
       </CardContent>
       <CardFooter className="text-muted-foreground border-border/60 justify-center border-t text-sm">
         Already have an account?&nbsp;
-        <Link href="/auth/sign-in" className="text-foreground underline-offset-4 hover:underline">
+        <Link
+          href="/auth/sign-in"
+          className="text-foreground inline-flex min-h-11 items-center underline underline-offset-4 hover:no-underline"
+        >
           Sign in
         </Link>
       </CardFooter>

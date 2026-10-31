@@ -92,6 +92,10 @@ const respondToFocusSessionRequestSchema = z.object({
   decision: z.enum(["accept", "decline"]),
 });
 
+const cancelFocusSessionRequestSchema = z.object({
+  requestId: z.string().uuid(),
+});
+
 const syncFocusSessionTimerStateSchema = z.object({
   sessionId: z.string().uuid(),
   phase: z.enum(["work", "shortBreak", "longBreak"]),
@@ -783,6 +787,61 @@ export async function respondToFocusSessionRequestAction(
 
     await leaveCurrentFocusSession(tx, request.targetUserId);
     await activateSessionMembership(tx, request.sessionId, request.targetUserId);
+  });
+
+  const snapshot = await getPomodoroCollaborationSnapshot(actor.id);
+
+  revalidatePath("/timer");
+
+  return { success: true, snapshot };
+}
+
+export async function cancelFocusSessionRequestAction(
+  values: z.input<typeof cancelFocusSessionRequestSchema>
+): Promise<PomodoroCollaborationActionResult> {
+  const parsed = cancelFocusSessionRequestSchema.safeParse(values);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
+
+  const actor = await getCurrentUser();
+  if (!actor) {
+    return { error: "Not authenticated" };
+  }
+
+  const request = await prisma.pomodoroFocusSessionRequest.findUnique({
+    where: {
+      id: parsed.data.requestId,
+    },
+    include: {
+      session: {
+        select: {
+          ownerId: true,
+        },
+      },
+    },
+  });
+
+  if (!request || request.status !== "PENDING") {
+    return { error: "Request not found" };
+  }
+
+  if (
+    request.session.ownerId !== actor.id &&
+    request.requesterId !== actor.id &&
+    actor.role !== "ADMIN"
+  ) {
+    return { error: "Only the session owner can cancel an invite" };
+  }
+
+  await prisma.pomodoroFocusSessionRequest.update({
+    where: {
+      id: request.id,
+    },
+    data: {
+      status: "CANCELLED",
+      respondedAt: new Date(),
+    },
   });
 
   const snapshot = await getPomodoroCollaborationSnapshot(actor.id);

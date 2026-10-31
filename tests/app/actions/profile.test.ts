@@ -208,6 +208,56 @@ describe("profile actions", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/admin/members");
   });
 
+  it("saves empty theme colors as the theme default and rejects invalid ones", async () => {
+    const { updateAppearanceAction, createClient, update, findUnique } = await loadProfileModule();
+    const supabase = buildSupabaseClient();
+    supabase.auth.getUser.mockResolvedValue({
+      data: { user: { id: "11111111-1111-4111-8111-111111111111" } },
+    });
+    createClient.mockResolvedValue(supabase);
+    findUnique.mockResolvedValue({ backgroundImageUrl: null });
+
+    function build(primary: string | null, secondary: string | null) {
+      const formData = new FormData();
+      if (primary !== null) formData.set("primaryColor", primary);
+      if (secondary !== null) formData.set("secondaryColor", secondary);
+      formData.set("backgroundMode", "NONE");
+      formData.set("backgroundImageStyle", "STRETCH");
+      formData.set("backgroundPatternScale", "100");
+      formData.set("backgroundColor", "");
+      formData.set("backgroundImageOpacity", "45");
+      formData.set("removeBackgroundImage", "false");
+      return formData;
+    }
+
+    // empty, whitespace and missing all mean "use the theme color": nothing is stored
+    for (const [primary, secondary] of [
+      ["", ""],
+      ["   ", ""],
+      [null, null],
+    ] as const) {
+      update.mockClear();
+      await expect(updateAppearanceAction(build(primary, secondary))).resolves.toEqual({
+        success: true,
+      });
+      expect(update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ primaryColor: null, secondaryColor: null }),
+        })
+      );
+    }
+
+    // a non-empty value that is not a hex color is rejected, never saved as the default
+    update.mockClear();
+    await expect(updateAppearanceAction(build("blue", ""))).resolves.toEqual({
+      error: "Primary color must be a valid hex color",
+    });
+    await expect(updateAppearanceAction(build("", "#12"))).resolves.toEqual({
+      error: "Secondary color must be a valid hex color",
+    });
+    expect(update).not.toHaveBeenCalled();
+  });
+
   it("validates image mode appearance updates", async () => {
     const { updateAppearanceAction, createClient, findUnique } = await loadProfileModule();
     const supabase = buildSupabaseClient();

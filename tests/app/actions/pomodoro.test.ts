@@ -674,6 +674,92 @@ describe("pomodoro actions", () => {
     );
   });
 
+  describe("cancelFocusSessionRequestAction", () => {
+    const requestId = "55555555-5555-4555-8555-555555555555";
+    const owner = "11111111-1111-4111-8111-111111111111";
+
+    it("lets the session owner cancel a pending invite", async () => {
+      const {
+        cancelFocusSessionRequestAction,
+        getCurrentUser,
+        getPomodoroCollaborationSnapshot,
+        tx,
+        revalidatePath,
+      } = await loadPomodoroActionsModule();
+      getCurrentUser.mockResolvedValueOnce({ id: owner, role: "MEMBER" });
+      tx.pomodoroFocusSessionRequest.findUnique.mockResolvedValueOnce({
+        id: requestId,
+        status: "PENDING",
+        requesterId: owner,
+        session: { ownerId: owner },
+      });
+      const snapshot = {
+        currentSession: null,
+        activeSessions: [],
+        inviteCandidates: [],
+        outgoingRequests: [],
+        incomingRequests: [],
+      };
+      getPomodoroCollaborationSnapshot.mockResolvedValueOnce(snapshot);
+
+      await expect(cancelFocusSessionRequestAction({ requestId })).resolves.toEqual({
+        success: true,
+        snapshot,
+      });
+      expect(tx.pomodoroFocusSessionRequest.update).toHaveBeenCalledWith({
+        where: { id: requestId },
+        data: { status: "CANCELLED", respondedAt: expect.any(Date) },
+      });
+      expect(revalidatePath).toHaveBeenCalledWith("/timer");
+    });
+
+    it("rejects bad input, signed-out users, missing requests and outsiders", async () => {
+      const { cancelFocusSessionRequestAction, getCurrentUser, tx } =
+        await loadPomodoroActionsModule();
+
+      await expect(cancelFocusSessionRequestAction({ requestId: "nope" })).resolves.toHaveProperty(
+        "error"
+      );
+
+      getCurrentUser.mockResolvedValueOnce(null);
+      await expect(cancelFocusSessionRequestAction({ requestId })).resolves.toEqual({
+        error: "Not authenticated",
+      });
+
+      getCurrentUser.mockResolvedValueOnce({ id: owner, role: "MEMBER" });
+      tx.pomodoroFocusSessionRequest.findUnique.mockResolvedValueOnce(null);
+      await expect(cancelFocusSessionRequestAction({ requestId })).resolves.toEqual({
+        error: "Request not found",
+      });
+
+      getCurrentUser.mockResolvedValueOnce({ id: owner, role: "MEMBER" });
+      tx.pomodoroFocusSessionRequest.findUnique.mockResolvedValueOnce({
+        id: requestId,
+        status: "ACCEPTED",
+        requesterId: owner,
+        session: { ownerId: owner },
+      });
+      await expect(cancelFocusSessionRequestAction({ requestId })).resolves.toEqual({
+        error: "Request not found",
+      });
+
+      getCurrentUser.mockResolvedValueOnce({
+        id: "99999999-9999-4999-8999-999999999999",
+        role: "MEMBER",
+      });
+      tx.pomodoroFocusSessionRequest.findUnique.mockResolvedValueOnce({
+        id: requestId,
+        status: "PENDING",
+        requesterId: owner,
+        session: { ownerId: owner },
+      });
+      await expect(cancelFocusSessionRequestAction({ requestId })).resolves.toEqual({
+        error: "Only the session owner can cancel an invite",
+      });
+      expect(tx.pomodoroFocusSessionRequest.update).not.toHaveBeenCalled();
+    });
+  });
+
   it("kicks a member from active session", async () => {
     const {
       kickFocusSessionMemberAction,

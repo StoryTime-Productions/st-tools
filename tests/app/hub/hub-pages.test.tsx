@@ -135,6 +135,20 @@ async function loadHub() {
     LiveRefresh: () => null,
   }));
   vi.doMock("@/app/hub/hangouts/[hangoutId]/_components/availability-setup", () => ({
+    EditableSetup: ({
+      summary,
+      defaultOpen,
+      children,
+    }: {
+      summary: React.ReactNode;
+      defaultOpen: boolean;
+      children: React.ReactNode;
+    }) => (
+      <div data-testid="editable-setup" data-open={String(defaultOpen)}>
+        {summary}
+        {children}
+      </div>
+    ),
     AvailabilitySetup: ({ initial }: { initial: { dates: string[]; deadline: string | null } }) => (
       <p data-testid="availability-setup">
         {initial.dates.join(",")} {initial.deadline ?? "no deadline"}
@@ -164,6 +178,11 @@ async function loadHub() {
     ),
   }));
   vi.doMock("@/app/hub/hangouts/[hangoutId]/_components/costs", () => ({
+    CostDialog: ({ members, goingIds }: { members: unknown[]; goingIds: string[] }) => (
+      <button type="button">
+        Add cost {members.length} {goingIds.length}
+      </button>
+    ),
     Costs: ({
       items,
       members,
@@ -191,6 +210,7 @@ async function loadHub() {
     ),
   }));
   vi.doMock("@/app/hub/hangouts/[hangoutId]/_components/itinerary", () => ({
+    StopDialog: () => <button type="button">Add stop</button>,
     Itinerary: ({ stops, canEdit }: { stops: unknown[]; canEdit: boolean }) => (
       <p data-testid="itinerary">
         {stops.length} {canEdit ? "editable" : "read-only"}
@@ -203,11 +223,8 @@ async function loadHub() {
         {total} {canLock ? "lockable" : "view-only"}
       </p>
     ),
-    LockedIn: ({ startSlot, canReopen }: { startSlot: string; canReopen: boolean }) => (
-      <p data-testid="locked-in">
-        {startSlot} {canReopen ? "reopenable" : "fixed"}
-      </p>
-    ),
+    LockedIn: ({ startSlot }: { startSlot: string }) => <p data-testid="locked-in">{startSlot}</p>,
+    ReopenAvailability: () => <button type="button">Reopen availability</button>,
   }));
   vi.doMock("@/app/hub/ideas/_components/idea-actions", () => ({
     IdeaActions: ({ title }: { title: string }) => <button type="button">Promote {title}</button>,
@@ -346,7 +363,7 @@ describe("hub pages", () => {
     expect(screen.getByTestId("project-boards")).toHaveTextContent("member");
     expect(lib.getProjectWork).toHaveBeenCalledWith("p1", member);
     expect(screen.getByText(/Members of this project/)).toBeInTheDocument();
-    expect(screen.getByText("No unassigned cards.")).toBeInTheDocument();
+    expect(screen.getByText(/No unassigned cards\./)).toBeInTheDocument();
 
     lib.getProjectDetail.mockResolvedValueOnce(null);
     await expect(ProjectPage({ params: Promise.resolve({ projectId: "nope" }) })).rejects.toThrow(
@@ -375,8 +392,8 @@ describe("hub pages", () => {
 
     expect(screen.getByTestId("admin-controls")).toHaveTextContent("web");
     expect(screen.getByText("No initiative")).toBeInTheDocument();
-    expect(screen.getByText("No phases yet.")).toBeInTheDocument();
-    expect(screen.getByText("No links yet.")).toBeInTheDocument();
+    expect(screen.getByText("No phases yet. Add them from Edit project.")).toBeInTheDocument();
+    expect(screen.getByText("No links yet. Add them from Edit project.")).toBeInTheDocument();
     expect(screen.getByTestId("project-boards")).toHaveTextContent("admin");
   });
 
@@ -395,6 +412,13 @@ describe("hub pages", () => {
           dueDate: new Date("2026-10-01T16:00:00Z"),
         },
         { id: "c2", title: "Undated", boardId: "b1", boardTitle: "Art", dueDate: null },
+        {
+          id: "c3",
+          title: "Far ahead",
+          boardId: "b1",
+          boardTitle: "Art",
+          dueDate: new Date("2099-01-05T16:00:00Z"),
+        },
       ],
       accessRequests: [],
     });
@@ -407,7 +431,8 @@ describe("hub pages", () => {
       "href",
       "/boards/b1?card=c1"
     );
-    expect(screen.getByText("Due Oct 1")).toBeInTheDocument();
+    expect(screen.getByText("Overdue · Oct 1")).toBeInTheDocument();
+    expect(screen.getByText("Due Jan 5")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Undated/ })).not.toHaveTextContent("Due");
   });
 
@@ -451,7 +476,9 @@ describe("hub pages", () => {
     expect(screen.getByRole("button", { name: "Edit Beach day" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel hangout" })).toBeInTheDocument();
     expect(screen.getByTestId("hangout-cover")).toHaveTextContent("editable");
-    expect(screen.getByTestId("itinerary")).toHaveTextContent("0 editable");
+    // Nothing under the Itinerary header until there are stops or the time is locked in.
+    expect(screen.getByRole("button", { name: "Add stop" })).toBeInTheDocument();
+    expect(screen.queryByTestId("itinerary")).not.toBeInTheDocument();
     admins.unmount();
 
     hangouts.getHangoutDetail.mockResolvedValueOnce({
@@ -465,6 +492,7 @@ describe("hub pages", () => {
     render(await HangoutPage(params()));
     expect(screen.getByText("Cancelled")).toBeInTheDocument();
     expect(screen.getByTestId("itinerary")).toHaveTextContent("1 read-only");
+    expect(screen.getByText(/This hangout was cancelled/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cancel hangout" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Discord thread" })).not.toBeInTheDocument();
 
@@ -483,7 +511,8 @@ describe("hub pages", () => {
 
     getCurrentUser.mockResolvedValue(admin);
     const admins = render(await HangoutPage(params()));
-    expect(screen.getByTestId("costs")).toHaveTextContent("0 1 0 estimate editable");
+    expect(screen.getByRole("button", { name: "Add cost 1 0" })).toBeInTheDocument();
+    expect(screen.queryByTestId("costs")).not.toBeInTheDocument();
     admins.unmount();
 
     getCurrentUser.mockResolvedValue(member);
@@ -496,7 +525,7 @@ describe("hub pages", () => {
         { userId: "u1", name: "Ann", status: "GOING" },
         { userId: "u2", name: "Bo", status: "MAYBE" },
       ],
-      costs: [{ id: "c1" }],
+      costs: [{ id: "c1", shares: [] }],
     });
     render(await HangoutPage(params()));
     expect(screen.getByTestId("costs")).toHaveTextContent("1 0 1 scheduled read-only");
@@ -510,7 +539,10 @@ describe("hub pages", () => {
 
     getCurrentUser.mockResolvedValue(member);
     const empty = render(await IdeasPage());
-    expect(screen.getByText("No ideas yet.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: "No ideas yet" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Ideas" })).toBeInTheDocument();
+    expect(screen.getByText("/idea")).toBeInTheDocument();
+    expect(screen.queryByText(/Promoted ideas become hangouts/)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Ideas" })).toHaveAttribute("aria-current", "page");
     expect(screen.queryByText(/Promote one/)).not.toBeInTheDocument();
     empty.unmount();
@@ -571,8 +603,9 @@ describe("hub pages", () => {
 
     hangouts.getHangoutDetail.mockResolvedValueOnce(setUp);
     const summary = render(await HangoutPage(params()));
-    expect(screen.getByText("Fri, Oct 2, Sat, Oct 3")).toBeInTheDocument();
-    expect(screen.getByText("6 PM – 10 PM EST · Fill in by Oct 1, 6:00 PM")).toBeInTheDocument();
+    expect(screen.queryByText("Fri, Oct 2, Sat, Oct 3")).toBeNull();
+    expect(screen.getByText("Window: 6 PM – 10 PM EST")).toBeInTheDocument();
+    expect(screen.getByText("Closed Oct 1, 6:00 PM")).toBeInTheDocument();
     expect(screen.getByTestId("availability-grid")).toHaveTextContent("m@storytime.gg 1 editable");
     expect(screen.getByTestId("ranked-slots")).toHaveTextContent("1 view-only");
     expect(hangouts.getAvailabilityResponses).toHaveBeenCalledWith("h1");
@@ -580,7 +613,7 @@ describe("hub pages", () => {
 
     hangouts.getHangoutDetail.mockResolvedValueOnce({ ...setUp, availabilityDeadline: null });
     const noDeadline = render(await HangoutPage(params()));
-    expect(screen.getByText("6 PM – 10 PM EST")).toBeInTheDocument();
+    expect(screen.getByText("Window: 6 PM – 10 PM EST")).toBeInTheDocument();
     noDeadline.unmount();
 
     getCurrentUser.mockResolvedValue(admin);
@@ -610,7 +643,8 @@ describe("hub pages", () => {
     expect(screen.getAllByTestId("availability-setup")).toHaveLength(1);
     expect(screen.getAllByTestId("availability-grid").at(-1)).toHaveTextContent("read-only");
     expect(screen.getAllByTestId("ranked-slots")).toHaveLength(1);
-    expect(screen.getByTestId("locked-in")).toHaveTextContent("2026-10-02T19:00 reopenable");
+    expect(screen.getByTestId("locked-in")).toHaveTextContent("2026-10-02T19:00");
+    expect(screen.getByRole("button", { name: "Reopen availability" })).toBeInTheDocument();
     expect(screen.getByTestId("carpools")).toHaveTextContent("0 not going");
     expect(screen.getByTestId("commute-map")).toHaveTextContent("no key");
     expect(screen.getByText("Commute map")).toBeInTheDocument();
@@ -658,9 +692,43 @@ describe("hub pages", () => {
     expect(screen.getByText("Settling up")).toBeInTheDocument();
     expect(screen.getByText("2 unpaid")).toBeInTheDocument();
     expect(screen.getByTestId("itinerary")).toHaveTextContent("0 read-only");
-    expect(screen.getByTestId("locked-in")).not.toHaveTextContent("reopenable");
+    expect(screen.queryByRole("button", { name: "Reopen availability" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel hangout" })).toBeInTheDocument();
     settling.unmount();
+
+    // Money matters once it is over: Costs leads the page, the badge says what is waiting, and the
+    // viewer's own balance is on the card.
+    hangouts.getHangoutDetail.mockResolvedValueOnce({
+      ...ended,
+      phase: "SETTLING_UP",
+      unpaid: 3,
+      costs: [
+        {
+          id: "c1",
+          shares: [
+            { userId: "x", status: "SENT", amountCents: 1000, paidCents: 1000 },
+            { userId: "y", status: "UNPAID", amountCents: 1000, paidCents: 0 },
+            { userId: admin.id, status: "UNPAID", amountCents: 1500, paidCents: 0 },
+          ],
+        },
+      ],
+    });
+    const money = render(await HangoutPage(params()));
+    expect(screen.getByRole("link", { name: "2 unpaid · 1 to confirm" })).toHaveAttribute(
+      "href",
+      "#costs"
+    );
+    expect(screen.getByText("You owe $15.00")).toBeInTheDocument();
+    const title = { selector: '[data-slot="card-title"]' };
+    const costsAt = screen.getByText("Costs", title);
+    const availabilityAt = screen.getByText("Availability", title);
+    expect(
+      costsAt.compareDocumentPosition(availabilityAt) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(screen.getAllByRole("link", { name: /Costs|Availability/ })[0]).toHaveTextContent(
+      "Costs"
+    );
+    money.unmount();
 
     hangouts.getHangoutDetail.mockResolvedValueOnce({ ...ended, phase: "DONE", unpaid: 0 });
     render(await HangoutPage(params()));

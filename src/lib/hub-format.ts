@@ -104,3 +104,19 @@ export function groupByInitiative<T extends Groupable>(projects: T[]): ProjectGr
     .sort((a, b) => (a === "" ? 1 : b === "" ? -1 : a.localeCompare(b)))
     .map((key) => ({ label: key || "No initiative", projects: groups.get(key)! }));
 }
+
+/** True when a due date (stored as a UTC day) is before the start of today. */
+export function isPastDue(due: Date, now: Date = new Date()): boolean {
+  return due.getTime() < Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+}
+
+/** "Due Oct 3", or "Overdue · Oct 3" when the day has passed. `due` is a YYYY-MM-DD day key. */
+export function formatDueLabel(due: string, now: Date = new Date()): string {
+  const date = new Date(`${due.slice(0, 10)}T00:00:00Z`);
+  const label = date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+  return isPastDue(date, now) ? `Overdue · ${label}` : `Due ${label}`;
+}

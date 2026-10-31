@@ -100,12 +100,12 @@ export function toRgba(hexColor: string, alpha: number): string {
 }
 
 export function incrementStats(previous: PomodoroStatsSnapshot): PomodoroStatsSnapshot {
-  const nextLast7Days = [...previous.last7Days];
-  const lastIndex = nextLast7Days.length - 1;
+  const nextWeekDays = [...previous.weekDays];
+  const todayIndex = nextWeekDays.findIndex((day) => day.isToday);
 
-  if (lastIndex >= 0) {
-    const day = nextLast7Days[lastIndex];
-    nextLast7Days[lastIndex] = {
+  if (todayIndex >= 0) {
+    const day = nextWeekDays[todayIndex];
+    nextWeekDays[todayIndex] = {
       ...day,
       count: day.count + 1,
     };
@@ -115,7 +115,7 @@ export function incrementStats(previous: PomodoroStatsSnapshot): PomodoroStatsSn
     todayCount: previous.todayCount + 1,
     weekCount: previous.weekCount + 1,
     totalCount: previous.totalCount + 1,
-    last7Days: nextLast7Days,
+    weekDays: nextWeekDays,
   };
 }
 

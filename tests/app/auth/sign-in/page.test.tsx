@@ -38,14 +38,41 @@ describe("SignInPage", () => {
   });
 
   it("shows initial server error from query params", () => {
-    navigationState.error = "Session expired";
+    navigationState.error = "confirm";
     render(<SignInPage />);
 
-    expect(screen.getByText("Session expired")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "We couldn't confirm your account. Request a new link and try again."
+    );
+  });
+
+  it("ignores unknown or crafted error codes in the URL", () => {
+    navigationState.error = "Your account is locked, call 555-0100";
+    render(<SignInPage />);
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText(/555-0100/)).not.toBeInTheDocument();
+  });
+
+  it("links to the forgot password page", () => {
+    render(<SignInPage />);
+
+    expect(screen.getByRole("link", { name: "Forgot password?" })).toHaveAttribute(
+      "href",
+      "/auth/forgot-password"
+    );
+  });
+
+  it("has one level 1 heading and autocomplete hints", () => {
+    render(<SignInPage />);
+
+    expect(screen.getByRole("heading", { level: 1, name: "Sign in" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Email")).toHaveAttribute("autocomplete", "email");
+    expect(screen.getByLabelText("Password")).toHaveAttribute("autocomplete", "current-password");
   });
 
   it("submits credentials and shows server-side sign-in errors", async () => {
-    actionMocks.signInAction.mockResolvedValueOnce({ error: "Invalid login credentials" });
+    actionMocks.signInAction.mockResolvedValueOnce({ error: "Wrong email or password." });
     render(<SignInPage />);
 
     fireEvent.change(screen.getByLabelText("Email"), {
@@ -63,7 +90,7 @@ describe("SignInPage", () => {
       });
     });
 
-    expect(screen.getByText("Invalid login credentials")).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Wrong email or password.");
   });
 
   it("starts discord sign-in from the discord button", async () => {
@@ -82,9 +109,6 @@ describe("SignInPage", () => {
     fireEvent.change(screen.getByLabelText("Email"), {
       target: { value: "valid@example.com" },
     });
-    fireEvent.change(screen.getByLabelText("Password"), {
-      target: { value: "short" },
-    });
     const submitButton = screen.getByRole("button", { name: /^sign in$/i });
     const signInForm = submitButton.closest("form");
 
@@ -94,7 +118,7 @@ describe("SignInPage", () => {
 
     fireEvent.submit(signInForm);
 
-    expect(await screen.findByText("Password must be at least 8 characters")).toBeInTheDocument();
+    expect(await screen.findByText("Enter your password")).toBeInTheDocument();
     expect(actionMocks.signInAction).not.toHaveBeenCalled();
   });
 });

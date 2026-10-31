@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { signInAction, signInWithGoogleAction, signInWithDiscordAction } from "@/app/actions/auth";
+import { callbackErrorMessage } from "@/lib/auth-errors";
+import { AuthError } from "../_components/auth-error";
+import { OrDivider } from "../_components/or-divider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,14 +24,16 @@ import {
 
 const schema = z.object({
   email: z.string().email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  password: z.string().min(1, "Enter your password"),
 });
 
 type FormValues = z.infer<typeof schema>;
 
 export default function SignInPage() {
   const searchParams = useSearchParams();
-  const [serverError, setServerError] = useState<string | null>(searchParams.get("error"));
+  const [serverError, setServerError] = useState<string | null>(
+    callbackErrorMessage(searchParams.get("error"))
+  );
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -45,20 +49,12 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="w-full max-w-md space-y-4">
-      <div className="flex justify-center">
-        <Image
-          src="/icon.jpg"
-          alt="StoryTime Tools"
-          width={64}
-          height={64}
-          className="size-16 rounded-2xl object-cover"
-        />
-      </div>
-
+    <div className="w-full max-w-md">
       <Card className="border-border/70 bg-background/95 w-full rounded-3xl shadow-none">
         <CardHeader>
-          <CardTitle className="text-2xl">Sign in</CardTitle>
+          <CardTitle className="text-2xl" role="heading" aria-level={1}>
+            Sign in
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -70,7 +66,12 @@ export default function SignInPage() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="you@example.com" {...field} />
+                      <Input
+                        type="email"
+                        autoComplete="email"
+                        placeholder="you@example.com"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -81,29 +82,35 @@ export default function SignInPage() {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Password</FormLabel>
+                    <div className="flex items-center justify-between gap-2">
+                      <FormLabel>Password</FormLabel>
+                      <Link
+                        href="/auth/forgot-password"
+                        className="text-foreground -my-3 inline-flex min-h-11 items-center text-sm underline underline-offset-4 hover:no-underline"
+                      >
+                        Forgot password?
+                      </Link>
+                    </div>
                     <FormControl>
-                      <Input type="password" placeholder="Your password" {...field} />
+                      <Input
+                        type="password"
+                        autoComplete="current-password"
+                        placeholder="Your password"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              {serverError && <p className="text-destructive text-sm">{serverError}</p>}
+              <AuthError message={serverError} />
               <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? "Signing in…" : "Sign in"}
               </Button>
             </form>
           </Form>
 
-          <div className="relative my-4">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card text-muted-foreground px-2">or</span>
-            </div>
-          </div>
+          <OrDivider />
 
           <form
             action={async () => {
@@ -148,7 +155,10 @@ export default function SignInPage() {
         </CardContent>
         <CardFooter className="text-muted-foreground border-border/60 justify-center border-t text-sm">
           Don&apos;t have an account?&nbsp;
-          <Link href="/auth/sign-up" className="text-foreground underline-offset-4 hover:underline">
+          <Link
+            href="/auth/sign-up"
+            className="text-foreground inline-flex min-h-11 items-center underline underline-offset-4 hover:no-underline"
+          >
             Sign up
           </Link>
         </CardFooter>

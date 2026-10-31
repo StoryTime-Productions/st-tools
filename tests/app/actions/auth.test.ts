@@ -9,6 +9,10 @@ function buildSupabaseClient() {
       signInWithOAuth: vi.fn(),
       signInWithPassword: vi.fn(),
       signOut: vi.fn(),
+      resetPasswordForEmail: vi.fn(),
+      getUser: vi.fn(),
+      getClaims: vi.fn(),
+      updateUser: vi.fn(),
     },
   };
 }
@@ -119,7 +123,7 @@ describe("auth actions", () => {
       confirmPassword: "password123",
     });
 
-    expect(result).toEqual({ error: "Sign-up failed" });
+    expect(result).toEqual({ error: "We couldn't create your account. Try again." });
     expect(supabase.auth.signUp).toHaveBeenCalledWith(
       expect.objectContaining({
         options: expect.objectContaining({
@@ -149,7 +153,7 @@ describe("auth actions", () => {
 
     const result = await signInWithGoogleAction();
 
-    expect(result).toEqual({ error: "OAuth unavailable" });
+    expect(result).toEqual({ error: "We couldn't start sign-in with Google. Try again." });
     expect(supabase.auth.signInWithOAuth).toHaveBeenCalledWith(
       expect.objectContaining({
         options: expect.objectContaining({
@@ -179,7 +183,7 @@ describe("auth actions", () => {
 
     const result = await signInWithGoogleAction();
 
-    expect(result).toEqual({ error: "Provider unavailable" });
+    expect(result).toEqual({ error: "We couldn't start sign-in with Google. Try again." });
     expect(supabase.auth.signInWithOAuth).toHaveBeenCalledWith(
       expect.objectContaining({
         options: expect.objectContaining({
@@ -282,17 +286,31 @@ describe("auth actions", () => {
     const supabase = buildSupabaseClient();
     createClient.mockResolvedValue(supabase);
 
-    await expect(signInAction({ email: "user@example.com", password: "short" })).resolves.toEqual({
-      error: "Password must be at least 8 characters",
+    await expect(signInAction({ email: "user@example.com", password: "" })).resolves.toEqual({
+      error: "Enter your password",
     });
 
     supabase.auth.signInWithPassword.mockResolvedValueOnce({
-      error: { message: "Invalid login credentials" },
+      error: { message: "Invalid login credentials", code: "invalid_credentials" },
     });
 
     await expect(
       signInAction({ email: "user@example.com", password: "password123" })
-    ).resolves.toEqual({ error: "Invalid login credentials" });
+    ).resolves.toEqual({ error: "Wrong email or password." });
+
+    for (const [code, message] of [
+      ["email_not_confirmed", "Confirm your email first. Check your inbox for the link."],
+      ["over_request_rate_limit", "Too many attempts. Wait a few minutes and try again."],
+      ["over_email_send_rate_limit", "Too many attempts. Wait a few minutes and try again."],
+      ["unexpected_failure", "We couldn't sign you in. Try again."],
+    ]) {
+      supabase.auth.signInWithPassword.mockResolvedValueOnce({
+        error: { message: "raw server text that must never reach the user", code },
+      });
+      await expect(
+        signInAction({ email: "user@example.com", password: "password123" })
+      ).resolves.toEqual({ error: message });
+    }
 
     supabase.auth.signInWithPassword.mockResolvedValueOnce({ error: null });
 
@@ -333,6 +351,122 @@ describe("auth actions", () => {
     expect(redirect).toHaveBeenCalledWith("https://discord.com/oauth2/authorize");
   });
 
+  it("asks Supabase for a reset email and always answers the same way", async () => {
+    const { requestPasswordResetAction, createClient } = await loadAuthModule();
+    const supabase = buildSupabaseClient();
+    createClient.mockResolvedValue(supabase);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(requestPasswordResetAction({ email: "not an email" })).resolves.toEqual({
+      error: "Invalid email address",
+    });
+    expect(supabase.auth.resetPasswordForEmail).not.toHaveBeenCalled();
+
+    supabase.auth.resetPasswordForEmail.mockResolvedValueOnce({ error: null });
+    await expect(requestPasswordResetAction({ email: "user@example.com" })).resolves.toEqual({
+      success: true,
+    });
+    expect(supabase.auth.resetPasswordForEmail).toHaveBeenCalledWith("user@example.com", {
+      redirectTo: "https://example.com/auth/callback?next=/auth/reset-password",
+    });
+
+    // an unknown account and an unexpected failure look identical to the user
+    supabase.auth.resetPasswordForEmail.mockResolvedValueOnce({
+      error: { message: "User not found", code: "user_not_found" },
+    });
+    await expect(requestPasswordResetAction({ email: "nobody@example.com" })).resolves.toEqual({
+      success: true,
+    });
+    expect(errorSpy).toHaveBeenCalledWith("Failed to request a password reset", expect.anything());
+
+    for (const code of ["over_request_rate_limit", "over_email_send_rate_limit"]) {
+      supabase.auth.resetPasswordForEmail.mockResolvedValueOnce({
+        error: { message: "slow down", code },
+      });
+      await expect(requestPasswordResetAction({ email: "user@example.com" })).resolves.toEqual({
+        error: "Too many attempts. Wait a few minutes and try again.",
+      });
+    }
+    errorSpy.mockRestore();
+  });
+
+  it("updates the password for a signed-in recovery session", async () => {
+    const { updatePasswordAction, createClient, redirect } = await loadAuthModule();
+    const supabase = buildSupabaseClient();
+    createClient.mockResolvedValue(supabase);
+    const values = { password: "newpassword1", confirmPassword: "newpassword1" };
+
+    await expect(
+      updatePasswordAction({ password: "short", confirmPassword: "short" })
+    ).resolves.toEqual({ error: "Password must be at least 8 characters" });
+    await expect(
+      updatePasswordAction({ password: "newpassword1", confirmPassword: "different1" })
+    ).resolves.toEqual({ error: "Passwords do not match" });
+
+    supabase.auth.getUser.mockResolvedValueOnce({ data: { user: null } });
+    await expect(updatePasswordAction(values)).resolves.toEqual({
+      error: "This reset link has expired. Request a new one.",
+    });
+    expect(supabase.auth.updateUser).not.toHaveBeenCalled();
+
+    supabase.auth.getUser.mockResolvedValue({ data: { user: { id: "u-1" } } });
+
+    // an ordinary signed-in session (password sign-in) cannot change the password this way
+    supabase.auth.getClaims.mockResolvedValueOnce({
+      data: { claims: { amr: [{ method: "password", timestamp: Date.now() / 1000 }] } },
+    });
+    await expect(updatePasswordAction(values)).resolves.toEqual({
+      error: "This reset link has expired. Request a new one.",
+    });
+    expect(supabase.auth.updateUser).not.toHaveBeenCalled();
+
+    supabase.auth.getClaims.mockResolvedValue({
+      data: { claims: { amr: [{ method: "otp", timestamp: Date.now() / 1000 }] } },
+    });
+    for (const [code, message] of [
+      ["same_password", "Choose a different password from your current one."],
+      ["weak_password", "Choose a stronger password."],
+      ["over_request_rate_limit", "Too many attempts. Wait a few minutes and try again."],
+      ["unexpected_failure", "We couldn't update your password. Try again."],
+    ]) {
+      supabase.auth.updateUser.mockResolvedValueOnce({
+        error: { message: "raw server text that must never reach the user", code },
+      });
+      await expect(updatePasswordAction(values)).resolves.toEqual({ error: message });
+    }
+    expect(redirect).not.toHaveBeenCalled();
+
+    supabase.auth.updateUser.mockResolvedValueOnce({ error: null });
+    await updatePasswordAction(values);
+    expect(supabase.auth.updateUser).toHaveBeenLastCalledWith({ password: "newpassword1" });
+    expect(redirect).toHaveBeenCalledWith("/dashboard");
+  });
+
+  it("maps sign-up error codes to fixed messages", async () => {
+    const { signUpAction, createClient } = await loadAuthModule();
+    const supabase = buildSupabaseClient();
+    createClient.mockResolvedValue(supabase);
+    const values = {
+      email: "new@example.com",
+      password: "password123",
+      confirmPassword: "password123",
+    };
+
+    for (const [code, message] of [
+      ["user_already_exists", "An account with that email already exists. Try signing in."],
+      ["email_exists", "An account with that email already exists. Try signing in."],
+      ["weak_password", "Choose a stronger password."],
+      ["over_request_rate_limit", "Too many attempts. Wait a few minutes and try again."],
+      ["over_email_send_rate_limit", "Too many attempts. Wait a few minutes and try again."],
+    ]) {
+      supabase.auth.signUp.mockResolvedValueOnce({
+        data: { session: null, user: null },
+        error: { message: "raw server text that must never reach the user", code },
+      });
+      await expect(signUpAction(values)).resolves.toEqual({ error: message });
+    }
+  });
+
   it("returns the provider error when discord oauth fails", async () => {
     const { signInWithDiscordAction, createClient } = await loadAuthModule();
     const supabase = buildSupabaseClient();
@@ -343,7 +477,9 @@ describe("auth actions", () => {
       error: { message: "Discord disabled" },
     });
 
-    expect(await signInWithDiscordAction()).toEqual({ error: "Discord disabled" });
+    expect(await signInWithDiscordAction()).toEqual({
+      error: "We couldn't start sign-in with Discord. Try again.",
+    });
   });
 
   it("signs out and redirects to sign-in", async () => {

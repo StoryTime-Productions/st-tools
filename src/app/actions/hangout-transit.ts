@@ -35,21 +35,43 @@ async function place(
 }
 
 /**
- * Marks the caller as taking public transit for one direction (R4). The start is where they set
- * off from (getting there) or from (getting home); getting home also needs where they end up.
- * Choosing transit takes them off that direction's car lists (AC6).
+ * Where getting home starts: the chosen stop of this hangout, or its last stop with an address.
+ * Only the hangout's own stops are allowed, so someone can leave early from an earlier one.
+ */
+async function stopPlace(
+  hangoutId: string,
+  stopId: string | null | undefined,
+  home: { homeAddress: string | null; homeLat: number | null; homeLon: number | null }
+) {
+  const stop = await prisma.hangoutStop.findFirst({
+    where: { hangoutId, address: { not: null }, ...(stopId ? { id: stopId } : {}) },
+    orderBy: { position: "desc" },
+    select: { address: true, lat: true, lon: true },
+  });
+  if (!stop?.address) return "no-stop" as const;
+  if (stop.lat !== null && stop.lon !== null)
+    return { address: stop.address, lat: stop.lat, lon: stop.lon };
+  return place(stop.address, home);
+}
+
+/**
+ * Marks the caller as taking public transit for one direction (R4). Getting there starts from the
+ * address they give; getting home starts at one of the hangout's stops (the last by default) and
+ * needs where they end up. Choosing transit takes them off that direction's car lists (AC6).
  */
 export async function setTransitAction(
   hangoutId: string,
   rideDirection: RideDirection,
-  values: { start: string; destination?: string | null }
+  values: { start?: string; startStopId?: string | null; destination?: string | null }
 ): Promise<TransitActionResult> {
   if (!uuid.safeParse(hangoutId).success) return { error: "Hangout not found" };
   const parsedDirection = direction.safeParse(rideDirection);
-  const start = address.safeParse(values.start);
+  const start = address.safeParse(values.start ?? "");
   if (!parsedDirection.success) return { error: "That isn't a valid trip" };
-  if (!start.success) return { error: start.error.issues[0].message };
   const needsDestination = rideDirection === RideDirection.DROPOFF;
+  if (!needsDestination && !start.success) return { error: start.error.issues[0].message };
+  if (values.startStopId && !uuid.safeParse(values.startStopId).success)
+    return { error: "That stop isn't part of this hangout" };
   const destination = needsDestination ? address.safeParse(values.destination ?? "") : null;
   if (destination && !destination.success) return { error: destination.error.issues[0].message };
 
@@ -59,7 +81,12 @@ export async function setTransitAction(
   if (await prisma.hangoutCar.findFirst({ where: { hangoutId, driverId: user.id } }))
     return { error: "You're driving your own car" };
 
-  const from = await place(start.data, user);
+  const from = needsDestination
+    ? await stopPlace(hangoutId, values.startStopId, user)
+    : start.success
+      ? await place(start.data, user)
+      : null;
+  if (from === "no-stop") return { error: "Pick a hangout stop that has an address" };
   const to = destination?.success ? await place(destination.data, user) : null;
   if (!from || (destination && !to)) return { error: "Couldn't find that address" };
 

@@ -374,7 +374,7 @@ describe("hangout actions", () => {
     mod.prisma.hangoutAvailability.findMany.mockResolvedValue([
       { userId: member.id, slots: ["2026-10-03T10:00", "2026-10-04T10:00"] },
       { userId: admin.id, slots: ["2026-10-03T11:00"] },
-      { userId: "kept", slots: ["2026-10-03T10:45"] },
+      { userId: "kept", slots: ["2026-10-03T10:30"] },
     ]);
 
     await expect(mod.setAvailabilitySetupAction(setup)).resolves.toEqual({ confirmDrop: 2 });
@@ -440,8 +440,8 @@ describe("hangout actions", () => {
       windowStartHour: 10,
       windowEndHour: 11,
       availability: [
-        { userId: admin.id, slots: ["2026-10-03T10:00", "2026-10-03T10:15"] },
-        { userId: member.id, slots: ["2026-10-03T10:15"] },
+        { userId: admin.id, slots: ["2026-10-03T10:00", "2026-10-03T10:30"] },
+        { userId: member.id, slots: ["2026-10-03T10:30"] },
       ],
     });
 
@@ -465,12 +465,12 @@ describe("hangout actions", () => {
     expect(mod.revalidatePath).toHaveBeenCalledWith(`/hub/hangouts/${HANGOUT_ID}`);
 
     await expect(
-      mod.lockInHangoutAction({ hangoutId: HANGOUT_ID, slot: "2026-10-03T10:30" })
+      mod.lockInHangoutAction({ hangoutId: HANGOUT_ID, slot: "2026-10-03T10:15" })
     ).resolves.toEqual({ error: "That time is no longer a top option" });
 
     mod.prisma.hangout.updateMany.mockResolvedValueOnce({ count: 0 });
     await expect(
-      mod.lockInHangoutAction({ hangoutId: HANGOUT_ID, slot: "2026-10-03T10:15" })
+      mod.lockInHangoutAction({ hangoutId: HANGOUT_ID, slot: "2026-10-03T10:30" })
     ).resolves.toEqual({ error: "Hangout not found or no longer collecting availability" });
 
     mod.prisma.hangout.findUnique.mockResolvedValue({ status: "SCHEDULED" });

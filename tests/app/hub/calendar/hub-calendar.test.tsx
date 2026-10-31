@@ -51,12 +51,13 @@ describe("HubCalendar", () => {
     expect(heading()).toBe("September 2026");
     expect(screen.getByRole("button", { name: "Month" })).toHaveAttribute("aria-pressed", "true");
     expect(
-      within(screen.getByRole("list", { name: "Projects" })).getAllByRole("listitem")
+      within(screen.getByRole("list", { name: "Legend" })).getAllByRole("listitem")
     ).toHaveLength(2);
     expect(
       within(screen.getByLabelText("September 29")).getByText("Record trailer")
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Channel art" })).toHaveClass("line-through");
+    expect(screen.getByRole("button", { name: /Channel art/ })).toHaveClass("line-through");
+    expect(screen.getByRole("button", { name: /Channel art/ })).not.toHaveClass("opacity-75");
     expect(screen.queryByText("Release notes")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Record trailer" }));
@@ -71,7 +72,7 @@ describe("HubCalendar", () => {
 
   it("marks finished cards and unassigned ones in the popover", () => {
     render(<HubCalendar cards={CARDS} hangouts={[]} today="2026-09-27" />);
-    fireEvent.click(screen.getByRole("button", { name: "Channel art" }));
+    fireEvent.click(screen.getByRole("button", { name: /Channel art/ }));
     const popover = screen.getByRole("dialog", { name: "Channel art" });
     expect(popover).toHaveTextContent("Unassigned");
     expect(popover).toHaveTextContent("Finished");
@@ -118,7 +119,7 @@ describe("HubCalendar", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Agenda" }));
     expect(screen.getAllByRole("listitem").map((item) => item.textContent)).toContain(
-      "Thursday, September 24Channel art"
+      "Thursday, September 24Channel art (finished)"
     );
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "p1" } });
     expect(screen.getByText("Nothing due this month.")).toBeInTheDocument();
@@ -151,9 +152,9 @@ describe("HubCalendar", () => {
     ];
     render(<HubCalendar cards={CARDS} hangouts={hangouts} today="2026-09-27" />);
 
-    expect(
-      within(screen.getByRole("list", { name: "Projects" })).getByText("Hangouts")
-    ).toBeInTheDocument();
+    const legend = within(screen.getByRole("list", { name: "Legend" }));
+    expect(legend.getByText("Confirmed hangout")).toBeInTheDocument();
+    expect(legend.getByText("Possible date")).toBeInTheDocument();
     const locked = within(screen.getByLabelText("September 26")).getByRole("button", {
       name: "7:30 PM Board games",
     });
@@ -184,5 +185,82 @@ describe("HubCalendar", () => {
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "p2" } });
     expect(screen.queryByText("Board games", { exact: false })).not.toBeInTheDocument();
     expect(screen.getByText("Record trailer")).toBeInTheDocument();
+  });
+  describe("on a phone (day markers and a day sheet)", () => {
+    const hangouts: CalendarHangout[] = [
+      {
+        id: "h1",
+        title: "Board games",
+        status: "SCHEDULED",
+        startSlot: "2026-09-29T19:30",
+        days: ["2026-09-29"],
+        goingCount: 3,
+      },
+      {
+        id: "h2",
+        title: "Karaoke",
+        status: "COLLECTING",
+        startSlot: null,
+        days: ["2026-09-29", "2026-09-30"],
+        goingCount: 0,
+      },
+    ];
+
+    it("lists a day's items under the grid with what each one is, confirmed ones first", () => {
+      render(<HubCalendar cards={CARDS} hangouts={hangouts} today="2026-09-27" />);
+
+      const day = screen.getByRole("button", { name: "September 29, 3 items" });
+      expect(day).toHaveAttribute("aria-pressed", "false");
+      fireEvent.click(day);
+      expect(day).toHaveAttribute("aria-pressed", "true");
+
+      const sheet = screen.getByRole("region", { name: /Tue, Sep 29 · 3 items/ });
+      const rows = within(sheet).getAllByRole("link");
+      expect(rows.map((row) => row.textContent)).toEqual([
+        "7:30 PMBoard gamesConfirmed hangout · 3 going",
+        "DueRecord trailerCard due · Channel relaunch",
+        "PossibleKaraokePossible date · one of 2",
+      ]);
+      expect(rows[0]).toHaveAttribute("href", "/hub/hangouts/h1");
+      expect(rows[1]).toHaveAttribute("href", "/boards/b1?card=c1");
+    });
+
+    it("says so when nothing is planned and marks finished cards in words", () => {
+      render(<HubCalendar cards={CARDS} hangouts={[]} today="2026-09-27" />);
+
+      expect(screen.getByRole("region", { name: /Sun, Sep 27 · nothing planned/ })).toBeVisible();
+
+      fireEvent.click(screen.getByRole("button", { name: "September 24, 1 item" }));
+      const sheet = screen.getByRole("region", { name: /Thu, Sep 24 · 1 item/ });
+      expect(sheet).toHaveTextContent("Channel art");
+      expect(sheet).toHaveTextContent("Card due · Channel relaunch · Finished");
+    });
+
+    it("caps the markers on a day and moves the selection when stepping months", () => {
+      const busy = ["A", "B", "C", "D", "E"].map((letter, index) =>
+        card({ id: `busy-${index}`, title: `Task ${letter}`, dueDate: "2026-09-29" })
+      );
+      render(<HubCalendar cards={busy} hangouts={[]} today="2026-09-27" />);
+
+      const day = screen.getByRole("button", { name: "September 29, 5 items" });
+      expect(day).toHaveTextContent("29+2");
+
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+      expect(screen.getByRole("region", { name: /Oct \d+ · nothing planned/ })).toBeVisible();
+    });
+
+    it("keeps a project's color the same when other projects appear", () => {
+      const only = render(<HubCalendar cards={[CARDS[2]]} hangouts={[]} today="2026-09-27" />);
+      const first = within(screen.getByRole("list", { name: "Legend" })).getByText("St-tools")
+        .firstElementChild?.className;
+      only.unmount();
+
+      render(<HubCalendar cards={CARDS} hangouts={[]} today="2026-09-27" />);
+      const second = within(screen.getByRole("list", { name: "Legend" })).getByText("St-tools")
+        .firstElementChild?.className;
+
+      expect(first).toBeTruthy();
+      expect(second).toBe(first);
+    });
   });
 });
