@@ -4,7 +4,9 @@ import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { ProjectCover } from "@/app/hub/_components/project-cover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { SegmentedToggle } from "@/components/ui/segmented-toggle";
 import { Button } from "@/components/ui/button";
 import { dayLabel, timeLabel } from "@/lib/calendar";
 import type { HangoutCardInfo } from "@/lib/hangouts";
@@ -17,7 +19,7 @@ import {
   sortBySoonestEnd,
   type ProjectGroup,
 } from "@/lib/hub-format";
-import { linkIcon } from "@/lib/hub-links";
+import { linkIcon, linkLabel } from "@/lib/hub-links";
 
 const VIEWS = [
   { value: "list", label: "List" },
@@ -118,35 +120,6 @@ function isPast(item: Item) {
     : item.hangout.phase === "CANCELLED" || item.hangout.phase === "DONE";
 }
 
-function Toggle<T extends string>({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: ReadonlyArray<{ value: T; label: string }>;
-  value: T;
-  onChange: (next: T) => void;
-}) {
-  return (
-    <div role="group" aria-label={label} className="bg-muted inline-flex rounded-xl p-1">
-      {options.map((option) => (
-        <Button
-          key={option.value}
-          type="button"
-          size="sm"
-          variant={value === option.value ? "default" : "ghost"}
-          aria-pressed={value === option.value}
-          onClick={() => onChange(option.value)}
-        >
-          {option.label}
-        </Button>
-      ))}
-    </div>
-  );
-}
-
 export function ProjectOverview({
   projects,
   hangouts = [],
@@ -166,8 +139,8 @@ export function ProjectOverview({
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
-        <Toggle label="Layout" options={MODES} value={mode} onChange={modeStore.choose} />
-        <Toggle label="View" options={VIEWS} value={view} onChange={viewStore.choose} />
+        <SegmentedToggle label="Layout" options={MODES} value={mode} onChange={modeStore.choose} />
+        <SegmentedToggle label="View" options={VIEWS} value={view} onChange={viewStore.choose} />
         <Button
           type="button"
           size="sm"
@@ -176,6 +149,7 @@ export function ProjectOverview({
           aria-pressed={showPast}
           onClick={() => setShowPast((current) => !current)}
         >
+          {showPast ? <Check aria-hidden="true" className="size-3.5" /> : null}
           Past
         </Button>
       </div>
@@ -259,11 +233,10 @@ const DEADLINE = {
 function hangoutWhen(hangout: HangoutCardInfo) {
   if (hangout.phase === "COLLECTING") {
     const due = hangout.availabilityDeadline ? new Date(hangout.availabilityDeadline) : null;
-    const deadline = due
-      ? due.getTime() < Date.now()
-        ? " · deadline passed"
-        : ` · fill in by ${due.toLocaleString("en-US", DEADLINE)}`
-      : "";
+    const deadline =
+      due && due.getTime() >= Date.now()
+        ? ` · fill in by ${due.toLocaleString("en-US", DEADLINE)}`
+        : "";
     return `${hangout.responded ? "You've responded" : "You haven't responded"}${deadline}`;
   }
   if (hangout.startSlot) {
@@ -271,6 +244,14 @@ function hangoutWhen(hangout: HangoutCardInfo) {
     return `${dayLabel(day, { weekday: "short", month: "short", day: "numeric" })} · ${timeLabel(time)}`;
   }
   return null;
+}
+
+function deadlinePassed(hangout: HangoutCardInfo) {
+  return (
+    hangout.phase === "COLLECTING" &&
+    hangout.availabilityDeadline !== null &&
+    new Date(hangout.availabilityDeadline).getTime() < Date.now()
+  );
 }
 
 function HangoutCard({ hangout }: { hangout: HangoutCardInfo }) {
@@ -284,7 +265,6 @@ function HangoutCard({ hangout }: { hangout: HangoutCardInfo }) {
         <div className="space-y-1">
           <p className="truncate font-medium">{hangout.title}</p>
           <p className="text-muted-foreground text-xs">Hangout</p>
-          {hangoutWhen(hangout) ? <p className="text-sm">{hangoutWhen(hangout)}</p> : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <Badge variant={hangout.phase === "CANCELLED" ? "outline" : "secondary"}>
@@ -297,7 +277,9 @@ function HangoutCard({ hangout }: { hangout: HangoutCardInfo }) {
                 : `${hangout.unpaid} unpaid`}
             </Badge>
           ) : null}
+          {deadlinePassed(hangout) ? <Badge variant="outline">Deadline passed</Badge> : null}
         </div>
+        {hangoutWhen(hangout) ? <p className="text-sm">{hangoutWhen(hangout)}</p> : null}
       </div>
     </Link>
   );
@@ -315,7 +297,7 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
       <div className="min-w-0 flex-1 space-y-2">
         <div className="space-y-1">
           <p className="truncate font-medium">{project.title}</p>
-          <p className="text-muted-foreground truncate text-xs">
+          <p className="text-muted-foreground line-clamp-2 text-xs">
             {project.initiativeName ?? "No initiative"}
             {project.quarterLabel ? ` · ${project.quarterLabel}` : ""}
           </p>
@@ -323,20 +305,34 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
         <div className="flex flex-wrap items-center gap-2">
           {project.currentPhase ? <Badge variant="secondary">{project.currentPhase}</Badge> : null}
           {project.finished ? <Badge variant="outline">Finished</Badge> : null}
-          {project.linkUrls.map((url) => {
-            const Icon = linkIcon(url);
-            return <Icon key={url} className="text-muted-foreground size-4" aria-hidden="true" />;
-          })}
+          {project.linkUrls.length > 0 ? (
+            <span className="flex items-center gap-2">
+              <span className="sr-only">
+                Links: {project.linkUrls.map((url) => linkLabel(url)).join(", ")}
+              </span>
+              {project.linkUrls.map((url, index) => {
+                const Icon = linkIcon(url);
+                return (
+                  <Icon
+                    key={`${url}-${index}`}
+                    className="text-muted-foreground size-4"
+                    aria-hidden="true"
+                  />
+                );
+              })}
+            </span>
+          ) : null}
         </div>
         {project.participants.length > 0 ? (
           <div
+            role="img"
             className="flex items-center -space-x-2"
-            aria-label={`${project.participants.length} participants`}
+            aria-label={`${project.participants.length} ${project.participants.length === 1 ? "participant" : "participants"}: ${project.participants.map((participant) => participant.name).join(", ")}`}
           >
             {project.participants.slice(0, MAX_AVATARS).map((participant) => (
               <Avatar key={participant.id} className="border-background size-7 border-2">
                 <AvatarImage src={participant.avatarUrl ?? undefined} alt="" />
-                <AvatarFallback className="text-[10px]" title={participant.name}>
+                <AvatarFallback className="text-[10px]">
                   {projectInitials(participant.name)}
                 </AvatarFallback>
               </Avatar>

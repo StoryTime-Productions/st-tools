@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { projectInitials } from "@/lib/hub-format";
 import { cn } from "@/lib/utils";
 
@@ -10,6 +13,9 @@ export function ProjectCover({
   coverImageUrl: string | null;
   className?: string;
 }) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const showImage = coverImageUrl && failedUrl !== coverImageUrl;
+
   return (
     <div
       className={cn(
@@ -18,9 +24,14 @@ export function ProjectCover({
       )}
       aria-hidden="true"
     >
-      {coverImageUrl ? (
+      {showImage ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={coverImageUrl} alt="" className="size-full object-cover" />
+        <img
+          src={coverImageUrl}
+          alt=""
+          className="size-full object-cover dark:brightness-90"
+          onError={() => setFailedUrl(coverImageUrl)}
+        />
       ) : (
         projectInitials(title)
       )}

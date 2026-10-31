@@ -107,7 +107,7 @@ describe("ProjectOverview", () => {
     expect(within(card).getByText("Internal Tools · Q3 2026 – Q4 2026")).toBeInTheDocument();
     expect(within(card).getByText("Build")).toBeInTheDocument();
     expect(card.querySelectorAll("svg")).toHaveLength(2);
-    expect(within(card).getByLabelText("7 participants")).toBeInTheDocument();
+    expect(within(card).getByRole("img", { name: /^7 participants: / })).toBeInTheDocument();
     expect(within(card).getByText("+2")).toBeInTheDocument();
     expect(within(card).getAllByText(/^P[0-9]$/)).toHaveLength(5);
     expect(screen.getByRole("link", { name: /Someday/ })).toHaveTextContent("No initiative");
@@ -206,9 +206,9 @@ describe("ProjectOverview", () => {
       ]
     );
 
-    expect(screen.getByRole("link", { name: /Beach day/ })).toHaveTextContent(
-      "You haven't responded · deadline passed"
-    );
+    const beach = screen.getByRole("link", { name: /Beach day/ });
+    expect(beach).toHaveTextContent("You haven't responded");
+    expect(within(beach).getByText("Deadline passed")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Picnic/ })).toHaveTextContent("You've responded");
     expect(screen.getByRole("link", { name: /Hike/ })).toHaveTextContent(/fill in by/);
     expect(screen.getByRole("link", { name: /Dinner/ })).toHaveTextContent("Fri, Oct 30 · 6:00 PM");
