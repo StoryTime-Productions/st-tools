@@ -386,7 +386,12 @@ export function WorkspaceShell({
                     <p className="text-muted-foreground text-xs font-medium tracking-[0.24em] uppercase lg:hidden">
                       StoryTime Tools
                     </p>
-                    <h1 className="truncate text-lg font-semibold tracking-tight">{title}</h1>
+                    <h1
+                      tabIndex={-1}
+                      className="truncate text-lg font-semibold tracking-tight outline-none"
+                    >
+                      {title}
+                    </h1>
                     {description ? (
                       <p className="text-muted-foreground hidden truncate text-sm sm:block">
                         {description}
