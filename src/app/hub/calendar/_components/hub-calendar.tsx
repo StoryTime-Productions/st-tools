@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SegmentedToggle } from "@/components/ui/segmented-toggle";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -193,20 +194,7 @@ export function HubCalendar({
               ))}
             </SelectContent>
           </Select>
-          <div role="group" aria-label="View" className="bg-muted inline-flex rounded-xl p-1">
-            {VIEWS.map((option) => (
-              <Button
-                key={option.value}
-                type="button"
-                size="sm"
-                variant={view === option.value ? "default" : "ghost"}
-                aria-pressed={view === option.value}
-                onClick={() => setView(option.value)}
-              >
-                {option.label}
-              </Button>
-            ))}
-          </div>
+          <SegmentedToggle label="View" options={VIEWS} value={view} onChange={setView} />
         </div>
       </div>
 
