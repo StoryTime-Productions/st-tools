@@ -32,7 +32,29 @@ export const voiceEventSchema = z.discriminatedUnion("type", [
 
 export type VoiceEvent = z.infer<typeof voiceEventSchema>;
 
+/**
+ * Tells the dashboard (over Supabase Realtime) that Discord stats changed. The ingest has already
+ * succeeded by now, so a failure here is logged and never fails the bot's request.
+ */
+export async function touchStatsPulse() {
+  try {
+    await prisma.discordStatsPulse.upsert({
+      where: { id: 1 },
+      create: { id: 1 },
+      update: { updatedAt: new Date() },
+    });
+  } catch (error) {
+    console.error("Could not touch the Discord stats pulse", error);
+  }
+}
+
 export async function applyVoiceEvent(event: VoiceEvent, now: Date = new Date()) {
+  const result = await applyVoiceChange(event, now);
+  if (result.closed + result.opened > 0) await touchStatsPulse();
+  return result;
+}
+
+async function applyVoiceChange(event: VoiceEvent, now: Date) {
   const when = event.at ?? now;
 
   if (event.type === "leave") {
@@ -135,6 +157,7 @@ export async function recordMessages(input: z.infer<typeof messagesSchema>) {
       })
     )
   );
+  await touchStatsPulse();
   return input.entries.length;
 }
 
@@ -149,4 +172,5 @@ export async function recordWordleStreak(input: z.infer<typeof wordleSchema>) {
     create: { id: 1, streak: input.streak, postedOn: input.postedOn },
     update: { streak: input.streak, postedOn: input.postedOn },
   });
+  await touchStatsPulse();
 }
