@@ -7,6 +7,7 @@ import { getDiscordStats, getVoiceNow, getWordleStreak } from "@/lib/discord-sta
 import type { DiscordStats, StatsRange } from "@/lib/discord-stats-format";
 import { AutoRefresh } from "./_components/auto-refresh";
 import { DiscordLeaderboards } from "./_components/discord-leaderboards";
+import { LiveStats } from "./_components/live-stats";
 import { LiveTimeWeather } from "./_components/live-time-weather";
 import { OnlineUsersCard } from "./_components/online-users-card";
 import { PlaylistWidget } from "./_components/playlist-widget";
@@ -43,6 +44,7 @@ export default async function DashboardPage() {
 
   return (
     <WorkspaceShell user={user} activeNav="overview" title="Dashboard">
+      <LiveStats />
       <AutoRefresh />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-6">

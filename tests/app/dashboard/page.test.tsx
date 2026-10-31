@@ -30,6 +30,7 @@ async function loadDashboardPageModule() {
   const rightNow = vi.fn(() => <div data-testid="right-now" />);
   const leaderboards = vi.fn(() => <div data-testid="leaderboards" />);
   const autoRefresh = vi.fn(() => <div data-testid="auto-refresh" />);
+  const liveStats = vi.fn(() => <div data-testid="live-stats" />);
 
   const getVoiceNow = vi.fn().mockResolvedValue([{ discordId: "1" }]);
   const getWordleStreak = vi.fn().mockResolvedValue({ streak: 80, postedOn: "2026-10-30" });
@@ -53,6 +54,7 @@ async function loadDashboardPageModule() {
     DiscordLeaderboards: leaderboards,
   }));
   vi.doMock("@/app/dashboard/_components/auto-refresh", () => ({ AutoRefresh: autoRefresh }));
+  vi.doMock("@/app/dashboard/_components/live-stats", () => ({ LiveStats: liveStats }));
 
   const dashboardPageModule = await import("@/app/dashboard/page");
 
@@ -111,6 +113,7 @@ describe("DashboardPage", () => {
     expect(liveTimeWeather).toHaveBeenCalledWith({ firstName: "member" }, undefined);
     expect(screen.queryByText("Quick access")).not.toBeInTheDocument();
     expect(screen.getByTestId("auto-refresh")).toBeInTheDocument();
+    expect(screen.getByTestId("live-stats")).toBeInTheDocument();
     expect(rightNow).toHaveBeenCalledWith(
       {
         loaded: true,

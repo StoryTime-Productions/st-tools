@@ -10,6 +10,7 @@ async function load() {
     },
     discordMessageDay: { upsert: vi.fn((args: unknown) => args) },
     discordWordleStreak: { upsert: vi.fn().mockResolvedValue({}) },
+    discordStatsPulse: { upsert: vi.fn().mockResolvedValue({}) },
     $transaction: vi.fn(async (ops: unknown[]) => ops),
   };
   vi.doMock("@/lib/prisma", () => ({ prisma }));
@@ -131,6 +132,63 @@ describe("applyVoiceEvent", () => {
     const { voiceEventSchema } = await load();
     expect(voiceEventSchema.safeParse({ type: "join", discordId: "x" }).success).toBe(false);
     expect(voiceEventSchema.safeParse({ type: "dance" }).success).toBe(false);
+  });
+});
+
+describe("the dashboard pulse", () => {
+  beforeEach(() => vi.resetModules());
+
+  it("is touched when a join, a leave or a snapshot changes something", async () => {
+    const { applyVoiceEvent, prisma } = await load();
+    prisma.discordVoiceSession.updateMany.mockResolvedValue({ count: 1 });
+
+    await applyVoiceEvent({ type: "leave", discordId: "1" }, NOW);
+    await applyVoiceEvent(
+      { type: "join", discordId: "1", name: "K", channelId: "10", channelName: "D&D" },
+      NOW
+    );
+
+    expect(prisma.discordStatsPulse.upsert).toHaveBeenCalledTimes(2);
+    expect(prisma.discordStatsPulse.upsert).toHaveBeenCalledWith({
+      where: { id: 1 },
+      create: { id: 1 },
+      update: { updatedAt: expect.any(Date) },
+    });
+  });
+
+  it("is left alone when a snapshot or leave changes nothing", async () => {
+    const { applyVoiceEvent, prisma } = await load();
+
+    await applyVoiceEvent({ type: "snapshot", members: [] }, NOW);
+    await applyVoiceEvent({ type: "leave", discordId: "1" }, NOW);
+
+    expect(prisma.discordStatsPulse.upsert).not.toHaveBeenCalled();
+  });
+
+  it("is touched after message counts and the Wordle streak are stored", async () => {
+    const { recordMessages, messagesSchema, recordWordleStreak, prisma } = await load();
+
+    await recordMessages(
+      messagesSchema.parse({
+        entries: [{ discordId: "1", name: "K", day: "2026-10-30", count: 1 }],
+      })
+    );
+    await recordWordleStreak({ streak: 80, postedOn: "2026-10-30" });
+
+    expect(prisma.discordStatsPulse.upsert).toHaveBeenCalledTimes(2);
+  });
+
+  it("never fails the bot's request when the pulse cannot be written", async () => {
+    const { recordWordleStreak, prisma } = await load();
+    prisma.discordStatsPulse.upsert.mockRejectedValueOnce(new Error("db hiccup"));
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(
+      recordWordleStreak({ streak: 80, postedOn: "2026-10-30" })
+    ).resolves.toBeUndefined();
+
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
   });
 });
 
