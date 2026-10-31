@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { BoardView } from "@/app/boards/[boardId]/_components/board-view";
+import { BoardView, dragAnnouncements } from "@/app/boards/[boardId]/_components/board-view";
 import type { BoardDetailsData } from "@/app/boards/types";
 import type { ComponentProps } from "react";
 import type { CardDetailSheet } from "@/app/boards/[boardId]/_components/card-detail-sheet";
@@ -78,6 +78,7 @@ vi.mock("@/app/boards/[boardId]/_components/card-detail-sheet", () => ({
     onAddComment,
     onSetGithubIssue,
     onDelete,
+    onMoveToColumn,
   }: CardDetailSheetProps) =>
     open && card ? (
       <div role="dialog">
@@ -109,6 +110,12 @@ vi.mock("@/app/boards/[boardId]/_components/card-detail-sheet", () => ({
         </button>
         <button type="button" onClick={() => onDelete(card.id)}>
           Delete card
+        </button>
+        <button
+          type="button"
+          onClick={() => onMoveToColumn(card.id, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")}
+        >
+          Move card
         </button>
         <button type="button" onClick={() => onOpenChange(false)}>
           Close
@@ -209,6 +216,12 @@ function makeBoard(): BoardDetailsData {
             ],
           },
         ],
+      },
+      {
+        id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        title: "Done",
+        position: 1,
+        cards: [],
       },
     ],
   };
@@ -323,6 +336,51 @@ describe("BoardView", () => {
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Card deleted"));
     expect(actionMocks.deleteCardAction).toHaveBeenCalledWith(IDS.card);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("moves a card to another column from the card sheet", async () => {
+    renderBoard(makeBoard(), IDS.card);
+
+    fireEvent.click(screen.getByRole("button", { name: "Move card" }));
+
+    await waitFor(() => {
+      expect(actionMocks.moveCardsAction).toHaveBeenCalledWith(IDS.board, [
+        { columnId: IDS.column, cardIds: [] },
+        { columnId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", cardIds: [IDS.card] },
+      ]);
+    });
+  });
+
+  it("puts the card back and says so when the move fails", async () => {
+    actionMocks.moveCardsAction.mockResolvedValueOnce({ error: "Cannot move card" });
+    renderBoard(makeBoard(), IDS.card);
+
+    fireEvent.click(screen.getByRole("button", { name: "Move card" }));
+
+    await waitFor(() => expect(toastMocks.error).toHaveBeenCalledWith("Cannot move card"));
+  });
+
+  it("asks before deleting a column and only then deletes it", async () => {
+    renderBoard();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Delete column" })[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+    expect(actionMocks.deleteColumnAction).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Delete column" })[0]);
+    fireEvent.click(
+      within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete column" })
+    );
+
+    await waitFor(() => expect(actionMocks.deleteColumnAction).toHaveBeenCalled());
+  });
+
+  it("announces drag and drop for screen readers", () => {
+    expect(dragAnnouncements.onDragStart()).toMatch(/picked up/i);
+    expect(dragAnnouncements.onDragOver()).toBeUndefined();
+    expect(dragAnnouncements.onDragEnd({ over: { id: "x" } })).toMatch(/new place/i);
+    expect(dragAnnouncements.onDragEnd({ over: null })).toMatch(/nothing changed/i);
+    expect(dragAnnouncements.onDragCancel()).toMatch(/cancelled/i);
   });
 
   it("opens the card from a deep link", () => {

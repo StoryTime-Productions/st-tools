@@ -593,7 +593,7 @@ function ColumnContainer({
   );
 }
 
-const dragAnnouncements = {
+export const dragAnnouncements = {
   onDragStart: () => "Picked up. Use the arrow keys to move, space to drop.",
   onDragOver: () => undefined,
   onDragEnd: ({ over }: { over: { id: string | number } | null }) =>
