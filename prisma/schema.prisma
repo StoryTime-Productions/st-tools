@@ -744,3 +744,11 @@ model DiscordWordleStreak {
 
   @@map("discord_wordle_streak")
 }
+
+model DiscordStatsPulse {
+  // Singleton row (id is always 1): touched on every change so the dashboard can refresh live.
+  id        Int      @id @default(1)
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@map("discord_stats_pulse")
+}
