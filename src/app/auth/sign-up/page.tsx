@@ -127,12 +127,7 @@ export default function SignUpPage() {
                 <FormItem>
                   <FormLabel>Password</FormLabel>
                   <FormControl>
-                    <Input
-                      type="password"
-                      autoComplete="new-password"
-                      placeholder="Min. 8 characters"
-                      {...field}
-                    />
+                    <Input type="password" autoComplete="new-password" {...field} />
                   </FormControl>
                   <FormDescription>Use at least 8 characters.</FormDescription>
                   <FormMessage />
