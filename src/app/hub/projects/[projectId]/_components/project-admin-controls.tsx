@@ -2,7 +2,17 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, CheckCircle2, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  CheckCircle2,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Trash2,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   deleteProjectAction,
@@ -13,6 +23,7 @@ import { InitiativeSelect } from "@/app/hub/_components/initiative-select";
 import { QuarterRangeFields } from "@/app/hub/_components/quarter-range-fields";
 import { ProjectCoverEditor } from "@/app/hub/projects/[projectId]/_components/project-cover-editor";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -183,6 +194,7 @@ function ProjectEditorForm({
                   onClick={() => toggleTag(tag)}
                   className="rounded-full"
                 >
+                  {tags.includes(tag) ? <Check aria-hidden="true" className="size-3.5" /> : null}
                   {tag}
                 </Button>
               ))}
@@ -215,14 +227,16 @@ function ProjectEditorForm({
           <ol className="space-y-2">
             {phases.map((phase, index) => (
               <li key={index} className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="current-phase"
-                  aria-label={`Mark phase ${index + 1} as current`}
-                  checked={currentPhaseIndex === index}
-                  onChange={() => setCurrentPhaseIndex(index)}
-                  className="size-4 shrink-0"
-                />
+                <label className="flex size-11 shrink-0 items-center justify-center sm:size-auto">
+                  <input
+                    type="radio"
+                    name="current-phase"
+                    aria-label={`Mark phase ${index + 1} as current`}
+                    checked={currentPhaseIndex === index}
+                    onChange={() => setCurrentPhaseIndex(index)}
+                    className="size-4 shrink-0"
+                  />
+                </label>
                 <Input
                   aria-label={`Phase ${index + 1} name`}
                   value={phase}
@@ -362,6 +376,7 @@ export function ProjectAdminControls(props: ProjectAdminControlsProps) {
   const router = useRouter();
   const [editorOpen, setEditorOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
 
   function handleToggleFinished() {
     startTransition(async () => {
@@ -375,12 +390,13 @@ export function ProjectAdminControls(props: ProjectAdminControlsProps) {
     });
   }
 
-  function handleDelete() {
-    if (
-      !window.confirm(`Delete "${project.title}"? Its boards stay, but become standalone boards.`)
-    ) {
-      return;
-    }
+  async function handleDelete() {
+    const confirmed = await confirm("Its boards stay, but become standalone boards.", {
+      title: `Delete ${project.title}?`,
+      confirmLabel: "Delete project",
+      destructive: true,
+    });
+    if (!confirmed) return;
 
     startTransition(async () => {
       const result = await deleteProjectAction(project.id);
@@ -395,7 +411,7 @@ export function ProjectAdminControls(props: ProjectAdminControlsProps) {
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
       <Sheet open={editorOpen} onOpenChange={setEditorOpen}>
         <SheetTrigger asChild>
           <Button type="button" className="gap-2">
@@ -418,10 +434,17 @@ export function ProjectAdminControls(props: ProjectAdminControlsProps) {
         {project.finished ? <RotateCcw className="size-4" /> : <CheckCircle2 className="size-4" />}
         {project.finished ? "Reopen project" : "Mark finished"}
       </Button>
-      <Button type="button" variant="ghost" onClick={handleDelete} disabled={isPending}>
+      <Button
+        type="button"
+        variant="ghost"
+        className="text-destructive hover:text-destructive max-sm:col-span-2"
+        onClick={handleDelete}
+        disabled={isPending}
+      >
         <Trash2 className="size-4" />
         Delete
       </Button>
+      {confirmDialog}
     </div>
   );
 }
