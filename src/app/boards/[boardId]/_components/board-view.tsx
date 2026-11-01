@@ -1316,7 +1316,7 @@ export function BoardView({ board, initialCardId }: BoardViewProps) {
         <Alert className="border-destructive/50">
           <CircleAlert aria-hidden="true" className="text-destructive!" />
           <AlertTitle>Couldn&apos;t refresh this board</AlertTitle>
-          <AlertDescription className="space-y-2">
+          <AlertDescription className="space-y-2 sm:flex sm:items-center sm:justify-between sm:gap-3 sm:space-y-0">
             <p>What you see may be out of date.</p>
             <Button
               type="button"
