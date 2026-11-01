@@ -405,7 +405,8 @@ describe("BoardView", () => {
   it("deletes a board and redirects", async () => {
     renderBoard();
 
-    fireEvent.click(screen.getByRole("button", { name: /delete board/i }));
+    fireEvent.keyDown(screen.getByRole("button", { name: "Board actions" }), { key: "Enter" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete board" }));
     fireEvent.click(await screen.findByRole("button", { name: "Delete board", hidden: false }));
 
     await waitFor(() => {
@@ -429,7 +430,8 @@ describe("BoardView", () => {
   it("does not delete board when confirmation is cancelled", async () => {
     renderBoard();
 
-    fireEvent.click(screen.getByRole("button", { name: /delete board/i }));
+    fireEvent.keyDown(screen.getByRole("button", { name: "Board actions" }), { key: "Enter" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete board" }));
     fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
 
     await waitFor(() => {
