@@ -13,7 +13,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { keepOpenForInlineEdit } from "@/lib/dismiss";
@@ -116,13 +115,25 @@ function InitiativeRow({ initiative }: { initiative: InitiativeOption }) {
   );
 }
 
-export function ManageInitiativesDialog({ initiatives }: { initiatives: InitiativeOption[] }) {
+export function ManageInitiativesDialog({
+  initiatives,
+  open,
+  onOpenChange,
+  onCloseAutoFocus,
+}: {
+  initiatives: InitiativeOption[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** Lets the opener (a button or a menu item) take focus back when the dialog closes. */
+  onCloseAutoFocus?: (event: Event) => void;
+}) {
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="outline">Manage initiatives</Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md" onEscapeKeyDown={keepOpenForInlineEdit}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="sm:max-w-md"
+        onEscapeKeyDown={keepOpenForInlineEdit}
+        onCloseAutoFocus={onCloseAutoFocus}
+      >
         <DialogHeader>
           <DialogTitle>Initiatives</DialogTitle>
           <DialogDescription>

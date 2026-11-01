@@ -6,6 +6,7 @@ import { ProjectCover } from "@/app/hub/_components/project-cover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { ViewMenu } from "@/app/hub/_components/view-menu";
 import { SegmentedToggle } from "@/components/ui/segmented-toggle";
 import { Button } from "@/components/ui/button";
 import { dayLabel, timeLabel } from "@/lib/calendar";
@@ -139,13 +140,36 @@ export function ProjectOverview({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-2">
-        <SegmentedToggle label="Layout" options={MODES} value={mode} onChange={modeStore.choose} />
-        <SegmentedToggle label="View" options={VIEWS} value={view} onChange={viewStore.choose} />
+      <div className="flex items-center gap-2 md:flex-wrap">
+        <ViewMenu
+          groups={[
+            {
+              label: "Show",
+              options: MODES,
+              value: mode,
+              onChange: (next) => modeStore.choose(next as Mode),
+            },
+            {
+              label: "Group by",
+              options: VIEWS,
+              value: view,
+              onChange: (next) => viewStore.choose(next as View),
+            },
+          ]}
+        />
+        <div className="hidden md:flex md:flex-wrap md:items-center md:gap-2">
+          <SegmentedToggle
+            label="Layout"
+            options={MODES}
+            value={mode}
+            onChange={modeStore.choose}
+          />
+          <SegmentedToggle label="View" options={VIEWS} value={view} onChange={viewStore.choose} />
+        </div>
         <Button
           type="button"
           size="sm"
-          className="sm:ml-auto"
+          className="md:ml-auto"
           variant={showPast ? "default" : "outline"}
           aria-pressed={showPast}
           onClick={() => setShowPast((current) => !current)}

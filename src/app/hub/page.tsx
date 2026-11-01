@@ -1,10 +1,8 @@
 import { redirect } from "next/navigation";
 import { Compass } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { HangoutDialog } from "@/app/hub/_components/hangout-dialog";
+import { HubAdminActions } from "@/app/hub/_components/hub-admin-actions";
 import { HubTabs } from "@/app/hub/_components/hub-tabs";
-import { ManageInitiativesDialog } from "@/app/hub/_components/manage-initiatives-dialog";
-import { NewProjectDialog } from "@/app/hub/_components/new-project-dialog";
 import { ProjectOverview } from "@/app/hub/_components/project-overview";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { getHangoutSummaries } from "@/lib/hangouts";
@@ -24,15 +22,7 @@ export default async function HubPage() {
   return (
     <div className="space-y-6">
       <HubTabs active="/hub" />
-      {isAdmin ? (
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
-          <div className="col-span-2 sm:contents">
-            <HangoutDialog />
-          </div>
-          <ManageInitiativesDialog initiatives={initiatives} />
-          <NewProjectDialog initiatives={initiatives} />
-        </div>
-      ) : null}
+      {isAdmin ? <HubAdminActions initiatives={initiatives} /> : null}
 
       {projects.length === 0 && hangouts.length === 0 ? (
         <Card className="border-border/70 bg-background/85 rounded-3xl shadow-none">
