@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { BoardView, dragAnnouncements } from "@/app/boards/[boardId]/_components/board-view";
+import {
+  BoardView,
+  dragAnnouncements,
+  dropColumnId,
+} from "@/app/boards/[boardId]/_components/board-view";
 import type { BoardDetailsData } from "@/app/boards/types";
 import type { ComponentProps } from "react";
 import type { CardDetailSheet } from "@/app/boards/[boardId]/_components/card-detail-sheet";
@@ -524,5 +528,26 @@ describe("BoardView", () => {
     fireEvent.click(unlink);
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("GitHub issue unlinked"));
     expect(actionMocks.setCardGithubIssueAction).toHaveBeenCalledWith(IDS.card, null);
+  });
+});
+
+describe("dropColumnId", () => {
+  const over = (id: string, data: object | undefined) =>
+    ({ id, data: { current: data } }) as unknown as Parameters<typeof dropColumnId>[0];
+
+  it("is the column itself when a card is over a column", () => {
+    expect(dropColumnId(over("col-done", { kind: "column", columnId: "col-done" }))).toBe(
+      "col-done"
+    );
+  });
+
+  it("is the card's column when a card is over another card", () => {
+    expect(dropColumnId(over("card-9", { kind: "card", columnId: "col-todo" }))).toBe("col-todo");
+  });
+
+  it("is nothing when the card is over nothing or something unknown", () => {
+    expect(dropColumnId(null)).toBeNull();
+    expect(dropColumnId(over("x", undefined))).toBeNull();
+    expect(dropColumnId(over("x", { kind: "card" }))).toBeNull();
   });
 });
