@@ -12,6 +12,7 @@ import { dayLabel, timeLabel } from "@/lib/calendar";
 import type { HangoutCardInfo } from "@/lib/hangouts";
 import type { ProjectSummary } from "@/lib/hub";
 import {
+  formatDeadline,
   groupByInitiative,
   groupByQuarter,
   HANGOUT_STATUS_LABEL,
@@ -221,22 +222,12 @@ function ItemGroups({
   ));
 }
 
-const DEADLINE = {
-  timeZone: "America/Toronto",
-  month: "short",
-  day: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-} as const;
-
 /** The one line that says what a hangout needs from you: when it is, or whether to fill in availability. */
 function hangoutWhen(hangout: HangoutCardInfo) {
   if (hangout.phase === "COLLECTING") {
     const due = hangout.availabilityDeadline ? new Date(hangout.availabilityDeadline) : null;
     const deadline =
-      due && due.getTime() >= Date.now()
-        ? ` · fill in by ${due.toLocaleString("en-US", DEADLINE)}`
-        : "";
+      due && due.getTime() >= Date.now() ? ` · fill in by ${formatDeadline(due)}` : "";
     return `${hangout.responded ? "You've responded" : "You haven't responded"}${deadline}`;
   }
   if (hangout.startSlot) {

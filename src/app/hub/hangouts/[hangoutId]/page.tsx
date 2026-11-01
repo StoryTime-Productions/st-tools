@@ -24,7 +24,7 @@ import { hourLabel, todayKey, torontoInputValue } from "@/lib/calendar";
 import { rankRuns } from "@/lib/availability";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { getAvailabilityResponses, getHangoutDetail, getMemberOptions } from "@/lib/hangouts";
-import { HANGOUT_STATUS_LABEL } from "@/lib/hub-format";
+import { formatDeadline, HANGOUT_STATUS_LABEL } from "@/lib/hub-format";
 import { buildCommuteMap, toMapCar, toMapTransit } from "@/lib/commute-map";
 import { scheduleStops, timeText } from "@/lib/itinerary";
 import { getStopWeather } from "@/lib/weather";
@@ -109,13 +109,7 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
           </span>
           <span className="whitespace-nowrap">
             {deadlinePassed ? "Closed" : "Fill in by"}{" "}
-            {hangout.availabilityDeadline.toLocaleString("en-US", {
-              timeZone: "America/Toronto",
-              month: "short",
-              day: "numeric",
-              hour: "numeric",
-              minute: "2-digit",
-            })}
+            {formatDeadline(hangout.availabilityDeadline)}
           </span>
         </>
       ) : null}
