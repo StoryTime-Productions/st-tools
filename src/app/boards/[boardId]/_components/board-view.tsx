@@ -19,10 +19,19 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { type QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Github, GripVertical, Pencil, Plus, Trash2, UserPlus, Users } from "lucide-react";
+import {
+  Github,
+  GripVertical,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Trash2,
+  UserPlus,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   addBoardMemberAction,
@@ -45,6 +54,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -614,6 +629,7 @@ export function BoardView({ board, initialCardId }: BoardViewProps) {
   const [inviteMemberId, setInviteMemberId] = useState<string | undefined>(undefined);
   const [isPending, startTransition] = useTransition();
   const [confirm, confirmDialog] = useConfirm();
+  const actionsTrigger = useRef<HTMLButtonElement>(null);
 
   const boardQuery = useQuery({
     queryKey: boardQueryKey,
@@ -1018,6 +1034,7 @@ export function BoardView({ board, initialCardId }: BoardViewProps) {
         title: `Delete ${board.title}?`,
         confirmLabel: "Delete board",
         destructive: true,
+        returnFocusTo: () => actionsTrigger.current,
       }
     );
     if (!confirmed) {
@@ -1268,22 +1285,34 @@ export function BoardView({ board, initialCardId }: BoardViewProps) {
           </Button>
 
           {board.canManage ? (
-            <Button
-              type="button"
-              variant="ghost"
-              className="text-destructive hover:text-destructive"
-              onClick={handleDeleteBoard}
-              disabled={isPending}
-            >
-              <Trash2 className="size-4" />
-              Delete board
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Board actions"
+                  title="Board actions"
+                  ref={actionsTrigger}
+                  disabled={isPending}
+                >
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem variant="destructive" onSelect={handleDeleteBoard}>
+                  <Trash2 className="size-4" />
+                  Delete board
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : null}
         </div>
       </div>
 
       <ScrollArea className="w-full rounded-3xl">
         <DndContext
+          id="board-columns"
           sensors={sensors}
           collisionDetection={closestCorners}
           onDragEnd={handleDragEnd}
