@@ -52,6 +52,10 @@ describe("FormDescription", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(await screen.findByText("Name is required")).toBeInTheDocument();
+    // while it has an error the field is described by the error, not by the hint that stepped aside
+    const described = screen.getByLabelText("Name").getAttribute("aria-describedby") ?? "";
+    expect(described.split(" ")).toHaveLength(1);
+    expect(document.getElementById(described)).toHaveTextContent("Name is required");
     await waitFor(() => expect(screen.queryByText("Use your real name.")).not.toBeInTheDocument());
 
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Ada" } });
