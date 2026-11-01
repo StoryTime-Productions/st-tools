@@ -108,7 +108,12 @@ function FormControl({ ...props }: React.ComponentProps<typeof Slot.Root>) {
 }
 
 function FormDescription({ className, ...props }: React.ComponentProps<"p">) {
-  const { formDescriptionId } = useFormField();
+  const { error, formDescriptionId } = useFormField();
+
+  // the error message replaces the hint, so the same advice is not shown twice
+  if (error) {
+    return null;
+  }
 
   return (
     <p
