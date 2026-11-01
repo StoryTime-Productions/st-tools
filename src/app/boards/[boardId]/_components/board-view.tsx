@@ -23,6 +23,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { type QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  CircleAlert,
   Github,
   GripVertical,
   MoreHorizontal,
@@ -50,6 +51,7 @@ import {
 } from "@/app/actions/boards";
 import { CardDetailSheet } from "@/app/boards/[boardId]/_components/card-detail-sheet";
 import type { BoardCardData, BoardColumnData, BoardDetailsData } from "@/app/boards/types";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1309,6 +1311,26 @@ export function BoardView({ board, initialCardId }: BoardViewProps) {
           ) : null}
         </div>
       </div>
+
+      {boardQuery.isError ? (
+        <Alert className="border-destructive/50">
+          <CircleAlert aria-hidden="true" className="text-destructive!" />
+          <AlertTitle>Couldn&apos;t refresh this board</AlertTitle>
+          <AlertDescription className="space-y-2 sm:flex sm:items-center sm:justify-between sm:gap-3 sm:space-y-0">
+            <p>What you see may be out of date.</p>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="text-foreground"
+              onClick={() => void boardQuery.refetch()}
+              disabled={boardQuery.isFetching}
+            >
+              {boardQuery.isFetching ? "Retrying..." : "Retry"}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <ScrollArea className="w-full rounded-3xl">
         <DndContext

@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { CardDetailSheet } from "@/app/boards/[boardId]/_components/card-detail-sheet";
 import type { BoardCardData, BoardMemberSummary } from "@/app/boards/types";
@@ -181,6 +181,35 @@ describe("CardDetailSheet", () => {
     fireEvent.click(await screen.findByRole("option", { name: COLUMN_LOOKUP["col-done"] }));
 
     expect(onMoveToColumn).toHaveBeenCalledWith("33333333-3333-4333-8333-333333333333", "col-done");
+  });
+
+  describe("focus on open", () => {
+    function setPointer(coarse: boolean) {
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        writable: true,
+        value: (query: string) => ({ matches: coarse && query === "(pointer: coarse)" }),
+      });
+    }
+
+    afterEach(() => {
+      Reflect.deleteProperty(window, "matchMedia");
+    });
+
+    it("focuses the title with a mouse or keyboard", async () => {
+      setPointer(false);
+      renderSheet({});
+
+      await waitFor(() => expect(screen.getByLabelText("Title")).toHaveFocus());
+    });
+
+    it("keeps focus on the sheet, not the title, on a touch screen so no keyboard pops up", async () => {
+      setPointer(true);
+      renderSheet({});
+
+      await waitFor(() => expect(screen.getByRole("dialog")).toHaveFocus());
+      expect(screen.getByLabelText("Title")).not.toHaveFocus();
+    });
   });
 
   it("renders header fallback when card is null", () => {

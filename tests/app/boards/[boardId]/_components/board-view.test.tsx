@@ -297,6 +297,33 @@ describe("BoardView", () => {
     vi.restoreAllMocks();
   });
 
+  it("keeps showing the board and offers a retry when a refresh fails", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: false, json: async () => ({ error: "Boom" }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderBoard();
+
+    const banner = await screen.findByRole("alert");
+    expect(within(banner).getByText("Couldn't refresh this board")).toBeInTheDocument();
+    expect(screen.getByText("To do")).toBeInTheDocument();
+
+    fetchMock.mockResolvedValue({ ok: true, json: async () => makeBoard() });
+    fireEvent.click(within(banner).getByRole("button", { name: "Retry" }));
+
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    expect(screen.getByText("To do")).toBeInTheDocument();
+  });
+
+  it("shows no banner while refreshes succeed", async () => {
+    renderBoard();
+
+    await screen.findByText("To do");
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled());
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("renders board and executes primary interactions", async () => {
     renderBoard();
 

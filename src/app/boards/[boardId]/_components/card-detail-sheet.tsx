@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import type { BoardCardActivityData, BoardCardData, BoardMemberSummary } from "@/app/boards/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -701,9 +701,22 @@ export function CardDetailSheet({
   onSetGithubIssue,
   onDelete,
 }: CardDetailSheetProps) {
+  const content = useRef<HTMLDivElement>(null);
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-xl">
+      <SheetContent
+        ref={content}
+        className="w-full sm:max-w-xl"
+        onOpenAutoFocus={(event) => {
+          // on a touch screen, focusing the Title input would raise the keyboard before anyone
+          // asked to type; keep focus inside the sheet but on the sheet itself
+          if (window.matchMedia?.("(pointer: coarse)").matches) {
+            event.preventDefault();
+            content.current?.focus();
+          }
+        }}
+      >
         <SheetHeader>
           <SheetTitle>{card?.title ?? "Card details"}</SheetTitle>
           <SheetDescription>
