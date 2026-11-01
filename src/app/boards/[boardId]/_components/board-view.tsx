@@ -1292,6 +1292,7 @@ export function BoardView({ board, initialCardId }: BoardViewProps) {
                   variant="outline"
                   size="icon"
                   aria-label="Board actions"
+                  title="Board actions"
                   ref={actionsTrigger}
                   disabled={isPending}
                 >
@@ -1311,6 +1312,7 @@ export function BoardView({ board, initialCardId }: BoardViewProps) {
 
       <ScrollArea className="w-full rounded-3xl">
         <DndContext
+          id="board-columns"
           sensors={sensors}
           collisionDetection={closestCorners}
           onDragEnd={handleDragEnd}
