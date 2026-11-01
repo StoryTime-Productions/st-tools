@@ -198,6 +198,16 @@ describe("Costs", () => {
   });
 
   it("lets the collector confirm, revert and refund", async () => {
+    // slow actions keep the buttons disabled while the next click lands, as a loaded CI runner does
+    for (const action of [
+      payMocks.confirmPaymentAction,
+      payMocks.revertConfirmationAction,
+      payMocks.markRefundedAction,
+    ]) {
+      action.mockImplementationOnce(
+        () => new Promise((resolve) => setTimeout(() => resolve({ success: true }), 250))
+      );
+    }
     renderCosts(
       [
         item({
@@ -216,12 +226,18 @@ describe("Costs", () => {
     await waitFor(() => expect(payMocks.confirmPaymentAction).toHaveBeenCalledWith("c1", "b"), {
       timeout: 3000,
     });
+    // the buttons stay disabled until the previous action's transition settles; a click before
+    // then is dropped, which is what made this test fail under CI load
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "Revert" })[0]).toBeEnabled());
     expect(screen.getAllByRole("button", { name: "Revert" })).toHaveLength(2);
     fireEvent.click(screen.getAllByRole("button", { name: "Revert" })[0]);
     await waitFor(() => expect(payMocks.revertConfirmationAction).toHaveBeenCalledWith("c1", "d"), {
       timeout: 3000,
     });
     expect(screen.getByText(/refund due \$20\.00/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Mark refunded" })).toBeEnabled()
+    );
     fireEvent.click(screen.getByRole("button", { name: "Mark refunded" }));
     await waitFor(() => expect(payMocks.markRefundedAction).toHaveBeenCalledWith("c1", "e"), {
       timeout: 3000,
