@@ -1,9 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { BoardView, dragAnnouncements } from "@/app/boards/[boardId]/_components/board-view";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  BoardView,
+  dragAnnouncements,
+  dropColumnId,
+} from "@/app/boards/[boardId]/_components/board-view";
 import type { BoardDetailsData } from "@/app/boards/types";
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import type { CardDetailSheet } from "@/app/boards/[boardId]/_components/card-detail-sheet";
 
 type CardDetailSheetProps = ComponentProps<typeof CardDetailSheet>;
@@ -52,6 +56,32 @@ const supabaseMocks = vi.hoisted(() => {
     channel,
     client,
     createClient: vi.fn(() => client),
+  };
+});
+
+const dnd = vi.hoisted(() => ({
+  props: null as null | {
+    onDragStart: (event: never) => void;
+    onDragOver: (event: never) => void;
+    onDragCancel: () => void;
+    onDragEnd: (event: never) => void;
+  },
+}));
+
+vi.mock("@dnd-kit/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@dnd-kit/core")>();
+
+  return {
+    ...actual,
+    // jsdom cannot do a real pointer drag, so the tests fire the context's callbacks themselves
+    DndContext: (props: ComponentProps<typeof actual.DndContext>) => {
+      dnd.props = props as unknown as NonNullable<typeof dnd.props>;
+      return <actual.DndContext {...props} />;
+    },
+    // the real overlay only mounts its children mid-drag in a browser
+    DragOverlay: ({ children }: { children?: ReactNode }) => (
+      <div data-testid="drag-overlay">{children}</div>
+    ),
   };
 });
 
@@ -524,5 +554,108 @@ describe("BoardView", () => {
     fireEvent.click(unlink);
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("GitHub issue unlinked"));
     expect(actionMocks.setCardGithubIssueAction).toHaveBeenCalledWith(IDS.card, null);
+  });
+});
+
+describe("dragging a card", () => {
+  const card = {
+    active: { id: IDS.card, data: { current: { kind: "card", columnId: IDS.column } } },
+  };
+  const overColumn = { over: { id: IDS.column, data: { current: { kind: "column" } } } };
+
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => makeBoard() }));
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it("floats a copy of the card while it is held and removes it on cancel", async () => {
+    renderBoard();
+    await screen.findByText("Seed card");
+    const overlay = screen.getByTestId("drag-overlay");
+    expect(within(overlay).queryByText("Seed card")).not.toBeInTheDocument();
+
+    act(() => dnd.props?.onDragStart(card as never));
+    expect(within(overlay).getByText("Seed card")).toBeInTheDocument();
+    // the copy is a picture of the card: nothing in it can be clicked or dragged
+    expect(within(overlay).queryByRole("button")).not.toBeInTheDocument();
+
+    act(() => dnd.props?.onDragCancel());
+    expect(within(overlay).queryByText("Seed card")).not.toBeInTheDocument();
+  });
+
+  it("marks the column the card is over and clears it on drop", async () => {
+    renderBoard();
+    await screen.findByText("Seed card");
+    const ring = () => document.querySelector('[class*="ring-primary/60"]');
+    expect(ring()).toBeNull();
+
+    act(() => dnd.props?.onDragStart(card as never));
+    act(() => dnd.props?.onDragOver(overColumn as never));
+    expect(ring()).not.toBeNull();
+
+    act(() => dnd.props?.onDragEnd({ ...card, over: null } as never));
+    expect(ring()).toBeNull();
+    expect(
+      within(screen.getByTestId("drag-overlay")).queryByText("Seed card")
+    ).not.toBeInTheDocument();
+  });
+
+  it("marks the card's own column when it is over another card, and nothing when over nothing", async () => {
+    renderBoard();
+    await screen.findByText("Seed card");
+    const ring = () => document.querySelector('[class*="ring-primary/60"]');
+
+    act(() => dnd.props?.onDragStart(card as never));
+    act(() =>
+      dnd.props?.onDragOver({
+        over: { id: "other-card", data: { current: { kind: "card", columnId: IDS.column } } },
+      } as never)
+    );
+    expect(ring()).not.toBeNull();
+
+    act(() => dnd.props?.onDragOver({ over: null } as never));
+    expect(ring()).toBeNull();
+  });
+
+  it("shows no card copy and no drop cue while a column is being dragged", async () => {
+    renderBoard();
+    await screen.findByText("Seed card");
+
+    act(() =>
+      dnd.props?.onDragStart({
+        active: { id: IDS.column, data: { current: { kind: "column" } } },
+      } as never)
+    );
+    act(() => dnd.props?.onDragOver(overColumn as never));
+
+    expect(
+      within(screen.getByTestId("drag-overlay")).queryByText("Seed card")
+    ).not.toBeInTheDocument();
+    expect(document.querySelector('[class*="ring-primary/60"]')).toBeNull();
+  });
+});
+
+describe("dropColumnId", () => {
+  const over = (id: string, data: object | undefined) =>
+    ({ id, data: { current: data } }) as unknown as Parameters<typeof dropColumnId>[0];
+
+  it("is the column itself when a card is over a column", () => {
+    expect(dropColumnId(over("col-done", { kind: "column", columnId: "col-done" }))).toBe(
+      "col-done"
+    );
+  });
+
+  it("is the card's column when a card is over another card", () => {
+    expect(dropColumnId(over("card-9", { kind: "card", columnId: "col-todo" }))).toBe("col-todo");
+  });
+
+  it("is nothing when the card is over nothing or something unknown", () => {
+    expect(dropColumnId(null)).toBeNull();
+    expect(dropColumnId(over("x", undefined))).toBeNull();
+    expect(dropColumnId(over("x", { kind: "card" }))).toBeNull();
   });
 });
