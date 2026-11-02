@@ -30,7 +30,8 @@ export function BirthdaysCard({ birthdays }: { birthdays: UpcomingBirthday[] }) 
           <div className="flex items-start gap-3">
             <Cake className="text-muted-foreground mt-0.5 size-5 shrink-0" aria-hidden="true" />
             <p className="text-muted-foreground text-sm">
-              No birthdays saved yet. An admin can add them in Discord with /birthday set.
+              No birthdays saved yet. An admin can add them in Discord with{" "}
+              <code className="whitespace-nowrap">/birthday set</code>.
             </p>
           </div>
         ) : (
