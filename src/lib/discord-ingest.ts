@@ -174,3 +174,45 @@ export async function recordWordleStreak(input: z.infer<typeof wordleSchema>) {
   });
   await touchStatsPulse();
 }
+
+const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+export const birthdaysSchema = z.object({
+  birthdays: z
+    .array(
+      z
+        .object({
+          discordId: id,
+          name,
+          avatarUrl,
+          month: z.number().int().min(1).max(12),
+          day: z.number().int().min(1).max(31),
+        })
+        .refine((birthday) => birthday.day <= (DAYS_IN_MONTH[birthday.month - 1] as number), {
+          message: "Day does not exist in that month",
+        })
+    )
+    .max(500),
+});
+
+/** Replaces the stored birthdays with the bot's full list, so removals reach the dashboard. */
+export async function replaceBirthdays(input: z.infer<typeof birthdaysSchema>) {
+  const ids = input.birthdays.map((birthday) => birthday.discordId);
+  await prisma.$transaction([
+    prisma.discordBirthday.deleteMany({ where: { discordId: { notIn: ids } } }),
+    ...input.birthdays.map((birthday) =>
+      prisma.discordBirthday.upsert({
+        where: { discordId: birthday.discordId },
+        create: { ...birthday, avatarUrl: birthday.avatarUrl ?? null },
+        update: {
+          name: birthday.name,
+          avatarUrl: birthday.avatarUrl ?? null,
+          month: birthday.month,
+          day: birthday.day,
+        },
+      })
+    ),
+  ]);
+  await touchStatsPulse();
+  return input.birthdays.length;
+}
