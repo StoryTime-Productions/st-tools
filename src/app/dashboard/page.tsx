@@ -3,9 +3,11 @@ import { getCurrentUser } from "@/lib/get-current-user";
 import { Card, CardContent } from "@/components/ui/card";
 import { WorkspaceShell } from "@/components/layout/workspace-shell";
 import { todayKey } from "@/lib/calendar";
+import { getUpcomingBirthdays } from "@/lib/discord-birthdays";
 import { getDiscordStats, getVoiceNow, getWordleStreak } from "@/lib/discord-stats";
 import type { DiscordStats, StatsRange } from "@/lib/discord-stats-format";
 import { AutoRefresh } from "./_components/auto-refresh";
+import { BirthdaysCard } from "./_components/birthdays-card";
 import { DiscordLeaderboards } from "./_components/discord-leaderboards";
 import { LiveStats } from "./_components/live-stats";
 import { LiveTimeWeather } from "./_components/live-time-weather";
@@ -32,6 +34,15 @@ async function loadDiscord() {
   }
 }
 
+async function loadBirthdays() {
+  try {
+    return await getUpcomingBirthdays();
+  } catch (error) {
+    console.error("Birthdays failed to load", error);
+    return null;
+  }
+}
+
 export default async function DashboardPage() {
   const user = await getCurrentUser();
 
@@ -40,7 +51,7 @@ export default async function DashboardPage() {
   }
 
   const firstName = user.name?.split(" ")[0] ?? user.email.split("@")[0] ?? "there";
-  const discord = await loadDiscord();
+  const [discord, birthdays] = await Promise.all([loadDiscord(), loadBirthdays()]);
 
   return (
     <WorkspaceShell user={user} activeNav="overview" title="Dashboard">
@@ -74,6 +85,7 @@ export default async function DashboardPage() {
             }}
           />
           <PlaylistWidget discordId={user.discordId} />
+          {birthdays ? <BirthdaysCard birthdays={birthdays} /> : null}
         </div>
       </div>
     </WorkspaceShell>
