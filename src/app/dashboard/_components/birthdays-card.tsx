@@ -21,15 +21,18 @@ export function BirthdaysCard({ birthdays }: { birthdays: UpcomingBirthday[] }) 
     <Card className="border-border/70 bg-background/80 gap-4 rounded-3xl shadow-none">
       <CardHeader>
         <h2 className="flex items-center gap-2 text-base leading-none font-semibold">
-          <Cake className="size-4" aria-hidden="true" />
+          <Cake className="text-muted-foreground size-4" aria-hidden="true" />
           Birthdays
         </h2>
       </CardHeader>
       <CardContent>
         {birthdays.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            No birthdays saved yet. An admin can add them with /birthday set.
-          </p>
+          <div className="flex items-start gap-3">
+            <Cake className="text-muted-foreground mt-0.5 size-5 shrink-0" aria-hidden="true" />
+            <p className="text-muted-foreground text-sm">
+              No birthdays saved yet. An admin can add them in Discord with /birthday set.
+            </p>
+          </div>
         ) : (
           <ul className="space-y-3">
             {birthdays.map((birthday) => (
@@ -41,7 +44,9 @@ export function BirthdaysCard({ birthdays }: { birthdays: UpcomingBirthday[] }) 
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{birthday.name}</p>
+                  <p className="truncate text-sm font-medium" title={birthday.name}>
+                    {birthday.name}
+                  </p>
                   <p className="text-muted-foreground text-xs">
                     {birthdayDate(birthday.month, birthday.day)}
                   </p>

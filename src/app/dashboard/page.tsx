@@ -75,7 +75,7 @@ export default async function DashboardPage() {
           {discord.loaded ? <DiscordLeaderboards stats={discord.stats} /> : null}
         </div>
 
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           <OnlineUsersCard
             currentUser={{
               id: user.id,
