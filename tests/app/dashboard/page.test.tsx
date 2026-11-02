@@ -31,6 +31,8 @@ async function loadDashboardPageModule() {
   const leaderboards = vi.fn(() => <div data-testid="leaderboards" />);
   const autoRefresh = vi.fn(() => <div data-testid="auto-refresh" />);
   const liveStats = vi.fn(() => <div data-testid="live-stats" />);
+  const birthdaysCard = vi.fn(() => <div data-testid="birthdays-card" />);
+  const getUpcomingBirthdays = vi.fn().mockResolvedValue([{ discordId: "1", daysUntil: 3 }]);
 
   const getVoiceNow = vi.fn().mockResolvedValue([{ discordId: "1" }]);
   const getWordleStreak = vi.fn().mockResolvedValue({ streak: 80, postedOn: "2026-10-30" });
@@ -55,6 +57,10 @@ async function loadDashboardPageModule() {
   }));
   vi.doMock("@/app/dashboard/_components/auto-refresh", () => ({ AutoRefresh: autoRefresh }));
   vi.doMock("@/app/dashboard/_components/live-stats", () => ({ LiveStats: liveStats }));
+  vi.doMock("@/app/dashboard/_components/birthdays-card", () => ({
+    BirthdaysCard: birthdaysCard,
+  }));
+  vi.doMock("@/lib/discord-birthdays", () => ({ getUpcomingBirthdays }));
 
   const dashboardPageModule = await import("@/app/dashboard/page");
 
@@ -69,6 +75,8 @@ async function loadDashboardPageModule() {
     rightNow,
     leaderboards,
     getVoiceNow,
+    birthdaysCard,
+    getUpcomingBirthdays,
   };
 }
 
@@ -100,12 +108,17 @@ describe("DashboardPage", () => {
       playlistWidget,
       rightNow,
       leaderboards,
+      birthdaysCard,
     } = await loadDashboardPageModule();
 
     getCurrentUser.mockResolvedValueOnce(USER);
 
     render(await DashboardPage());
 
+    expect(birthdaysCard).toHaveBeenCalledWith(
+      { birthdays: [{ discordId: "1", daysUntil: 3 }] },
+      undefined
+    );
     expect(workspaceShell).toHaveBeenCalledWith(
       expect.objectContaining({ title: "Dashboard", activeNav: "overview" }),
       undefined
@@ -168,6 +181,25 @@ describe("DashboardPage", () => {
       undefined
     );
     expect(leaderboards).not.toHaveBeenCalled();
+    expect(screen.getByTestId("playlist-widget")).toBeInTheDocument();
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
+  });
+
+  it("leaves the birthdays card out when the birthdays fail to load", async () => {
+    const {
+      default: DashboardPage,
+      getCurrentUser,
+      getUpcomingBirthdays,
+      birthdaysCard,
+    } = await loadDashboardPageModule();
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    getCurrentUser.mockResolvedValueOnce(USER);
+    getUpcomingBirthdays.mockRejectedValueOnce(new Error("db down"));
+
+    render(await DashboardPage());
+
+    expect(birthdaysCard).not.toHaveBeenCalled();
     expect(screen.getByTestId("playlist-widget")).toBeInTheDocument();
     expect(log).toHaveBeenCalled();
     log.mockRestore();
