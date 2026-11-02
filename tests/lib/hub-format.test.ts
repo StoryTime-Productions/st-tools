@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatDeadline,
   formatQuarter,
   formatQuarterRange,
   groupByInitiative,
@@ -110,5 +111,17 @@ describe("formatDueLabel", () => {
     expect(formatDueLabel("2026-11-03", now)).toBe("Due Nov 3");
     expect(formatDueLabel("2026-10-30", now)).toBe("Due Oct 30");
     expect(formatDueLabel("2026-10-03T00:00:00.000Z", now)).toBe("Overdue · Oct 3");
+  });
+});
+
+describe("formatDeadline", () => {
+  it("shows an instant in Toronto time", () => {
+    // 14:45 UTC on Oct 12 is 10:45 AM in Toronto (EDT)
+    expect(formatDeadline(new Date("2026-10-12T14:45:00Z"))).toBe("Oct 12, 10:45 AM");
+  });
+
+  it("accepts an ISO string and follows daylight saving", () => {
+    // 14:45 UTC on Dec 12 is 9:45 AM in Toronto (EST)
+    expect(formatDeadline("2026-12-12T14:45:00Z")).toBe("Dec 12, 9:45 AM");
   });
 });

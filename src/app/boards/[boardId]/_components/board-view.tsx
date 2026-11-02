@@ -2,6 +2,7 @@
 
 import {
   DndContext,
+  DragOverlay,
   KeyboardSensor,
   PointerSensor,
   TouchSensor,
@@ -9,6 +10,8 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -19,10 +22,20 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { type QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Github, GripVertical, Pencil, Plus, Trash2, UserPlus, Users } from "lucide-react";
+import {
+  CircleAlert,
+  Github,
+  GripVertical,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Trash2,
+  UserPlus,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   addBoardMemberAction,
@@ -41,10 +54,17 @@ import {
 } from "@/app/actions/boards";
 import { CardDetailSheet } from "@/app/boards/[boardId]/_components/card-detail-sheet";
 import type { BoardCardData, BoardColumnData, BoardDetailsData } from "@/app/boards/types";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -285,6 +305,85 @@ function moveCardBetweenColumns(
   return reindexColumns(nextColumns);
 }
 
+/** The column a dragged card would land in, from whatever it is currently over. */
+export function dropColumnId(over: DragOverEvent["over"]): string | null {
+  const data = over?.data.current as { kind?: "column" | "card"; columnId?: string } | undefined;
+  if (data?.kind === "column") {
+    return String(over?.id);
+  }
+
+  return data?.kind === "card" && data.columnId ? data.columnId : null;
+}
+
+/** What a card looks like. The real card and the drag preview both draw it. */
+function CardFace({
+  card,
+  onOpen,
+  handle,
+}: {
+  card: BoardCardData;
+  onOpen?: () => void;
+  handle: ReactNode;
+}) {
+  const contentClass = "min-w-0 flex-1 space-y-3 text-left";
+  const content = (
+    <>
+      <div className="space-y-2">
+        <p className="line-clamp-2 text-sm leading-5 font-medium">{card.title}</p>
+        {card.description ? (
+          <p className="text-muted-foreground line-clamp-2 text-xs leading-5">{card.description}</p>
+        ) : null}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {card.labels.slice(0, 3).map((label, index) => (
+          <Badge key={`${label}-${index}`} variant="outline">
+            {label}
+          </Badge>
+        ))}
+        {card.dueDate ? <Badge variant="secondary">{formatDueLabel(card.dueDate)}</Badge> : null}
+        {card.githubIssue ? (
+          <Badge variant="outline" className="gap-1">
+            <Github className="size-3" aria-hidden="true" />
+            {card.githubIssue.label}
+            {card.githubIssue.state ? ` · ${card.githubIssue.state}` : ""}
+          </Badge>
+        ) : null}
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-muted-foreground text-xs">
+          {card.checklistItems.length > 0
+            ? `${card.checklistItems.filter((item) => item.completed).length}/${card.checklistItems.length} checklist done`
+            : null}
+        </div>
+        {card.assignee ? (
+          <Avatar className="h-7 w-7">
+            <AvatarImage
+              src={card.assignee.avatarUrl ?? undefined}
+              alt={card.assignee.name ?? card.assignee.email}
+            />
+            <AvatarFallback>{getInitials(card.assignee.name, card.assignee.email)}</AvatarFallback>
+          </Avatar>
+        ) : null}
+      </div>
+    </>
+  );
+
+  return (
+    <div className="flex items-start gap-3">
+      {onOpen ? (
+        <button type="button" onClick={onOpen} className={contentClass}>
+          {content}
+        </button>
+      ) : (
+        <div className={contentClass}>{content}</div>
+      )}
+      {handle}
+    </div>
+  );
+}
+
 function CardItem({
   card,
   columnId,
@@ -313,74 +412,32 @@ function CardItem({
       style={style}
       className={cn(
         "border-border/70 bg-background rounded-2xl border p-3 shadow-sm transition-shadow",
-        isDragging && "opacity-70 shadow-lg"
+        // the floating copy follows the cursor; this one stays behind as the card's place
+        isDragging && "opacity-40"
       )}
     >
-      <div className="flex items-start gap-3">
-        <button type="button" onClick={onOpen} className="min-w-0 flex-1 space-y-3 text-left">
-          <div className="space-y-2">
-            <p className="line-clamp-2 text-sm leading-5 font-medium">{card.title}</p>
-            {card.description ? (
-              <p className="text-muted-foreground line-clamp-2 text-xs leading-5">
-                {card.description}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {card.labels.slice(0, 3).map((label, index) => (
-              <Badge key={`${label}-${index}`} variant="outline">
-                {label}
-              </Badge>
-            ))}
-            {card.dueDate ? (
-              <Badge variant="secondary">{formatDueLabel(card.dueDate)}</Badge>
-            ) : null}
-            {card.githubIssue ? (
-              <Badge variant="outline" className="gap-1">
-                <Github className="size-3" aria-hidden="true" />
-                {card.githubIssue.label}
-                {card.githubIssue.state ? ` · ${card.githubIssue.state}` : ""}
-              </Badge>
-            ) : null}
-          </div>
-
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-muted-foreground text-xs">
-              {card.checklistItems.length > 0
-                ? `${card.checklistItems.filter((item) => item.completed).length}/${card.checklistItems.length} checklist done`
-                : null}
-            </div>
-            {card.assignee ? (
-              <Avatar className="h-7 w-7">
-                <AvatarImage
-                  src={card.assignee.avatarUrl ?? undefined}
-                  alt={card.assignee.name ?? card.assignee.email}
-                />
-                <AvatarFallback>
-                  {getInitials(card.assignee.name, card.assignee.email)}
-                </AvatarFallback>
-              </Avatar>
-            ) : null}
-          </div>
-        </button>
-
-        <button
-          type="button"
-          className="text-muted-foreground hover:text-foreground flex touch-none items-center justify-center rounded-md max-md:size-11 md:mt-0.5 md:p-1"
-          aria-label="Drag card"
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical className="size-4" />
-        </button>
-      </div>
+      <CardFace
+        card={card}
+        onOpen={onOpen}
+        handle={
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground flex touch-none items-center justify-center rounded-md max-md:size-11 md:mt-0.5 md:p-1"
+            aria-label="Drag card"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="size-4" />
+          </button>
+        }
+      />
     </div>
   );
 }
 
 function ColumnContainer({
   column,
+  isDropTarget = false,
   isPending,
   onRename,
   onDelete,
@@ -388,6 +445,7 @@ function ColumnContainer({
   onOpenCard,
 }: {
   column: BoardColumnData;
+  isDropTarget?: boolean;
   isPending: boolean;
   onRename: (columnId: string, title: string) => void;
   onDelete: (columnId: string) => void;
@@ -443,7 +501,9 @@ function ColumnContainer({
       style={style}
       className={cn(
         "border-border/70 bg-background/95 flex h-full w-[320px] shrink-0 flex-col rounded-3xl border p-4 shadow-sm",
-        isDragging && "opacity-80 shadow-lg"
+        isDragging && "relative z-10 opacity-80 shadow-lg",
+        // where a dragged card will land if it is dropped now
+        isDropTarget && "ring-primary/60 bg-primary/5 ring-2"
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -614,6 +674,9 @@ export function BoardView({ board, initialCardId }: BoardViewProps) {
   const [inviteMemberId, setInviteMemberId] = useState<string | undefined>(undefined);
   const [isPending, startTransition] = useTransition();
   const [confirm, confirmDialog] = useConfirm();
+  const actionsTrigger = useRef<HTMLButtonElement>(null);
+  const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
   const boardQuery = useQuery({
     queryKey: boardQueryKey,
@@ -628,6 +691,7 @@ export function BoardView({ board, initialCardId }: BoardViewProps) {
   const showInviteControls = board.canManage;
 
   const selectedCard = selectedCardId ? findCardById(columns, selectedCardId) : null;
+  const draggingCard = draggingCardId ? findCardById(columns, draggingCardId) : null;
   const inviteableMembers = boardState.allMembers.filter(
     (member) => !boardState.activeMembers.some((activeMember) => activeMember.id === member.id)
   );
@@ -1018,6 +1082,7 @@ export function BoardView({ board, initialCardId }: BoardViewProps) {
         title: `Delete ${board.title}?`,
         confirmLabel: "Delete board",
         destructive: true,
+        returnFocusTo: () => actionsTrigger.current,
       }
     );
     if (!confirmed) {
@@ -1037,6 +1102,11 @@ export function BoardView({ board, initialCardId }: BoardViewProps) {
       router.push("/boards");
       router.refresh();
     });
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    const data = event.active.data.current as { kind?: "column" | "card" } | undefined;
+    setDraggingCardId(data?.kind === "card" ? String(event.active.id) : null);
   }
 
   function handleDragEnd(event: DragEndEvent) {
@@ -1268,25 +1338,67 @@ export function BoardView({ board, initialCardId }: BoardViewProps) {
           </Button>
 
           {board.canManage ? (
-            <Button
-              type="button"
-              variant="ghost"
-              className="text-destructive hover:text-destructive"
-              onClick={handleDeleteBoard}
-              disabled={isPending}
-            >
-              <Trash2 className="size-4" />
-              Delete board
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Board actions"
+                  title="Board actions"
+                  ref={actionsTrigger}
+                  disabled={isPending}
+                >
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem variant="destructive" onSelect={handleDeleteBoard}>
+                  <Trash2 className="size-4" />
+                  Delete board
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : null}
         </div>
       </div>
 
+      {boardQuery.isError ? (
+        <Alert className="border-destructive/50">
+          <CircleAlert aria-hidden="true" className="text-destructive!" />
+          <AlertTitle>Couldn&apos;t refresh this board</AlertTitle>
+          <AlertDescription className="space-y-2 sm:flex sm:items-center sm:justify-between sm:gap-3 sm:space-y-0">
+            <p>What you see may be out of date.</p>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="text-foreground"
+              onClick={() => void boardQuery.refetch()}
+              disabled={boardQuery.isFetching}
+            >
+              {boardQuery.isFetching ? "Retrying..." : "Retry"}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       <ScrollArea className="w-full rounded-3xl">
         <DndContext
+          id="board-columns"
           sensors={sensors}
           collisionDetection={closestCorners}
-          onDragEnd={handleDragEnd}
+          onDragStart={handleDragStart}
+          onDragOver={(event) => setDropTargetId(draggingCardId ? dropColumnId(event.over) : null)}
+          onDragCancel={() => {
+            setDraggingCardId(null);
+            setDropTargetId(null);
+          }}
+          onDragEnd={(event) => {
+            setDraggingCardId(null);
+            setDropTargetId(null);
+            handleDragEnd(event);
+          }}
           accessibility={{ announcements: dragAnnouncements }}
         >
           <SortableContext
@@ -1298,6 +1410,7 @@ export function BoardView({ board, initialCardId }: BoardViewProps) {
                 <ColumnContainer
                   key={`${column.id}:${column.title}`}
                   column={column}
+                  isDropTarget={dropTargetId === column.id}
                   isPending={isPending}
                   onRename={handleRenameColumn}
                   onDelete={handleDeleteColumn}
@@ -1307,6 +1420,19 @@ export function BoardView({ board, initialCardId }: BoardViewProps) {
               ))}
             </div>
           </SortableContext>
+          {/* a copy that follows the cursor above every column, so the card never slips behind one */}
+          <DragOverlay>
+            {draggingCard ? (
+              <div className="border-border/70 bg-background cursor-grabbing rounded-2xl border p-3 shadow-xl">
+                <CardFace
+                  card={draggingCard}
+                  handle={
+                    <GripVertical aria-hidden="true" className="text-muted-foreground size-4" />
+                  }
+                />
+              </div>
+            ) : null}
+          </DragOverlay>
         </DndContext>
       </ScrollArea>
 

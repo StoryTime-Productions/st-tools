@@ -80,7 +80,7 @@ export function NewProjectDialog({ initiatives }: { initiatives: InitiativeOptio
       }}
     >
       <DialogTrigger asChild>
-        <Button className="gap-2">
+        <Button variant="outline" className="gap-2">
           <Plus className="size-4" />
           New project
         </Button>

@@ -1,5 +1,5 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { CardDetailSheet } from "@/app/boards/[boardId]/_components/card-detail-sheet";
 import type { BoardCardData, BoardMemberSummary } from "@/app/boards/types";
 
@@ -183,6 +183,35 @@ describe("CardDetailSheet", () => {
     expect(onMoveToColumn).toHaveBeenCalledWith("33333333-3333-4333-8333-333333333333", "col-done");
   });
 
+  describe("focus on open", () => {
+    function setPointer(coarse: boolean) {
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        writable: true,
+        value: (query: string) => ({ matches: coarse && query === "(pointer: coarse)" }),
+      });
+    }
+
+    afterEach(() => {
+      Reflect.deleteProperty(window, "matchMedia");
+    });
+
+    it("focuses the title with a mouse or keyboard", async () => {
+      setPointer(false);
+      renderSheet({});
+
+      await waitFor(() => expect(screen.getByLabelText("Title")).toHaveFocus());
+    });
+
+    it("keeps focus on the sheet, not the title, on a touch screen so no keyboard pops up", async () => {
+      setPointer(true);
+      renderSheet({});
+
+      await waitFor(() => expect(screen.getByRole("dialog")).toHaveFocus());
+      expect(screen.getByLabelText("Title")).not.toHaveFocus();
+    });
+  });
+
   it("renders header fallback when card is null", () => {
     renderSheet({ card: null });
 
@@ -340,8 +369,6 @@ describe("CardDetailSheet", () => {
 
   it("shows timeline summaries and handles delete confirmation", async () => {
     const onDelete = vi.fn();
-    vi.mocked(window.confirm).mockReturnValueOnce(false).mockReturnValueOnce(true);
-
     renderSheet({ onDelete });
 
     expect(screen.getByText("Card created")).toBeInTheDocument();
@@ -354,9 +381,12 @@ describe("CardDetailSheet", () => {
     expect(screen.getByText(/System \u00b7 Unknown time/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Delete card" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
     expect(onDelete).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Delete card" }));
+    const dialog = await screen.findByRole("dialog", { name: "Delete this card?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete card" }));
 
     await waitFor(() => {
       expect(onDelete).toHaveBeenCalledWith("33333333-3333-4333-8333-333333333333");

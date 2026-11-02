@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,6 +17,8 @@ interface ConfirmOptions {
   cancelLabel?: string;
   /** Style the confirm button as destructive, for deletes. */
   destructive?: boolean;
+  /** Where focus goes on close when the element that asked is gone (e.g. a menu item). */
+  returnFocusTo?: () => HTMLElement | null;
 }
 
 interface Pending extends ConfirmOptions {
@@ -30,12 +32,15 @@ interface Pending extends ConfirmOptions {
  */
 export function useConfirm() {
   const [pending, setPending] = useState<Pending | null>(null);
+  // the dialog has no trigger, so remember who asked and give focus back when it closes
+  const asker = useRef<HTMLElement | null>(null);
+  const returnFocusTo = useRef<ConfirmOptions["returnFocusTo"]>(undefined);
 
-  const confirm = useCallback(
-    (message: string, options: ConfirmOptions = {}) =>
-      new Promise<boolean>((resolve) => setPending({ message, resolve, ...options })),
-    []
-  );
+  const confirm = useCallback((message: string, options: ConfirmOptions = {}) => {
+    asker.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    returnFocusTo.current = options.returnFocusTo;
+    return new Promise<boolean>((resolve) => setPending({ message, resolve, ...options }));
+  }, []);
 
   function settle(confirmed: boolean) {
     pending?.resolve(confirmed);
@@ -44,7 +49,17 @@ export function useConfirm() {
 
   const dialog = (
     <Dialog open={pending !== null} onOpenChange={(open) => (open ? undefined : settle(false))}>
-      <DialogContent showCloseButton={false} className="sm:max-w-sm">
+      <DialogContent
+        showCloseButton={false}
+        className="sm:max-w-sm"
+        onCloseAutoFocus={(event) => {
+          const target = asker.current?.isConnected ? asker.current : returnFocusTo.current?.();
+          if (target) {
+            event.preventDefault();
+            target.focus();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{pending?.title ?? "Are you sure?"}</DialogTitle>
           <DialogDescription>{pending?.message}</DialogDescription>

@@ -120,3 +120,14 @@ export function formatDueLabel(due: string, now: Date = new Date()): string {
   });
   return isPastDue(date, now) ? `Overdue · ${label}` : `Due ${label}`;
 }
+
+/** An instant as a Toronto-time deadline, e.g. "Oct 12, 10:45 AM". */
+export function formatDeadline(at: Date | string): string {
+  return new Date(at).toLocaleString("en-US", {
+    timeZone: "America/Toronto",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}

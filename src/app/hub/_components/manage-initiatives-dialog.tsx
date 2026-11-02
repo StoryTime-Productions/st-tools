@@ -6,13 +6,13 @@ import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { deleteInitiativeAction, renameInitiativeAction } from "@/app/actions/hub";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { keepOpenForInlineEdit } from "@/lib/dismiss";
@@ -23,6 +23,7 @@ function InitiativeRow({ initiative }: { initiative: InitiativeOption }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(initiative.name);
   const [isPending, startTransition] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
 
   function handleRename() {
     startTransition(async () => {
@@ -37,12 +38,13 @@ function InitiativeRow({ initiative }: { initiative: InitiativeOption }) {
     });
   }
 
-  function handleDelete() {
-    if (
-      !window.confirm(
-        `Delete "${initiative.name}"? Its projects stay, but will no longer have an initiative.`
-      )
-    ) {
+  async function handleDelete() {
+    const confirmed = await confirm(`Its projects stay, but will no longer have an initiative.`, {
+      title: `Delete "${initiative.name}"?`,
+      confirmLabel: "Delete initiative",
+      destructive: true,
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -108,17 +110,30 @@ function InitiativeRow({ initiative }: { initiative: InitiativeOption }) {
           <Trash2 className="size-4" />
         </Button>
       </div>
+      {confirmDialog}
     </li>
   );
 }
 
-export function ManageInitiativesDialog({ initiatives }: { initiatives: InitiativeOption[] }) {
+export function ManageInitiativesDialog({
+  initiatives,
+  open,
+  onOpenChange,
+  onCloseAutoFocus,
+}: {
+  initiatives: InitiativeOption[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** Lets the opener (a button or a menu item) take focus back when the dialog closes. */
+  onCloseAutoFocus?: (event: Event) => void;
+}) {
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="outline">Manage initiatives</Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md" onEscapeKeyDown={keepOpenForInlineEdit}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="sm:max-w-md"
+        onEscapeKeyDown={keepOpenForInlineEdit}
+        onCloseAutoFocus={onCloseAutoFocus}
+      >
         <DialogHeader>
           <DialogTitle>Initiatives</DialogTitle>
           <DialogDescription>

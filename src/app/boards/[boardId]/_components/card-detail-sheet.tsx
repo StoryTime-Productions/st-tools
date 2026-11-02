@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import type { BoardCardActivityData, BoardCardData, BoardMemberSummary } from "@/app/boards/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CardGithubIssue } from "@/app/boards/[boardId]/_components/card-github-issue";
@@ -215,6 +216,7 @@ function CardDetailSheetBody({
   onSetGithubIssue: CardDetailSheetProps["onSetGithubIssue"];
   onDelete: CardDetailSheetProps["onDelete"];
 }) {
+  const [confirm, confirmDialog] = useConfirm();
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description ?? "");
   const [labels, setLabels] = useState<string[]>(card.labels);
@@ -275,8 +277,13 @@ function CardDetailSheetBody({
     });
   }
 
-  function handleDelete() {
-    if (!window.confirm(`Delete "${card.title}"?`)) {
+  async function handleDelete() {
+    const confirmed = await confirm(`Delete "${card.title}"? This cannot be undone.`, {
+      title: "Delete this card?",
+      confirmLabel: "Delete card",
+      destructive: true,
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -673,6 +680,7 @@ function CardDetailSheetBody({
           </Button>
         </div>
       </SheetFooter>
+      {confirmDialog}
     </>
   );
 }
@@ -693,9 +701,22 @@ export function CardDetailSheet({
   onSetGithubIssue,
   onDelete,
 }: CardDetailSheetProps) {
+  const content = useRef<HTMLDivElement>(null);
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-xl">
+      <SheetContent
+        ref={content}
+        className="w-full sm:max-w-xl"
+        onOpenAutoFocus={(event) => {
+          // on a touch screen, focusing the Title input would raise the keyboard before anyone
+          // asked to type; keep focus inside the sheet but on the sheet itself
+          if (window.matchMedia?.("(pointer: coarse)").matches) {
+            event.preventDefault();
+            content.current?.focus();
+          }
+        }}
+      >
         <SheetHeader>
           <SheetTitle>{card?.title ?? "Card details"}</SheetTitle>
           <SheetDescription>

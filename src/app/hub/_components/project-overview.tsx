@@ -6,12 +6,14 @@ import { ProjectCover } from "@/app/hub/_components/project-cover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { ViewMenu } from "@/app/hub/_components/view-menu";
 import { SegmentedToggle } from "@/components/ui/segmented-toggle";
 import { Button } from "@/components/ui/button";
 import { dayLabel, timeLabel } from "@/lib/calendar";
 import type { HangoutCardInfo } from "@/lib/hangouts";
 import type { ProjectSummary } from "@/lib/hub";
 import {
+  formatDeadline,
   groupByInitiative,
   groupByQuarter,
   HANGOUT_STATUS_LABEL,
@@ -138,13 +140,36 @@ export function ProjectOverview({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-2">
-        <SegmentedToggle label="Layout" options={MODES} value={mode} onChange={modeStore.choose} />
-        <SegmentedToggle label="View" options={VIEWS} value={view} onChange={viewStore.choose} />
+      <div className="flex items-center gap-2 md:flex-wrap">
+        <ViewMenu
+          groups={[
+            {
+              label: "Show",
+              options: MODES,
+              value: mode,
+              onChange: (next) => modeStore.choose(next as Mode),
+            },
+            {
+              label: "Group by",
+              options: VIEWS,
+              value: view,
+              onChange: (next) => viewStore.choose(next as View),
+            },
+          ]}
+        />
+        <div className="hidden md:flex md:flex-wrap md:items-center md:gap-2">
+          <SegmentedToggle
+            label="Layout"
+            options={MODES}
+            value={mode}
+            onChange={modeStore.choose}
+          />
+          <SegmentedToggle label="View" options={VIEWS} value={view} onChange={viewStore.choose} />
+        </div>
         <Button
           type="button"
           size="sm"
-          className="sm:ml-auto"
+          className="md:ml-auto"
           variant={showPast ? "default" : "outline"}
           aria-pressed={showPast}
           onClick={() => setShowPast((current) => !current)}
@@ -221,22 +246,12 @@ function ItemGroups({
   ));
 }
 
-const DEADLINE = {
-  timeZone: "America/Toronto",
-  month: "short",
-  day: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-} as const;
-
 /** The one line that says what a hangout needs from you: when it is, or whether to fill in availability. */
 function hangoutWhen(hangout: HangoutCardInfo) {
   if (hangout.phase === "COLLECTING") {
     const due = hangout.availabilityDeadline ? new Date(hangout.availabilityDeadline) : null;
     const deadline =
-      due && due.getTime() >= Date.now()
-        ? ` · fill in by ${due.toLocaleString("en-US", DEADLINE)}`
-        : "";
+      due && due.getTime() >= Date.now() ? ` · fill in by ${formatDeadline(due)}` : "";
     return `${hangout.responded ? "You've responded" : "You haven't responded"}${deadline}`;
   }
   if (hangout.startSlot) {
