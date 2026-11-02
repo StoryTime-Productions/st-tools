@@ -745,6 +745,16 @@ model DiscordWordleStreak {
   @@map("discord_wordle_streak")
 }
 
+model DiscordBirthday {
+  discordId String  @id
+  name      String
+  avatarUrl String?
+  month     Int
+  day       Int
+
+  @@map("discord_birthdays")
+}
+
 model DiscordStatsPulse {
   // Singleton row (id is always 1): touched on every change so the dashboard can refresh live.
   id        Int      @id @default(1)
