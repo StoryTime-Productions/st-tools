@@ -371,8 +371,13 @@ export function AvailabilityGrid({
             </button>
           ))}
         </div>
+        {view === "mine" ? (
+          <p className="text-muted-foreground hidden text-sm min-[1100px]:block">
+            Switch to Group to see who else is free.
+          </p>
+        ) : null}
         {paged ? (
-          <div className="ml-auto flex items-center gap-1">
+          <div className="flex w-full items-center justify-between gap-1 sm:ml-auto sm:w-auto sm:justify-start">
             <Button
               type="button"
               variant="outline"
@@ -403,7 +408,7 @@ export function AvailabilityGrid({
       </div>
 
       {view === "mine" ? (
-        <section className="space-y-2">
+        <section className="space-y-2 lg:col-span-full">
           <div>
             <h3 className="text-sm font-medium">Your availability</h3>
             <p className="text-muted-foreground text-xs">
@@ -568,11 +573,7 @@ export function AvailabilityGrid({
             </p>
           )}
         </aside>
-      ) : (
-        <p className="text-muted-foreground hidden self-start text-sm lg:block">
-          Switch to Group to see who else is free.
-        </p>
-      )}
+      ) : null}
       <p className="sr-only" aria-live="polite">
         {announcement}
       </p>
