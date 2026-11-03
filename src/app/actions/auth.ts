@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { isRecoverySession } from "@/lib/auth-recovery";
+import { RESET_LINK_EXPIRED } from "@/lib/auth-errors";
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
@@ -262,7 +263,7 @@ export async function updatePasswordAction(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const expired = { error: "This reset link has expired. Request a new one." };
+  const expired = { error: RESET_LINK_EXPIRED };
   if (!user) {
     return expired;
   }

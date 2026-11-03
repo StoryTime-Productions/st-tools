@@ -44,6 +44,17 @@ function Harness() {
   );
 }
 
+describe("FormMessage", () => {
+  it("announces a field error with a decorative icon", async () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Name is required");
+    expect(alert.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+  });
+});
+
 describe("FormDescription", () => {
   it("shows the hint until the field has an error, then lets the error speak", async () => {
     render(<Harness />);

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import ResetPasswordPage from "@/app/auth/reset-password/page";
 import { ResetPasswordForm } from "@/app/auth/reset-password/reset-password-form";
+import { RESET_LINK_EXPIRED } from "@/lib/auth-errors";
 
 const createClientMock = vi.hoisted(() => vi.fn());
 const redirectMock = vi.hoisted(() =>
@@ -93,6 +94,32 @@ describe("ResetPasswordForm", () => {
     fill("longenough1", "different12");
     expect(await screen.findByText("Passwords do not match")).toBeVisible();
     expect(actionMocks.updatePasswordAction).not.toHaveBeenCalled();
+  });
+
+  it("offers a new link when the session expired while the form was open", async () => {
+    actionMocks.updatePasswordAction.mockResolvedValue({ error: RESET_LINK_EXPIRED });
+    render(<ResetPasswordForm />);
+
+    fill("longenough1", "longenough1");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(RESET_LINK_EXPIRED);
+    expect(screen.getByRole("link", { name: "Request a new link" })).toHaveAttribute(
+      "href",
+      "/auth/forgot-password"
+    );
+    // retrying cannot work, so the new link is the only action left
+    expect(screen.queryByRole("button", { name: "Save password" })).not.toBeInTheDocument();
+  });
+
+  it("does not offer a new link for other server errors", async () => {
+    actionMocks.updatePasswordAction.mockResolvedValue({ error: "Could not update password." });
+    render(<ResetPasswordForm />);
+
+    fill("longenough1", "longenough1");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not update password.");
+    expect(screen.queryByRole("link", { name: "Request a new link" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save password" })).toBeInTheDocument();
   });
 
   it("saves a valid new password", async () => {
