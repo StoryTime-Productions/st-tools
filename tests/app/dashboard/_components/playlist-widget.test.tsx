@@ -82,7 +82,7 @@ describe("PlaylistWidget", () => {
   it("shows the empty state", async () => {
     getPlaylistWidgetData.mockResolvedValue({ state: "empty", ...week });
     await show();
-    expect(screen.getByText("You have not added a song for Week 4 yet")).toBeInTheDocument();
+    expect(screen.getByText(/You have not added a song for Week 4 yet\./)).toBeInTheDocument();
   });
 
   it("shows raw text and a search link when unmatched", async () => {
