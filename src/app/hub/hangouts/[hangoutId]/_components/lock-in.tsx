@@ -83,8 +83,11 @@ export function RankedSlots({
           >
             <span>
               <span className="text-muted-foreground mr-2 tabular-nums">{index + 1}.</span>
-              {dayLabel(option.day, DAY)}, {timeLabel(option.start)} – {timeLabel(option.end)}
-              <span className="text-muted-foreground">
+              {dayLabel(option.day, DAY)},{" "}
+              <span className="whitespace-nowrap">
+                {timeLabel(option.start)} – {timeLabel(option.end)}
+              </span>
+              <span className="text-muted-foreground whitespace-nowrap">
                 {" "}
                 · {option.free.length} of {total} free
               </span>
@@ -141,11 +144,14 @@ export function LockedIn({
   startSlot,
   attendees,
   userId,
+  ended = false,
 }: {
   hangoutId: string;
   startSlot: string;
   attendees: { userId: string; name: string; status: string }[];
   userId: string;
+  /** The hangout is over, so the attendance buttons are disabled and the card says why. */
+  ended?: boolean;
 }) {
   const [isPending, run] = useAction();
   const [day, time] = startSlot.split("T");
@@ -154,7 +160,7 @@ export function LockedIn({
 
   return (
     <div className="space-y-4 text-sm">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
             Locked in
@@ -164,6 +170,11 @@ export function LockedIn({
           </p>
         </div>
         <div className="space-y-1">
+          {ended ? (
+            <p className="text-muted-foreground text-xs sm:text-right">
+              This hangout has ended, so responses are closed.
+            </p>
+          ) : null}
           <p className="text-muted-foreground text-xs sm:text-right">
             Your response: {mineLabel ?? "Not answered"}
           </p>
@@ -187,7 +198,7 @@ export function LockedIn({
           </div>
         </div>
       </div>
-      <dl className="space-y-2">
+      <dl className="space-y-3">
         {STATUSES.map(([status, label]) => {
           const people = attendees.filter((attendee) => attendee.status === status);
           return (
