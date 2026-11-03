@@ -44,7 +44,36 @@ function Harness() {
   );
 }
 
+function MessageHarness() {
+  const form = useForm<{ name: string }>({ defaultValues: { name: "" } });
+
+  return (
+    <Form {...form}>
+      <FormField
+        control={form.control}
+        name="name"
+        render={({ field }) => (
+          <FormItem>
+            <FormControl>
+              <input aria-label="Name" {...field} />
+            </FormControl>
+            <FormMessage>Choose a name</FormMessage>
+          </FormItem>
+        )}
+      />
+    </Form>
+  );
+}
+
 describe("FormMessage", () => {
+  it("shows supplied text plainly when the field has no error", () => {
+    render(<MessageHarness />);
+
+    const message = screen.getByText("Choose a name");
+    expect(message).not.toHaveAttribute("role");
+    expect(message.querySelector("svg")).toBeNull();
+  });
+
   it("announces a field error with a decorative icon", async () => {
     render(<Harness />);
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
