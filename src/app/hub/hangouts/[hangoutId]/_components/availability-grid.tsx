@@ -297,10 +297,11 @@ export function AvailabilityGrid({
     );
   }
 
-  const green = "[--avail:var(--color-green-500)] dark:[--avail:var(--color-green-400)]";
+  // Muted sage: still reads as "free" but sits quietly on the neutral card.
+  const freeTone = "[--avail:oklch(0.55_0.09_155)] dark:[--avail:oklch(0.74_0.09_155)]";
   const cellClass = (row: number) =>
     cn(
-      green,
+      freeTone,
       "focus-visible:ring-ring h-4 border-l border-t focus-visible:ring-2 focus-visible:outline-none",
       row % 4 === 0 ? "border-t-border" : "border-t-border/30"
     );
@@ -416,7 +417,7 @@ export function AvailabilityGrid({
             </p>
             <p
               className={cn(
-                green,
+                freeTone,
                 "text-muted-foreground mt-1.5 flex items-center gap-1.5 text-xs"
               )}
             >
@@ -484,7 +485,7 @@ export function AvailabilityGrid({
             </p>
             <p
               className={cn(
-                green,
+                freeTone,
                 "text-muted-foreground mt-1.5 flex items-center gap-1.5 text-xs"
               )}
             >
