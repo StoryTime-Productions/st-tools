@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -17,6 +18,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { RESET_LINK_EXPIRED } from "@/lib/auth-errors";
 import { AuthError } from "../_components/auth-error";
 
 const schema = z
@@ -86,9 +88,15 @@ export function ResetPasswordForm() {
               )}
             />
             <AuthError message={serverError} />
-            <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? "Saving…" : "Save password"}
-            </Button>
+            {serverError === RESET_LINK_EXPIRED ? (
+              <Button asChild className="w-full">
+                <Link href="/auth/forgot-password">Request a new link</Link>
+              </Button>
+            ) : (
+              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? "Saving…" : "Save password"}
+              </Button>
+            )}
           </form>
         </Form>
       </CardContent>

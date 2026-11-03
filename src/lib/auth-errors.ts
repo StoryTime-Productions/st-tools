@@ -5,6 +5,9 @@ export const CALLBACK_ERRORS = {
   expired: "That reset link has expired or was already used. Request a new one.",
 } as const;
 
+/** Returned by the reset action when the recovery session is gone; the form offers a new link for it. */
+export const RESET_LINK_EXPIRED = "This reset link has expired. Request a new one.";
+
 export type CallbackErrorCode = keyof typeof CALLBACK_ERRORS;
 
 /** Fixed message for a known `?error=` code, otherwise null, so a crafted link can never print its own text. */
