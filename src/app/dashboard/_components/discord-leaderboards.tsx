@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { SegmentedToggle } from "@/components/ui/segmented-toggle";
 import {
   STATS_RANGES,
-  formatDay,
   formatMinutes,
   type DiscordStats,
   type LeaderboardRow,
@@ -95,8 +94,7 @@ function Leaderboard({
 }
 
 function voiceNote(stats: DiscordStats) {
-  if (!stats.voiceTrackedSince) return "Voice time starts counting once voice tracking is on.";
-  return `Voice time counted since ${formatDay(stats.voiceTrackedSince)}. Earlier time is not available.`;
+  return stats.voiceTrackedSince ? null : "Voice time starts counting once voice tracking is on.";
 }
 
 export function DiscordLeaderboards({ stats }: { stats: Record<StatsRange, DiscordStats> }) {
