@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { describeWeather } from "@/lib/weather-codes";
 
 type WeatherInfo = {
@@ -26,6 +27,7 @@ type CachedWeatherRecord = {
 
 const WEATHER_REFRESH_MS = 60 * 60 * 1000;
 const WEATHER_CACHE_KEY = "dashboard-weather-cache-v1";
+const WEATHER_ERROR = "Weather unavailable right now.";
 
 function isValidWeatherInfo(value: unknown): value is WeatherInfo {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -134,7 +136,8 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
   const [now, setNow] = useState(() => new Date());
   const [weather, setWeather] = useState<WeatherInfo | null>(null);
   const [isWeatherLoading, setIsWeatherLoading] = useState(true);
-  const [weatherError, setWeatherError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const statusRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -150,7 +153,6 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
       if (cachedWeather) {
         if (!cancelled) {
           setWeather(cachedWeather);
-          setWeatherError(null);
           setIsWeatherLoading(false);
         }
 
@@ -158,7 +160,6 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
       }
 
       setIsWeatherLoading(true);
-      setWeatherError(null);
 
       try {
         const nextWeather = await loadWeather();
@@ -166,12 +167,8 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
           setWeather(nextWeather);
           writeCachedWeather(nextWeather);
         }
-      } catch (error) {
-        if (!cancelled) {
-          setWeatherError(
-            error instanceof Error ? error.message : "Weather unavailable right now."
-          );
-        }
+      } catch {
+        // The card shows a friendly message with Retry; the cause is not useful on a dashboard.
       } finally {
         if (!cancelled) {
           setIsWeatherLoading(false);
@@ -186,7 +183,7 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
       cancelled = true;
       clearInterval(refreshTimer);
     };
-  }, []);
+  }, [attempt]);
 
   const liveDate = useMemo(
     () =>
@@ -221,7 +218,7 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
   const weatherView = useMemo(() => {
     if (isWeatherLoading) {
       return (
-        <p className="flex items-center gap-2 text-sm text-slate-300">
+        <p role="status" className="flex items-center gap-2 text-sm text-slate-300">
           <LoaderCircle className="size-4 animate-spin" />
           Loading weather...
         </p>
@@ -230,7 +227,25 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
 
     if (!weather) {
       return (
-        <p className="text-sm text-slate-300">{weatherError ?? "Weather unavailable right now."}</p>
+        <p
+          role="status"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-300"
+        >
+          {WEATHER_ERROR}
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            className="rounded-full border-slate-500 bg-transparent text-slate-100 hover:bg-slate-800 hover:text-white dark:border-slate-500 dark:bg-transparent dark:hover:bg-slate-800"
+            onClick={() => {
+              setAttempt((count) => count + 1);
+              // the button is replaced by the loading line, so keep keyboard focus on the card
+              statusRef.current?.focus();
+            }}
+          >
+            Retry
+          </Button>
+        </p>
       );
     }
 
@@ -254,7 +269,7 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
         ) : null}
       </p>
     );
-  }, [isWeatherLoading, weather, weatherError]);
+  }, [isWeatherLoading, weather]);
 
   return (
     <div className="space-y-3">
@@ -270,7 +285,9 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
           ) : null}
         </span>
       </p>
-      {weatherView}
+      <div ref={statusRef} tabIndex={-1} className="outline-none">
+        {weatherView}
+      </div>
     </div>
   );
 }

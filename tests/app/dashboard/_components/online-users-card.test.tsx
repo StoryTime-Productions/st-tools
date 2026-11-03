@@ -114,6 +114,7 @@ describe("OnlineUsersCard", () => {
 
     expect(screen.getByText("Online now")).toBeInTheDocument();
     expect(screen.getByText("Current User (You)")).toBeInTheDocument();
+    expect(screen.getByText(", online")).toHaveClass("sr-only");
     expect(screen.queryByRole("button", { name: "Poke" })).not.toBeInTheDocument();
 
     await waitFor(() => {

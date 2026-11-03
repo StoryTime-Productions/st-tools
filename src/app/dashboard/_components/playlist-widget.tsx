@@ -1,7 +1,6 @@
 import Image from "next/image";
 import { ExternalLink, Music } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { formatDuration } from "@/lib/playlist-music";
 import { getPlaylistWidgetData, type PlaylistLinks } from "@/lib/playlist-widget";
 
@@ -11,7 +10,7 @@ function ExternalAnchor({ href, children }: { href: string; children: React.Reac
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="text-foreground inline-flex items-center gap-1 underline underline-offset-4 hover:decoration-2"
+      className="text-foreground inline-flex items-center gap-1 underline underline-offset-4 hover:decoration-2 max-md:min-h-11"
     >
       {children}
       <ExternalLink className="size-3.5" aria-hidden />
@@ -97,13 +96,16 @@ export async function PlaylistWidget({ discordId }: { discordId: string | null }
 
         {data.state === "empty" ? (
           <div className="flex items-center gap-4">
-            <Skeleton className="size-[72px] shrink-0 rounded-xl" />
-            <div className="space-y-2">
-              <p className="text-sm font-medium">
-                You have not added a song for Week {data.weekNumber} yet
-              </p>
-              <Skeleton className="h-3 w-24" />
+            <div
+              aria-hidden="true"
+              className="bg-muted text-muted-foreground flex size-[72px] shrink-0 items-center justify-center rounded-xl"
+            >
+              <Music className="size-6" />
             </div>
+            <p className="text-sm font-medium">
+              You have not added a song for Week {data.weekNumber} yet.
+              {data.sheetUrl ? " Add one in the sheet." : ""}
+            </p>
           </div>
         ) : null}
 
