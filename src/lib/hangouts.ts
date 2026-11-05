@@ -11,7 +11,7 @@ import type { AvailabilityResponse } from "@/lib/availability";
 import { scheduleStops, spanDays } from "@/lib/itinerary";
 import { hangoutEnd, hangoutPhase, unpaidCount, type HangoutPhase } from "@/lib/lifecycle";
 import { prisma } from "@/lib/prisma";
-import type { CarSchedule, StopRoute } from "@/lib/routes";
+import type { CarSchedule, StopRoute, TransitRoute } from "@/lib/routes";
 
 export interface HangoutSummary {
   id: string;
@@ -67,6 +67,8 @@ export interface HangoutTransitItem {
   destAddress: string | null;
   destLat: number | null;
   destLon: number | null;
+  /** The stored itinerary, `{error}` when none could be planned, null until one is. */
+  route: TransitRoute | null;
 }
 
 export interface HangoutCostItem {
@@ -263,6 +265,7 @@ export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail
           destAddress: true,
           destLat: true,
           destLon: true,
+          route: true,
           user: { select: { id: true, name: true, email: true } },
         },
         orderBy: { user: { name: "asc" } },
@@ -368,8 +371,9 @@ export async function getHangoutDetail(hangoutId: string): Promise<HangoutDetail
         dropoffs: listed("DROPOFF"),
       };
     }),
-    transit: transit.map(({ user, ...row }) => ({
+    transit: transit.map(({ user, route, ...row }) => ({
       ...row,
+      route: route as TransitRoute | null,
       userId: user.id,
       name: user.name ?? user.email,
     })),

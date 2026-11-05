@@ -141,6 +141,7 @@ describe("hangout data loaders", () => {
             destAddress: "3 Oak St",
             destLat: 3,
             destLon: 4,
+            route: { error: "no route", computedAt: "2026-10-12T00:00:00.000Z" },
             user: { id: "c", name: "Cara", email: "c@x.gg" },
           },
         ],
@@ -273,6 +274,7 @@ describe("hangout data loaders", () => {
           destAddress: "3 Oak St",
           destLat: 3,
           destLon: 4,
+          route: { error: "no route", computedAt: "2026-10-12T00:00:00.000Z" },
         },
       ],
       cars: [

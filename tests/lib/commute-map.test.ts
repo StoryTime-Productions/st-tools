@@ -5,6 +5,7 @@ import {
   toMapCar,
   toMapTransit,
   CAR_COLORS,
+  TRANSIT_COLORS,
   type MapCar,
   type MapPassenger,
   type MapStop,
@@ -225,11 +226,34 @@ describe("buildCommuteMap", () => {
 
   describe("public transit (AC 8)", () => {
     it("passes transit pins through with trip planner links, and none without transit", () => {
-      const rider = { name: "Eve", trip: "there" as const, position: [9, 9] as [number, number] };
+      const rider = {
+        userId: "e",
+        name: "Eve",
+        trip: "there" as const,
+        position: [9, 9] as [number, number],
+        color: TRANSIT_COLORS[0],
+        legs: [],
+      };
       const withTransit = buildCommuteMap([], [], null, [rider]);
       expect(withTransit.transit).toEqual([rider]);
       expect(withTransit.planners.map((p) => p.label)).toEqual(["STM", "exo"]);
       expect(buildCommuteMap([], []).planners).toEqual([]);
+    });
+
+    it("drops the trip planner links once every rider has a drawn route (AC 4)", () => {
+      const leg = { label: "Eve · walk", walk: true, path: [[1, 1]] as [number, number][] };
+      const drawn = {
+        userId: "e",
+        name: "Eve",
+        trip: "there" as const,
+        position: [9, 9] as [number, number],
+        color: "#000",
+        legs: [leg],
+      };
+      expect(buildCommuteMap([], [], null, [drawn]).planners).toEqual([]);
+      expect(
+        buildCommuteMap([], [], null, [drawn, { ...drawn, userId: "f", legs: [] }]).planners
+      ).toHaveLength(2);
     });
 
     it("maps transit rows to the matching phase at their start", () => {
@@ -242,6 +266,7 @@ describe("buildCommuteMap", () => {
         destAddress: null,
         destLat: null,
         destLon: null,
+        route: null,
       };
       expect(
         toMapTransit([
@@ -249,9 +274,127 @@ describe("buildCommuteMap", () => {
           { ...row, direction: "DROPOFF" },
         ])
       ).toEqual([
-        { name: "Eve", trip: "there", position: [9, 8] },
-        { name: "Eve", trip: "back", position: [9, 8] },
+        {
+          userId: "e",
+          name: "Eve",
+          trip: "there",
+          position: [9, 8],
+          color: TRANSIT_COLORS[0],
+          legs: [],
+        },
+        {
+          userId: "e",
+          name: "Eve",
+          trip: "back",
+          position: [9, 8],
+          color: TRANSIT_COLORS[0],
+          legs: [],
+        },
       ]);
+    });
+
+    it("labels each stored leg with the owner and line, and keeps one colour per rider", () => {
+      const row = {
+        userId: "e",
+        name: "Eve",
+        direction: "PICKUP" as const,
+        startAddress: "x",
+        startLat: 9,
+        startLon: 8,
+        destAddress: null,
+        destLat: null,
+        destLon: null,
+      };
+      const place = { name: "p", lat: 0, lon: 0 };
+      const route = {
+        start: "s",
+        end: "e",
+        minutes: 30,
+        computedAt: "t",
+        legs: [
+          {
+            mode: "WALK",
+            from: place,
+            to: place,
+            path: [
+              [1, 1],
+              [2, 2],
+            ] as [number, number][],
+          },
+          {
+            mode: "SUBWAY",
+            agency: "STM",
+            line: "2",
+            from: place,
+            to: place,
+            path: [
+              [2, 2],
+              [3, 3],
+            ] as [number, number][],
+          },
+          {
+            mode: "RAIL",
+            from: place,
+            to: place,
+            path: [
+              [3, 3],
+              [4, 4],
+            ] as [number, number][],
+          },
+        ],
+      };
+      const [there, back, other] = toMapTransit([
+        { ...row, route },
+        { ...row, direction: "DROPOFF", route: { error: "no route", computedAt: "t" } },
+        { ...row, userId: "f", name: "Finn", route: null },
+      ]);
+      expect(there.legs).toEqual([
+        {
+          label: "Eve · walk",
+          walk: true,
+          path: [
+            [1, 1],
+            [2, 2],
+          ],
+        },
+        {
+          label: "Eve · STM 2",
+          walk: false,
+          path: [
+            [2, 2],
+            [3, 3],
+          ],
+        },
+        {
+          label: "Eve · rail",
+          walk: false,
+          path: [
+            [3, 3],
+            [4, 4],
+          ],
+        },
+      ]);
+      expect(back.legs).toEqual([]);
+      expect(other.legs).toEqual([]);
+      expect(back.color).toBe(there.color);
+      expect(other.color).toBe(TRANSIT_COLORS[1]);
+    });
+
+    it("keeps transit colours distinct from car colours and wraps past the palette", () => {
+      expect(TRANSIT_COLORS.filter((color) => CAR_COLORS.includes(color))).toEqual([]);
+      const rows = Array.from({ length: TRANSIT_COLORS.length + 1 }, (_, i) => ({
+        userId: `u${i}`,
+        name: `P${i}`,
+        direction: "PICKUP" as const,
+        startAddress: "x",
+        startLat: 1,
+        startLon: 1,
+        destAddress: null,
+        destLat: null,
+        destLon: null,
+        route: null,
+      }));
+      expect(toMapTransit(rows)[TRANSIT_COLORS.length].color).toBe(TRANSIT_COLORS[0]);
     });
   });
 
@@ -332,6 +475,17 @@ describe("arrowsAlong", () => {
       1
     );
     expect(Math.round(south[0].bearing)).toBe(180);
+  });
+
+  it("drops arrows from a short path so none overlap, and keeps all on a long one", () => {
+    const path = (length: number): [number, number][] => [
+      [0, 0],
+      [0, length],
+    ];
+    expect(arrowsAlong(path(0.025), 4, 0.01)).toHaveLength(2);
+    expect(arrowsAlong(path(0.005), 4, 0.01)).toEqual([]);
+    expect(arrowsAlong(path(1), 4, 0.01)).toHaveLength(4);
+    expect(arrowsAlong(path(0.005), 4)).toHaveLength(4);
   });
 
   it("follows a bend and gives nothing for an empty path", () => {

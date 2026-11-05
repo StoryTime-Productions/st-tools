@@ -555,6 +555,7 @@ describe("Carpools", () => {
       destAddress: "7 Home Rd",
       destLat: 3,
       destLon: 4,
+      route: null,
     };
     const rideWith = { ...CAR, pickups: [{ ...BOB, userId: "c", name: "Cara" }], dropoffs: [] };
 

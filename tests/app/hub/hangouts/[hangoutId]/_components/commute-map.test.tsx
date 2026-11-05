@@ -22,7 +22,12 @@ const leaflet = vi.hoisted(() => {
     map: vi.fn(() => map),
     tileLayer: vi.fn<(url: string, options?: unknown) => ReturnType<typeof layer>>(layer),
     polyline:
-      vi.fn<(line: unknown, options?: { dashArray?: string }) => ReturnType<typeof layer>>(layer),
+      vi.fn<
+        (
+          line: unknown,
+          options?: { dashArray?: string; color?: string; lineCap?: string }
+        ) => ReturnType<typeof layer>
+      >(layer),
     marker:
       vi.fn<
         (
@@ -278,8 +283,8 @@ describe("CommuteMap", () => {
     const data: MapData = {
       ...DATA,
       transit: [
-        { name: "Eve", trip: "there", position: [9, 9] },
-        { name: "Finn", trip: "back", position: [7, 7] },
+        { userId: "e", name: "Eve", trip: "there", position: [9, 9], color: "#be185d", legs: [] },
+        { userId: "f", name: "Finn", trip: "back", position: [7, 7], color: "#a16207", legs: [] },
       ],
       planners: [
         { label: "STM", url: "https://www.stm.info/en" },
@@ -299,6 +304,115 @@ describe("CommuteMap", () => {
     fireEvent.click(screen.getByRole("button", { name: "Getting home" }));
     await waitFor(() => expect(screen.getByText(/By public transit: Finn\./)).toBeTruthy());
     expect(screen.queryByText(/Eve/)).toBeNull();
+  });
+
+  describe("transit lines (T3, AC 1)", () => {
+    const WALK = {
+      label: "Eve · walk",
+      walk: true,
+      path: [
+        [8, 8],
+        [8.5, 8.5],
+      ] as [number, number][],
+    };
+    const METRO = {
+      label: "Eve · STM 2",
+      walk: false,
+      path: [
+        [8.5, 8.5],
+        [5, 5],
+      ] as [number, number][],
+    };
+    const drawn: MapData = {
+      ...DATA,
+      cars: [],
+      transit: [
+        {
+          userId: "e",
+          name: "Eve",
+          trip: "there",
+          position: [8, 8],
+          color: "#be185d",
+          legs: [WALK, METRO],
+        },
+        {
+          userId: "e",
+          name: "Eve",
+          trip: "back",
+          position: [5, 5],
+          color: "#be185d",
+          legs: [{ ...METRO, label: "Eve · STM 2 (home)" }],
+        },
+      ],
+    };
+    const lines = () =>
+      leaflet.polyline.mock.calls.map(([path, options], i) => ({
+        path,
+        options,
+        tooltip: (
+          leaflet.polyline.mock.results[i].value.bindTooltip.mock.calls[0][0] as HTMLElement
+        ).textContent,
+      }));
+
+    it("draws each leg in the rider's colour, walking dashed and transit solid with arrows", async () => {
+      render(<CommuteMap data={drawn} hasKey />);
+      await waitFor(() => expect(leaflet.instance.fitBounds).toHaveBeenCalled());
+
+      expect(lines()).toEqual([
+        {
+          path: WALK.path,
+          options: expect.objectContaining({ color: "#be185d", dashArray: "1 10" }),
+          tooltip: "Eve · walk",
+        },
+        {
+          path: METRO.path,
+          options: expect.objectContaining({ color: "#be185d", dashArray: undefined }),
+          tooltip: "Eve · STM 2",
+        },
+      ]);
+      const arrows = leaflet.marker.mock.calls.filter(([, o]) => o?.interactive === false);
+      expect(arrows).toHaveLength(4);
+      const bounds = leaflet.instance.fitBounds.mock.calls[0][0];
+      expect(bounds).toContainEqual([8.5, 8.5]);
+      expect(bounds).toContainEqual([5, 5]);
+    });
+
+    it("shows only the active phase's lines and switches without new data", async () => {
+      render(<CommuteMap data={drawn} hasKey />);
+      await waitFor(() => expect(leaflet.instance.fitBounds).toHaveBeenCalled());
+      leaflet.polyline.mockClear();
+
+      fireEvent.click(screen.getByRole("button", { name: "Getting home" }));
+      await waitFor(() => expect(leaflet.polyline).toHaveBeenCalled());
+      expect(lines().map((l) => l.tooltip)).toEqual(["Eve · STM 2 (home)"]);
+    });
+
+    it("lists each rider once in the legend and credits the transit data", async () => {
+      render(<CommuteMap data={drawn} hasKey />);
+      await waitFor(() => expect(leaflet.instance.fitBounds).toHaveBeenCalled());
+
+      const legend = screen.getByRole("list", { name: "Public transit riders" });
+      expect(legend.querySelectorAll("li")).toHaveLength(1);
+      expect(legend.textContent).toContain("Eve (public transit)");
+      expect(screen.getByText(/Transit data: STM, exo/)).toBeTruthy();
+      expect(screen.getByRole("link", { name: "CC BY 4.0" })).toHaveAttribute(
+        "href",
+        "https://www.donneesquebec.ca/licence/#cc-by"
+      );
+      expect(screen.getByText(/Arrows show the direction of travel/)).toBeTruthy();
+      expect(screen.queryByRole("link", { name: "STM" })).toBeNull();
+    });
+
+    it("credits nothing and shows no arrows note for a walk-only route", async () => {
+      const walkOnly: MapData = {
+        ...drawn,
+        transit: [{ ...drawn.transit[0], legs: [WALK] }],
+      };
+      render(<CommuteMap data={walkOnly} hasKey />);
+      await waitFor(() => expect(leaflet.instance.fitBounds).toHaveBeenCalled());
+      expect(screen.queryByText(/Transit data/)).toBeNull();
+      expect(screen.queryByText(/Arrows show/)).toBeNull();
+    });
   });
 
   it("shows no transit line when nobody takes transit", async () => {

@@ -606,6 +606,7 @@ model HangoutTransit {
   destAddress  String?
   destLat      Float?
   destLon      Float?
+  route        Json?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 

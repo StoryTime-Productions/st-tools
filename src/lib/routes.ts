@@ -1,6 +1,7 @@
 import { HangoutStatus, PassengerPointKind, Prisma, RideDirection } from "@prisma/client";
 import { addDays, torontoToUtc } from "@/lib/calendar";
 import { scheduleStops } from "@/lib/itinerary";
+import { planTransit, type TransitPlan, type TransitResult } from "@/lib/otp";
 import { prisma } from "@/lib/prisma";
 import { routeLegs, routeVia, type Point } from "@/lib/tomtom";
 import { getStopWeather, weatherDelay } from "@/lib/weather";
@@ -61,6 +62,96 @@ const PERSON = { name: true, email: true, homeLat: true, homeLon: true } as cons
 const located = (lat: number | null, lon: number | null): Point | null =>
   lat === null || lon === null ? null : { lat, lon };
 
+type PlacedStop = { point: Point; number: number; at: number; end: number };
+
+/** The located stops with their clock times, and the Toronto instant for any minute after Day 1 midnight. */
+function placeStops(
+  startSlot: string,
+  stops: { lat: number | null; lon: number | null; durationMinutes: number; arriveBy: unknown }[]
+) {
+  const { times } = scheduleStops(startSlot, stops as Parameters<typeof scheduleStops>[1]);
+  const startDay = startSlot.slice(0, 10);
+  const instant = (minutes: number) =>
+    torontoToUtc(addDays(startDay, Math.floor(minutes / 1440)), minutes % 1440);
+  const placed: PlacedStop[] = stops.flatMap((stop, index) => {
+    const point = located(stop.lat, stop.lon);
+    const time = times[index];
+    return point && "at" in time
+      ? [{ point, number: index + 1, at: time.at, end: time.at + stop.durationMinutes }]
+      : [];
+  });
+  return { startDay, instant, placed, first: placed[0], last: placed[placed.length - 1] };
+}
+
+/** What `hangout_transit.route` holds: the planned itinerary, or why there isn't one (the card falls back). */
+export type TransitRoute = (TransitPlan | { error: string }) & { computedAt: string };
+
+type RoutableTransit = {
+  id: string;
+  direction: RideDirection;
+  startLat: number;
+  startLon: number;
+  destLat: number | null;
+  destLon: number | null;
+};
+
+/** Getting there arrives at the first located stop's start; getting home leaves at the last stop's end. */
+async function routeTransits(
+  transits: RoutableTransit[],
+  first: { point: Point; at: number } | undefined,
+  last: { end: number } | undefined,
+  instant: (minutes: number) => Date
+) {
+  const plans = await Promise.all(
+    transits.map(async (row): Promise<TransitResult> => {
+      if (!first || !last) return { error: "No stop has an address on the map" };
+      const from = { lat: row.startLat, lon: row.startLon };
+      if (row.direction === RideDirection.PICKUP)
+        return planTransit({ from, to: first.point, arriveAt: instant(first.at) });
+      const to = located(row.destLat, row.destLon);
+      if (!to) return { error: "No destination on the map" };
+      return planTransit({ from, to, departAt: instant(last.end) });
+    })
+  );
+  const computedAt = new Date().toISOString();
+  await Promise.all(
+    transits.map((row, i) =>
+      prisma.hangoutTransit.update({
+        where: { id: row.id },
+        data: { route: { ...plans[i], computedAt } as unknown as Prisma.InputJsonValue },
+      })
+    )
+  );
+}
+
+const TRANSIT = {
+  id: true,
+  direction: true,
+  startLat: true,
+  startLon: true,
+  destLat: true,
+  destLon: true,
+} as const;
+
+/** Plan every transit rider's trip for a scheduled hangout and store it on their row. */
+export async function recomputeTransit(hangoutId: string) {
+  const hangout = await prisma.hangout.findUnique({
+    where: { id: hangoutId },
+    select: {
+      status: true,
+      startSlot: true,
+      stops: {
+        select: { lat: true, lon: true, durationMinutes: true, arriveBy: true },
+        orderBy: { position: "asc" },
+      },
+      transit: { select: TRANSIT },
+    },
+  });
+  if (hangout?.status !== HangoutStatus.SCHEDULED || !hangout.startSlot) return;
+  const { instant, first, last } = placeStops(hangout.startSlot, hangout.stops);
+  await routeTransits(hangout.transit, first, last, instant);
+}
+
 /** Route every car of a scheduled hangout both ways and store the result on the car. */
 // ponytail: re-routes every car on any change (2 calls per car); go per-car if the 2,500/day quota bites.
 export async function recomputeRoutes(hangoutId: string) {
@@ -73,6 +164,7 @@ export async function recomputeRoutes(hangoutId: string) {
         select: { lat: true, lon: true, durationMinutes: true, arriveBy: true },
         orderBy: { position: "asc" },
       },
+      transit: { select: TRANSIT },
       cars: {
         select: {
           id: true,
@@ -99,19 +191,7 @@ export async function recomputeRoutes(hangoutId: string) {
   });
   if (hangout?.status !== HangoutStatus.SCHEDULED || !hangout.startSlot) return;
 
-  const { times } = scheduleStops(hangout.startSlot, hangout.stops);
-  const startDay = hangout.startSlot.slice(0, 10);
-  const instant = (minutes: number) =>
-    torontoToUtc(addDays(startDay, Math.floor(minutes / 1440)), minutes % 1440);
-  const placed = hangout.stops.flatMap((stop, index) => {
-    const point = located(stop.lat, stop.lon);
-    const time = times[index];
-    return point && "at" in time
-      ? [{ point, number: index + 1, at: time.at, end: time.at + stop.durationMinutes }]
-      : [];
-  });
-  const first = placed[0];
-  const last = placed[placed.length - 1];
+  const { startDay, instant, placed, first, last } = placeStops(hangout.startSlot, hangout.stops);
 
   // Forecast at the arrival stop for the way there and at the last stop's end for the way home.
   const [thereWeather, backWeather] = first
@@ -141,6 +221,7 @@ export async function recomputeRoutes(hangoutId: string) {
   }
 
   await routeStops(hangoutId, placed, instant);
+  await routeTransits(hangout.transit, first, last, instant);
 }
 
 /** Drive between the located stops, as stored on `hangouts.stopRoute` for the map's between-stops phase. */
