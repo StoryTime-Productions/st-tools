@@ -195,7 +195,21 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
         aria-label="Map of the hangout's stops and carpool routes. The itinerary lists the same stops."
       />
       <p className="text-muted-foreground text-xs">
-        © TomTom{showTransitCredit ? " · Transit data: STM, exo" : ""}
+        © TomTom
+        {showTransitCredit ? (
+          <>
+            {" · Transit data: STM, exo ("}
+            <a
+              href="https://www.donneesquebec.ca/licence/#cc-by"
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-2"
+            >
+              CC BY 4.0
+            </a>
+            {"), REM"}
+          </>
+        ) : null}
       </p>
       {data.cars.length > 0 ? (
         <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm">

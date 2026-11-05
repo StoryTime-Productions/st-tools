@@ -395,6 +395,10 @@ describe("CommuteMap", () => {
       expect(legend.querySelectorAll("li")).toHaveLength(1);
       expect(legend.textContent).toContain("Eve (public transit)");
       expect(screen.getByText(/Transit data: STM, exo/)).toBeTruthy();
+      expect(screen.getByRole("link", { name: "CC BY 4.0" })).toHaveAttribute(
+        "href",
+        "https://www.donneesquebec.ca/licence/#cc-by"
+      );
       expect(screen.getByText(/Arrows show the direction of travel/)).toBeTruthy();
       expect(screen.queryByRole("link", { name: "STM" })).toBeNull();
     });
