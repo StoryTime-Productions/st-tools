@@ -59,7 +59,7 @@ export default async function DashboardPage() {
       <AutoRefresh />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-6">
-          <Card className="overflow-hidden rounded-4xl border-0 bg-slate-950 text-white shadow-xl shadow-slate-950/10">
+          <Card className="relative isolate overflow-hidden rounded-4xl border-0 bg-slate-950 text-white shadow-xl shadow-slate-950/10">
             <CardContent className="p-5 md:p-8">
               <LiveTimeWeather firstName={firstName} />
             </CardContent>

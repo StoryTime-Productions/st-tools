@@ -3,13 +3,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { describeWeather } from "@/lib/weather-codes";
+import { parsePreviewOverride, type PreviewOverride } from "@/lib/psx-weather/preview";
+import { parseLocalMinutes } from "@/lib/psx-weather/time-of-day";
+import { describeWeather, sceneConditionFor } from "@/lib/weather-codes";
+import { WeatherScene } from "./weather-scene";
 
 type WeatherInfo = {
   temperature: number;
   unit: string;
   weatherCode: number;
   locationLabel: string;
+  /** minutes since midnight at the weather location when the forecast was fetched (its own timezone) */
+  localMinutes?: number;
+  /** today's sunrise and sunset, minutes since midnight at the weather location */
+  sunrise?: number;
+  sunset?: number;
 };
 
 type IpLocation = {
@@ -39,11 +47,16 @@ function isValidWeatherInfo(value: unknown): value is WeatherInfo {
     typeof candidate.temperature === "number" &&
     typeof candidate.unit === "string" &&
     typeof candidate.weatherCode === "number" &&
-    typeof candidate.locationLabel === "string"
+    typeof candidate.locationLabel === "string" &&
+    ["localMinutes", "sunrise", "sunset"].every(
+      (key) => candidate[key] === undefined || typeof candidate[key] === "number"
+    )
   );
 }
 
-function readCachedWeather(): WeatherInfo | null {
+type CachedWeather = { weather: WeatherInfo; fetchedAt: number };
+
+function readCachedWeather(): CachedWeather | null {
   if (typeof window === "undefined") {
     return null;
   }
@@ -66,21 +79,21 @@ function readCachedWeather(): WeatherInfo | null {
       return null;
     }
 
-    return parsed.weather;
+    return { weather: parsed.weather, fetchedAt: parsed.fetchedAt };
   } catch {
     window.localStorage.removeItem(WEATHER_CACHE_KEY);
     return null;
   }
 }
 
-function writeCachedWeather(weather: WeatherInfo) {
+function writeCachedWeather(weather: WeatherInfo, fetchedAt: number) {
   if (typeof window === "undefined") {
     return;
   }
 
   const payload: CachedWeatherRecord = {
     weather,
-    fetchedAt: Date.now(),
+    fetchedAt,
   };
 
   window.localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify(payload));
@@ -105,7 +118,7 @@ async function loadWeather(): Promise<WeatherInfo> {
     .join(", ");
 
   const forecastRes = await fetch(
-    `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&timezone=auto`
+    `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&daily=sunrise,sunset&forecast_days=1&timezone=auto`
   );
 
   if (!forecastRes.ok) {
@@ -113,8 +126,9 @@ async function loadWeather(): Promise<WeatherInfo> {
   }
 
   const forecast = (await forecastRes.json()) as {
-    current?: { temperature_2m?: number; weather_code?: number };
+    current?: { time?: string; temperature_2m?: number; weather_code?: number };
     current_units?: { temperature_2m?: string };
+    daily?: { sunrise?: string[]; sunset?: string[] };
   };
 
   if (
@@ -124,17 +138,32 @@ async function loadWeather(): Promise<WeatherInfo> {
     throw new Error("Weather data was incomplete.");
   }
 
+  // the timestamps are in the weather location's own timezone (timezone=auto), not the viewer's
+  const localMinutes = parseLocalMinutes(forecast.current.time);
+  const sunrise = parseLocalMinutes(forecast.daily?.sunrise?.[0]);
+  const sunset = parseLocalMinutes(forecast.daily?.sunset?.[0]);
+
   return {
     temperature: forecast.current.temperature_2m,
     weatherCode: forecast.current.weather_code,
     unit: forecast.current_units?.temperature_2m ?? "C",
     locationLabel,
+    ...(localMinutes !== null ? { localMinutes } : {}),
+    ...(sunrise !== null ? { sunrise } : {}),
+    ...(sunset !== null ? { sunset } : {}),
   };
+}
+
+function viewerMinutes(at: number) {
+  const date = new Date(at);
+  return date.getHours() * 60 + date.getMinutes();
 }
 
 export function LiveTimeWeather({ firstName }: { firstName: string }) {
   const [now, setNow] = useState(() => new Date());
   const [weather, setWeather] = useState<WeatherInfo | null>(null);
+  const [fetchedAt, setFetchedAt] = useState(0);
+  const [override, setOverride] = useState<PreviewOverride | null>(null);
   const [isWeatherLoading, setIsWeatherLoading] = useState(true);
   const [attempt, setAttempt] = useState(0);
   const statusRef = useRef<HTMLDivElement>(null);
@@ -145,6 +174,13 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
   }, []);
 
   useEffect(() => {
+    // `?weather=rain&time=16:45` pins the scene for design review; never in production
+    setOverride(
+      parsePreviewOverride(window.location.search, process.env.NODE_ENV === "production")
+    );
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function refreshWeather() {
@@ -152,7 +188,8 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
 
       if (cachedWeather) {
         if (!cancelled) {
-          setWeather(cachedWeather);
+          setWeather(cachedWeather.weather);
+          setFetchedAt(cachedWeather.fetchedAt);
           setIsWeatherLoading(false);
         }
 
@@ -164,8 +201,10 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
       try {
         const nextWeather = await loadWeather();
         if (!cancelled) {
+          const now = Date.now();
           setWeather(nextWeather);
-          writeCachedWeather(nextWeather);
+          setFetchedAt(now);
+          writeCachedWeather(nextWeather, now);
         }
       } catch {
         // The card shows a friendly message with Retry; the cause is not useful on a dashboard.
@@ -271,23 +310,42 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
     );
   }, [isWeatherLoading, weather]);
 
+  // the scene needs the weather (or a preview override); loading and error states stay plain navy
+  const sceneCondition =
+    override?.condition ?? (weather ? sceneConditionFor(weather.weatherCode) : null);
+  const sceneMinutes =
+    override?.minutes ?? weather?.localMinutes ?? viewerMinutes(fetchedAt || Date.now());
+
   return (
-    <div className="space-y-3">
-      <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
-        Welcome back, {firstName}
-      </h2>
-      <p className="text-sm text-slate-300 md:text-base">
-        {liveDate} -{" "}
-        <span className="inline-flex items-baseline gap-2">
-          <span className="tabular-nums">{liveTime.timeText}</span>
-          {liveTime.dayPeriod ? (
-            <span className="inline-flex w-10 justify-start">{liveTime.dayPeriod}</span>
-          ) : null}
-        </span>
-      </p>
-      <div ref={statusRef} tabIndex={-1} className="outline-none">
-        {weatherView}
+    <>
+      {sceneCondition ? (
+        <WeatherScene
+          condition={sceneCondition}
+          baseMinutes={sceneMinutes}
+          baseAt={override?.minutes !== undefined ? 0 : fetchedAt || Date.now()}
+          sunrise={weather?.sunrise}
+          sunset={weather?.sunset}
+          fixedClock={override?.minutes !== undefined}
+          textKey={`${isWeatherLoading}|${weather?.locationLabel}|${weather?.weatherCode}|${weather?.temperature}`}
+        />
+      ) : null}
+      <div className="relative z-10 space-y-3">
+        <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
+          Welcome back, {firstName}
+        </h2>
+        <p className="text-sm text-slate-300 md:text-base">
+          {liveDate} -{" "}
+          <span className="inline-flex items-baseline gap-2">
+            <span className="tabular-nums">{liveTime.timeText}</span>
+            {liveTime.dayPeriod ? (
+              <span className="inline-flex w-10 justify-start">{liveTime.dayPeriod}</span>
+            ) : null}
+          </span>
+        </p>
+        <div ref={statusRef} tabIndex={-1} className="outline-none">
+          {weatherView}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

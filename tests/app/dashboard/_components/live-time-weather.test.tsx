@@ -4,6 +4,11 @@ import { LiveTimeWeather } from "@/app/dashboard/_components/live-time-weather";
 
 const WEATHER_CACHE_KEY = "dashboard-weather-cache-v1";
 
+// the GPU scene is covered by its own tests; these tests only care about the text and the cache
+vi.mock("@/lib/psx-weather/scene", () => ({
+  createPsxScene: vi.fn(() => ({ setFrame: vi.fn(), setTime: vi.fn(), dispose: vi.fn() })),
+}));
+
 describe("LiveTimeWeather", () => {
   beforeEach(() => {
     vi.clearAllMocks();
