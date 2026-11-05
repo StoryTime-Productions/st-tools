@@ -333,12 +333,17 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
         <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
           Welcome back, {firstName}
         </h2>
-        <p className="text-sm text-slate-300 md:text-base">
+        {/* the server renders this a moment before the browser does, so the clock text is expected to differ */}
+        <p className="text-sm text-slate-300 md:text-base" suppressHydrationWarning>
           {liveDate} -{" "}
           <span className="inline-flex items-baseline gap-2">
-            <span className="tabular-nums">{liveTime.timeText}</span>
+            <span className="tabular-nums" suppressHydrationWarning>
+              {liveTime.timeText}
+            </span>
             {liveTime.dayPeriod ? (
-              <span className="inline-flex w-10 justify-start">{liveTime.dayPeriod}</span>
+              <span className="inline-flex w-10 justify-start" suppressHydrationWarning>
+                {liveTime.dayPeriod}
+              </span>
             ) : null}
           </span>
         </p>
