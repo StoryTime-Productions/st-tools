@@ -33,6 +33,29 @@ const arrow = (position: [number, number], bearing: number, L: typeof import("le
 const text = (value: string) =>
   Object.assign(document.createElement("div"), { textContent: value });
 
+/**
+ * Leaflet draws a path as an SVG element that Tab cannot reach. Make it a tab stop with the owner's name as its
+ * label; focusing it opens the same tooltip as hovering and thickens the line so the focus is visible.
+ * The element only exists once the map has a view, so call this after fitBounds/setView.
+ */
+const focusable = (line: import("leaflet").Polyline, label: string) => {
+  const element = line.getElement();
+  if (!element) return line;
+  element.setAttribute("tabindex", "0");
+  element.setAttribute("role", "img");
+  element.setAttribute("aria-label", label);
+  const weight = line.options.weight ?? 5;
+  element.addEventListener("focus", () => {
+    line.setStyle({ weight: weight + 3 });
+    line.openTooltip(line.getCenter());
+  });
+  element.addEventListener("blur", () => {
+    line.setStyle({ weight });
+    line.closeTooltip();
+  });
+  return line;
+};
+
 export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean }) {
   const container = useRef<HTMLDivElement>(null);
   const dark = useTheme().resolvedTheme === "dark";
@@ -50,6 +73,11 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
     if (!hasKey || !container.current) return;
     let map: import("leaflet").Map | undefined;
     let cancelled = false;
+    const tabbable: [import("leaflet").Polyline, string][] = [];
+    const track = (line: import("leaflet").Polyline, label: string) => {
+      tabbable.push([line, label]);
+      return line;
+    };
     void import("leaflet").then((L) => {
       if (cancelled || !container.current) return;
       map = L.map(container.current, { attributionControl: false });
@@ -79,16 +107,17 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
         car.lines.forEach((line, index) => {
           const trip = car.trips[index];
           if ((trip === "back" ? "home" : "there") !== active) return;
-          L.polyline(line, {
-            color: car.color,
-            weight: 5,
-            dashArray: car.dashed ? "8 8" : undefined,
-          })
-            .bindTooltip(
-              text(`${car.driver}'s car: ${trip === "back" ? "Getting home" : "Getting there"}`),
-              { sticky: true }
-            )
-            .addTo(map!);
+          const label = `${car.driver}'s car: ${trip === "back" ? "Getting home" : "Getting there"}`;
+          track(
+            L.polyline(line, {
+              color: car.color,
+              weight: 5,
+              dashArray: car.dashed ? "8 8" : undefined,
+            })
+              .bindTooltip(text(label), { sticky: true })
+              .addTo(map!),
+            label
+          );
           if (!car.dashed) {
             for (const { position, bearing } of arrowsAlong(line)) {
               arrow(position, bearing, L).addTo(map!);
@@ -122,7 +151,7 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
         });
         points.push(rider.position);
         for (const leg of rider.legs) {
-          L.polyline(leg.path, {
+          const legLine = L.polyline(leg.path, {
             color: rider.color,
             weight: 5,
             dashArray: leg.walk ? "1 10" : undefined,
@@ -130,6 +159,8 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
           })
             .bindTooltip(text(leg.label), { sticky: true })
             .addTo(map);
+          // the dotted walk legs stay out of the tab order; the solid legs carry the line and owner
+          if (!leg.walk) track(legLine, leg.label);
           if (!leg.walk) {
             for (const { position, bearing } of arrowsAlong(leg.path, 4, TRANSIT_ARROW_GAP)) {
               arrow(position, bearing, L).addTo(map);
@@ -147,9 +178,12 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
               label: `Stop ${leg.from} to stop ${leg.to}: ${leg.minutes} min`,
             }));
         for (const { path, label } of lines) {
-          L.polyline(path, { color: "#111", weight: 5, dashArray: dashed ? "8 8" : undefined })
-            .bindTooltip(text(label), { sticky: true })
-            .addTo(map);
+          track(
+            L.polyline(path, { color: "#111", weight: 5, dashArray: dashed ? "8 8" : undefined })
+              .bindTooltip(text(label), { sticky: true })
+              .addTo(map),
+            label
+          );
           if (!dashed) {
             for (const { position, bearing } of arrowsAlong(path)) {
               arrow(position, bearing, L).addTo(map);
@@ -160,6 +194,7 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
       }
       if (points.length > 0) map.fitBounds(points, { padding: [24, 24] });
       else map.setView([43.65, -79.38], 10);
+      for (const [line, label] of tabbable) focusable(line, label);
     });
     return () => {
       cancelled = true;

@@ -5,17 +5,30 @@ import type { buildCommuteMap } from "@/lib/commute-map";
 
 const theme = vi.hoisted(() => ({ resolvedTheme: "light" }));
 const leaflet = vi.hoisted(() => {
+  // like Leaflet, a path has no SVG element until the map has a view
+  const view = { set: false };
   const layer = () => {
+    const element = document.createElementNS("http://www.w3.org/2000/svg", "path");
     const self = {
+      options: { weight: 5 } as { weight?: number },
       addTo: vi.fn(() => self),
       bindPopup: vi.fn(() => self),
       bindTooltip: vi.fn(() => self),
+      getElement: vi.fn(() => (view.set ? element : undefined)),
+      getCenter: vi.fn(() => [1, 2]),
+      openTooltip: vi.fn(() => self),
+      closeTooltip: vi.fn(() => self),
+      setStyle: vi.fn(() => self),
     };
     return self;
   };
   const map = {
-    fitBounds: vi.fn<(points: unknown[], options?: unknown) => void>(),
-    setView: vi.fn<(center: unknown, zoom: number) => void>(),
+    fitBounds: vi.fn<(points: unknown[], options?: unknown) => void>(() => {
+      view.set = true;
+    }),
+    setView: vi.fn<(center: unknown, zoom: number) => void>(() => {
+      view.set = true;
+    }),
     remove: vi.fn(),
   };
   return {
@@ -37,6 +50,7 @@ const leaflet = vi.hoisted(() => {
       >(layer),
     divIcon: vi.fn((options: unknown) => options),
     instance: map,
+    view,
   };
 });
 
@@ -113,6 +127,7 @@ const NO_START: MapData = {
 describe("CommuteMap", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    leaflet.view.set = false;
     theme.resolvedTheme = "light";
   });
 
@@ -139,6 +154,24 @@ describe("CommuteMap", () => {
       "8 8",
     ]);
     expect(leaflet.instance.fitBounds.mock.calls[0][0]).toContainEqual([4, 4]);
+  });
+
+  it("makes each car line a keyboard tab stop that opens its tooltip on focus", async () => {
+    render(<CommuteMap data={DATA} hasKey />);
+    await waitFor(() => expect(leaflet.instance.fitBounds).toHaveBeenCalled());
+    const line = leaflet.polyline.mock.results[0].value;
+    const element = line.getElement() as SVGElement;
+
+    expect(element.getAttribute("tabindex")).toBe("0");
+    expect(element.getAttribute("role")).toBe("img");
+    expect(element.getAttribute("aria-label")).toMatch(/Alice's car: Getting there/);
+
+    element.dispatchEvent(new Event("focus"));
+    expect(line.openTooltip).toHaveBeenCalledWith([1, 2]);
+    expect(line.setStyle).toHaveBeenLastCalledWith({ weight: 8 });
+    element.dispatchEvent(new Event("blur"));
+    expect(line.closeTooltip).toHaveBeenCalled();
+    expect(line.setStyle).toHaveBeenLastCalledWith({ weight: 5 });
   });
 
   it("lists cars with drivers, the copyright, and what's not on the map", () => {
@@ -375,6 +408,18 @@ describe("CommuteMap", () => {
       const bounds = leaflet.instance.fitBounds.mock.calls[0][0];
       expect(bounds).toContainEqual([8.5, 8.5]);
       expect(bounds).toContainEqual([5, 5]);
+    });
+
+    it("makes solid transit legs tab stops named for their owner and leaves walk legs out", async () => {
+      render(<CommuteMap data={drawn} hasKey />);
+      await waitFor(() => expect(leaflet.instance.fitBounds).toHaveBeenCalled());
+
+      const [walk, metro] = leaflet.polyline.mock.results.map(
+        (r) => r.value.getElement() as SVGElement
+      );
+      expect(walk.getAttribute("tabindex")).toBeNull();
+      expect(metro.getAttribute("tabindex")).toBe("0");
+      expect(metro.getAttribute("aria-label")).toBe("Eve · STM 2");
     });
 
     it("shows only the active phase's lines and switches without new data", async () => {
