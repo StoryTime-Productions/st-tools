@@ -59,6 +59,9 @@ model User {
   hangoutPassengers            HangoutPassenger[]            @relation("PassengerUser")
   hangoutPassengerVias         HangoutPassenger[]            @relation("PassengerVia")
   hangoutTransit               HangoutTransit[]
+  countdowns                   Countdown[]                   @relation("CountdownOwner")
+  countdownAudiences           CountdownAudience[]           @relation("CountdownAudienceUser")
+  countdownDismissals          CountdownDismissal[]          @relation("CountdownDismissalUser")
 
   @@map("users")
 }
@@ -707,16 +710,16 @@ model HangoutPendingUpdate {
 // ─── Discord stats (counts and minutes only, never message text) ─────────────
 
 model DiscordVoiceSession {
-  id        String    @id @default(uuid())
-  discordId String
-  name      String
-  channelId String
+  id          String    @id @default(uuid())
+  discordId   String
+  name        String
+  channelId   String
   // The channel name when the session started, for "who is on a call now".
   channelName String
   // The person's Discord avatar URL, as sent by the bot.
   avatarUrl   String?
-  joinedAt  DateTime
-  leftAt    DateTime?
+  joinedAt    DateTime
+  leftAt      DateTime?
 
   @@index([discordId, joinedAt])
   @@index([leftAt])
@@ -744,6 +747,55 @@ model DiscordWordleStreak {
   updatedAt DateTime @updatedAt
 
   @@map("discord_wordle_streak")
+}
+
+enum CountdownScope {
+  GLOBAL
+  PERSONAL
+}
+
+model Countdown {
+  id        String         @id @default(uuid())
+  title     String
+  targetAt  DateTime
+  scope     CountdownScope
+  ownerId   String
+  /// Personal countdowns vanish 24 h after they fire; global ones stay until an admin removes them.
+  expiresAt DateTime?
+  createdAt DateTime       @default(now())
+
+  owner      User                 @relation("CountdownOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  audience   CountdownAudience[]
+  dismissals CountdownDismissal[]
+
+  @@index([scope, targetAt])
+  @@index([ownerId])
+  @@map("countdowns")
+}
+
+/// Rows exist only for a global countdown filtered to chosen members; none means everyone.
+model CountdownAudience {
+  countdownId String
+  userId      String
+
+  countdown Countdown @relation(fields: [countdownId], references: [id], onDelete: Cascade)
+  user      User      @relation("CountdownAudienceUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([countdownId, userId])
+  @@map("countdown_audience")
+}
+
+/// Per-user acknowledgement of a fired alarm, so it does not ring again on another tab or device.
+model CountdownDismissal {
+  countdownId String
+  userId      String
+  dismissedAt DateTime @default(now())
+
+  countdown Countdown @relation(fields: [countdownId], references: [id], onDelete: Cascade)
+  user      User      @relation("CountdownDismissalUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([countdownId, userId])
+  @@map("countdown_dismissals")
 }
 
 model DiscordBirthday {
