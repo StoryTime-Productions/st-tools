@@ -24,6 +24,8 @@ const view = (id: string, targetAt: Date, over: Record<string, unknown> = {}) =>
   scope: "GLOBAL" as const,
   ownerId: "u1",
   audienceCount: null,
+  audienceUserIds: [],
+  applies: true,
   dismissed: false,
   ...over,
 });
@@ -96,6 +98,15 @@ describe("countdown helpers", () => {
     expect(pickTitleCountdown(list, NOW)?.countdown.id).toBe("earlier");
   });
 
+  it("ignores countdowns that are for other people", async () => {
+    const { pickTitleCountdown } = await load();
+    const list = [
+      view("theirs-fired", at(-H), { applies: false }),
+      view("theirs-soon", at(H), { applies: false }),
+    ];
+    expect(pickTitleCountdown(list, NOW)).toBeNull();
+  });
+
   it("picks the soonest within 24 h and ignores farther or dismissed ones", async () => {
     const { pickTitleCountdown } = await load();
     const list = [
@@ -142,6 +153,54 @@ describe("countdown queries", () => {
     ]);
     const where = prisma.countdown.findMany.mock.calls[0][0].where;
     expect(JSON.stringify(where)).toContain('"audience":{"some":{"userId":"me"}}');
+  });
+
+  it("loads the chosen members for an admin only", async () => {
+    const row = {
+      id: "g",
+      title: "g",
+      targetAt: at(H),
+      scope: "GLOBAL",
+      ownerId: "u1",
+      _count: { audience: 2 },
+      audience: [{ userId: "a" }, { userId: "b" }],
+      dismissals: [],
+    };
+    const { getVisibleCountdowns, prisma } = await load([row]);
+    const [out] = await getVisibleCountdowns("me", NOW, { asAdmin: true });
+    expect(out.audienceUserIds).toEqual(["a", "b"]);
+    expect(prisma.countdown.findMany.mock.calls[0][0].include.audience).toEqual({
+      select: { userId: true },
+    });
+    await getVisibleCountdowns("me", NOW);
+    expect(prisma.countdown.findMany.mock.calls[1][0].include.audience).toBe(false);
+  });
+
+  it("lets an admin see every global countdown and flags the ones meant for others", async () => {
+    const row = (id: string, audience: { userId: string }[]) => ({
+      id,
+      title: id,
+      targetAt: at(H),
+      scope: "GLOBAL",
+      ownerId: "u1",
+      _count: { audience: audience.length },
+      audience,
+      dismissals: [],
+    });
+    const { getVisibleCountdowns, prisma } = await load([
+      row("everyone", []),
+      row("with-me", [{ userId: "me" }, { userId: "x" }]),
+      row("others", [{ userId: "x" }]),
+    ]);
+    const out = await getVisibleCountdowns("me", NOW, { asAdmin: true });
+    expect(out.map((c) => [c.id, c.applies])).toEqual([
+      ["everyone", true],
+      ["with-me", true],
+      ["others", false],
+    ]);
+    expect(JSON.stringify(prisma.countdown.findMany.mock.calls[0][0].where)).toContain(
+      '{"scope":"GLOBAL"}'
+    );
   });
 
   it("counts only active personal countdowns and deletes expired ones", async () => {

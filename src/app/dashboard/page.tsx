@@ -1,13 +1,18 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/get-current-user";
+import { Role } from "@prisma/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { WorkspaceShell } from "@/components/layout/workspace-shell";
 import { todayKey } from "@/lib/calendar";
+import { deleteExpiredCountdowns, getVisibleCountdowns } from "@/lib/countdowns";
+import { prisma } from "@/lib/prisma";
 import { getUpcomingBirthdays } from "@/lib/discord-birthdays";
 import { getDiscordStats, getVoiceNow, getWordleStreak } from "@/lib/discord-stats";
 import type { DiscordStats, StatsRange } from "@/lib/discord-stats-format";
 import { AutoRefresh } from "./_components/auto-refresh";
 import { BirthdaysCard } from "./_components/birthdays-card";
+import { CountdownsCard } from "./_components/countdowns-card";
+import { CountdownsError } from "./_components/countdowns-error";
 import { DiscordLeaderboards } from "./_components/discord-leaderboards";
 import { LiveStats } from "./_components/live-stats";
 import { LiveTimeWeather } from "./_components/live-time-weather";
@@ -43,6 +48,28 @@ async function loadBirthdays() {
   }
 }
 
+async function loadCountdowns(userId: string, isAdmin: boolean) {
+  try {
+    await deleteExpiredCountdowns();
+    const [countdowns, users] = await Promise.all([
+      getVisibleCountdowns(userId, new Date(), { asAdmin: isAdmin }),
+      isAdmin
+        ? prisma.user.findMany({
+            select: { id: true, name: true, email: true },
+            orderBy: { name: "asc" },
+          })
+        : Promise.resolve([]),
+    ]);
+    return {
+      countdowns: countdowns.map((c) => ({ ...c, targetAt: c.targetAt.toISOString() })),
+      members: users.map((u) => ({ id: u.id, name: u.name ?? u.email })),
+    };
+  } catch (error) {
+    console.error("Countdowns failed to load", error);
+    return null;
+  }
+}
+
 export default async function DashboardPage() {
   const user = await getCurrentUser();
 
@@ -51,7 +78,12 @@ export default async function DashboardPage() {
   }
 
   const firstName = user.name?.split(" ")[0] ?? user.email.split("@")[0] ?? "there";
-  const [discord, birthdays] = await Promise.all([loadDiscord(), loadBirthdays()]);
+  const isAdmin = user.role === Role.ADMIN;
+  const [discord, birthdays, countdowns] = await Promise.all([
+    loadDiscord(),
+    loadBirthdays(),
+    loadCountdowns(user.id, isAdmin),
+  ]);
 
   return (
     <WorkspaceShell user={user} activeNav="overview" title="Dashboard">
@@ -85,6 +117,16 @@ export default async function DashboardPage() {
             }}
           />
           <PlaylistWidget discordId={user.discordId} />
+          {countdowns ? (
+            <CountdownsCard
+              countdowns={countdowns.countdowns}
+              userId={user.id}
+              isAdmin={isAdmin}
+              members={countdowns.members}
+            />
+          ) : (
+            <CountdownsError />
+          )}
           {birthdays ? <BirthdaysCard birthdays={birthdays} /> : null}
         </div>
       </div>
