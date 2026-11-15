@@ -100,10 +100,11 @@ export function CountdownsCard({
           variant="outline"
           size="sm"
           className="shrink-0 gap-1.5"
+          aria-label="New countdown"
           onClick={() => setDialog({ item: null })}
         >
           <Plus className="size-4" aria-hidden="true" />
-          New countdown
+          New
         </Button>
       </CardHeader>
       <CardContent>
@@ -111,7 +112,7 @@ export function CountdownsCard({
           <div className="flex items-start gap-3">
             <Timer className="text-muted-foreground mt-0.5 size-5 shrink-0" aria-hidden="true" />
             <p className="text-muted-foreground text-sm">
-              Nothing to count down to yet. Add a date you are looking forward to.
+              Nothing to count down to yet. Use New to add a date you are looking forward to.
             </p>
           </div>
         ) : (
@@ -119,21 +120,26 @@ export function CountdownsCard({
             {countdowns.map((item) => {
               const target = new Date(item.targetAt);
               return (
-                <li key={item.id} className="flex items-center gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline justify-between gap-3">
-                      <p className="min-w-0 text-sm font-medium break-words">{item.title}</p>
-                      <p className="flex shrink-0 items-center gap-1 text-sm font-semibold">
-                        {hasReached(target, now) ? (
-                          <CheckCircle2 className="size-3.5" aria-hidden="true" />
-                        ) : null}
-                        {remainingLabel(target, now)}
-                      </p>
-                    </div>
-                    <p className="text-muted-foreground flex flex-wrap gap-x-2 text-xs">
-                      <span className="whitespace-nowrap">{formatCountdownDate(target)}</span>
+                <li key={item.id} className="flex items-start gap-2 rounded-xl border px-3 py-3">
+                  <div className="min-w-0 flex-1 space-y-1.5 pr-1">
+                    <p className="text-sm font-medium break-words">{item.title}</p>
+                    <p
+                      className={
+                        hasReached(target, now)
+                          ? "text-muted-foreground flex items-center gap-1.5 text-base leading-tight font-medium tabular-nums"
+                          : "flex items-center gap-1.5 text-base leading-tight font-semibold tabular-nums"
+                      }
+                    >
+                      {hasReached(target, now) ? (
+                        <CheckCircle2 className="size-4" aria-hidden="true" />
+                      ) : null}
+                      {remainingLabel(target, now)}
+                    </p>
+                    <p className="text-muted-foreground mt-0.5 text-xs">
+                      {formatCountdownDate(target)}
+                      <span aria-hidden="true"> · </span>
                       <span className="sr-only">, </span>
-                      <span className="whitespace-nowrap">{audienceLabel(item)}</span>
+                      {audienceLabel(item)}
                     </p>
                   </div>
                   {mayManage(item) ? (
@@ -147,6 +153,7 @@ export function CountdownsCard({
                           type="button"
                           variant="ghost"
                           size="icon"
+                          className="-my-1 -mr-2 shrink-0"
                           aria-label={`Actions for ${item.title}`}
                         >
                           <MoreHorizontal className="size-4" aria-hidden="true" />
@@ -168,9 +175,7 @@ export function CountdownsCard({
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                  ) : (
-                    <span className="size-9 shrink-0 max-md:size-11" aria-hidden="true" />
-                  )}
+                  ) : null}
                 </li>
               );
             })}

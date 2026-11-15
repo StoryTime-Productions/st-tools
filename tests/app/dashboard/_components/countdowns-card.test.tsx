@@ -76,10 +76,10 @@ describe("CountdownsCard", () => {
     ]);
     const rows = screen.getAllByRole("listitem");
     expect(within(rows[0]).getByText("Hangout")).toBeInTheDocument();
-    expect(within(rows[0]).getByText("Mon, Nov 16, 3:00 PM")).toBeInTheDocument();
-    expect(within(rows[0]).getByText("3 people")).toBeInTheDocument();
+    expect(within(rows[0]).getByText(/Mon, Nov 16, 3:00 PM/)).toBeInTheDocument();
+    expect(within(rows[0]).getByText(/3 people/)).toBeInTheDocument();
     expect(within(rows[0]).getByText("in 3 days")).toBeInTheDocument();
-    expect(within(rows[1]).getByText("Only you")).toBeInTheDocument();
+    expect(within(rows[1]).getByText(/Only you/)).toBeInTheDocument();
     expect(within(rows[1]).getByText("in 2 h 05 m")).toBeInTheDocument();
     expect(screen.getByText("1/10 personal")).toBeInTheDocument();
   });
