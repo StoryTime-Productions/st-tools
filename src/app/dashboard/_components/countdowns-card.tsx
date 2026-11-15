@@ -2,7 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, MoreHorizontal, Pencil, Plus, Timer, Trash2 } from "lucide-react";
+import {
+  CheckCircle2,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Timer,
+  Trash2,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 import { toast } from "sonner";
 import { deleteCountdownAction } from "@/app/actions/countdowns";
 import {
@@ -19,6 +28,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { playAlarmChime, useAlarmSound } from "@/lib/countdown-chime";
 import { formatCountdownDate } from "@/lib/countdown-time";
 import {
   MAX_PERSONAL_COUNTDOWNS,
@@ -50,6 +60,7 @@ export function CountdownsCard({
 }) {
   const router = useRouter();
   const now = useMinuteClock();
+  const [soundOn, setSoundOn] = useAlarmSound();
   const [confirm, confirmDialog] = useConfirm();
   const [dialog, setDialog] = useState<{ item: CountdownItem | null } | null>(null);
   const newButton = useRef<HTMLButtonElement>(null);
@@ -94,18 +105,38 @@ export function CountdownsCard({
             {personalCount}/{MAX_PERSONAL_COUNTDOWNS} personal
           </p>
         </div>
-        <Button
-          ref={newButton}
-          type="button"
-          variant="outline"
-          size="sm"
-          className="shrink-0 gap-1.5"
-          aria-label="New countdown"
-          onClick={() => setDialog({ item: null })}
-        >
-          <Plus className="size-4" aria-hidden="true" />
-          New
-        </Button>
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Alarm sound"
+            aria-pressed={soundOn}
+            title={soundOn ? "Alarm sound is on" : "Alarm sound is off"}
+            onClick={() => {
+              setSoundOn(!soundOn);
+              if (!soundOn) void playAlarmChime();
+            }}
+          >
+            {soundOn ? (
+              <Volume2 className="size-4" aria-hidden="true" />
+            ) : (
+              <VolumeX className="size-4" aria-hidden="true" />
+            )}
+          </Button>
+          <Button
+            ref={newButton}
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            aria-label="New countdown"
+            onClick={() => setDialog({ item: null })}
+          >
+            <Plus className="size-4" aria-hidden="true" />
+            New
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {countdowns.length === 0 ? (

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { currentTabTitle } from "@/lib/tab-title";
 import { TimerClient } from "@/app/timer/_components/timer-client";
 import { useTimerStore } from "@/stores/timer-store";
 
@@ -773,5 +774,24 @@ describe("TimerClient", () => {
     render(<TimerClient {...makeProps()} />);
 
     expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
+  });
+
+  it("registers the running timer as the tab title and clears it on unmount", () => {
+    useTimerStore.setState({
+      phase: "work",
+      secondsLeft: 300,
+      isRunning: true,
+      targetEndsAt: Date.now() + 300_000,
+      sessionCount: 0,
+      completionCount: 0,
+      lastCompletedPhase: null,
+      lastCompletedDurationMin: null,
+    });
+
+    const view = render(<TimerClient {...makeProps()} />);
+    expect(currentTabTitle()).toMatch(/^\d\d:\d\d · /);
+
+    view.unmount();
+    expect(currentTabTitle()).toBeNull();
   });
 });

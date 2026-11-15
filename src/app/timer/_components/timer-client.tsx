@@ -32,6 +32,7 @@ import {
 import { playCompletionTone, playUiCue } from "./timer-audio";
 import { notifyPhaseComplete, requestNotificationPermission } from "./timer-notify";
 import { readTimerPrefs, useTimerPrefs, writeTimerPrefs } from "./timer-prefs";
+import { setTabTitle } from "@/lib/tab-title";
 import { FocusTimerCard } from "./focus-timer-card";
 import { SessionCollaborationCard } from "./session-collaboration-card";
 import { SessionStatsCard } from "./session-stats-card";
@@ -369,15 +370,10 @@ export function TimerClient({
   useEffect(() => {
     const isSharedRunning = isLockedBySharedSession && currentSession?.sharedTimer?.isRunning;
     if (!isRunning && !isSharedRunning) {
-      document.title = "Focus timer";
-      return () => {
-        document.title = "Focus timer";
-      };
+      setTabTitle("pomodoro", null);
+      return;
     }
-    document.title = `${formatClock(displaySecondsLeft)} · ${phaseLabel(phase)}`;
-    return () => {
-      document.title = "Focus timer";
-    };
+    setTabTitle("pomodoro", `${formatClock(displaySecondsLeft)} · ${phaseLabel(phase)}`);
   }, [
     displaySecondsLeft,
     isRunning,
@@ -385,6 +381,8 @@ export function TimerClient({
     isLockedBySharedSession,
     currentSession?.sharedTimer?.isRunning,
   ]);
+
+  useEffect(() => () => setTabTitle("pomodoro", null), []);
 
   useEffect(() => {
     if (completionCount === 0 || completionCount === handledCompletionRef.current) {
