@@ -185,4 +185,19 @@ describe("CountdownsCard", () => {
     );
     expect(refresh).not.toHaveBeenCalled();
   });
+
+  it("arms and mutes the alarm sound from the header button", async () => {
+    window.localStorage.clear();
+    setup([]);
+    const button = screen.getByRole("button", { name: "Alarm sound" });
+    expect(button).toHaveAttribute("aria-pressed", "false");
+    expect(button).toHaveAttribute("title", "Alarm sound is off");
+    await userEvent.click(button);
+    expect(button).toHaveAttribute("aria-pressed", "true");
+    expect(button).toHaveAttribute("title", "Alarm sound is on");
+    expect(window.localStorage.getItem("st-countdown-sound")).toBe("on");
+    await userEvent.click(button);
+    expect(button).toHaveAttribute("aria-pressed", "false");
+    expect(window.localStorage.getItem("st-countdown-sound")).toBe("off");
+  });
 });

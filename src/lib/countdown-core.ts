@@ -71,7 +71,9 @@ export function sortCountdowns<T extends Pick<CountdownView, "scope" | "targetAt
 }
 
 /** The countdown the tab title shows: an unacknowledged fired alarm first, else the soonest within 24 h. */
-export function pickTitleCountdown(list: CountdownView[], now: Date) {
+export function pickTitleCountdown<
+  T extends Pick<CountdownView, "applies" | "dismissed" | "targetAt">,
+>(list: T[], now: Date) {
   const mine = list.filter((c) => c.applies);
   const fired = mine
     .filter((c) => hasReached(c.targetAt, now) && !c.dismissed)
