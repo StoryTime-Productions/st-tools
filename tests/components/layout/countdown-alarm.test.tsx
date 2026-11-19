@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CountdownAlarm } from "@/components/layout/countdown-alarm";
+import { COUNTDOWNS_CHANGED } from "@/lib/countdown-sync";
 import { setTabTitle } from "@/lib/tab-title";
 
 const mocks = vi.hoisted(() => ({
@@ -112,6 +113,42 @@ describe("CountdownAlarm", () => {
     act(() => setTabTitle("pomodoro", null));
     view.unmount();
     expect(document.title).toBe("Boards");
+  });
+
+  it("takes the title back when the page rewrites it, as every router refresh does", async () => {
+    rows = [row("Dinner", 2 * HOUR + 1000)];
+    await mount();
+    document.title = "Dashboard";
+    await act(async () => {});
+    expect(document.title).toBe("2h 00m · Dinner");
+  });
+
+  it("still rings on time when a refetch re-arms the clock between ticks", async () => {
+    rows = [row("Dinner", 90_000)];
+    await mount();
+    // A reload at 45 s must re-arm from the real clock; from the stale one the alarm slips to 105 s.
+    // Second by second: effects only re-run between act() calls, as they do between real timers.
+    const elapse = async (seconds: number) => {
+      for (let i = 0; i < seconds; i++) await advance(1000);
+    };
+    await elapse(45);
+    await act(async () => {
+      window.dispatchEvent(new Event(COUNTDOWNS_CHANGED));
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    await elapse(46);
+    expect(screen.getByRole("alert")).toHaveTextContent("Dinner is now");
+    expect(document.title).toBe("Now · Dinner");
+  });
+
+  it("re-reads straight away when this tab changes a countdown", async () => {
+    await mount();
+    rows = [row("Dinner", 2 * HOUR + 1000)];
+    await act(async () => {
+      window.dispatchEvent(new Event(COUNTDOWNS_CHANGED));
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(document.title).toBe("2h 00m · Dinner");
   });
 
   it("rings once and shows the banner when an alarm arrives while the tab is open", async () => {

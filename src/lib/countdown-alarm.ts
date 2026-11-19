@@ -43,7 +43,7 @@ export function countdownTabTitle(list: AlarmCountdown[], now: Date) {
 }
 
 /** Milliseconds until the clock needs to re-read: the next minute, or sooner if a target is closer. */
-export function nextTickMs(list: AlarmCountdown[], now: Date) {
+export function nextTickMs(list: Pick<AlarmCountdown, "targetAt">[], now: Date) {
   const soonest = list
     .filter((c) => !hasReached(c.targetAt, now))
     .reduce((min, c) => Math.min(min, c.targetAt.getTime() - now.getTime()), 60_000);

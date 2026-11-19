@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { COUNTDOWNS_CHANGED } from "@/lib/countdown-sync";
 
 const refresh = vi.hoisted(() => vi.fn());
 const deleteCountdownAction = vi.hoisted(() => vi.fn());
@@ -68,7 +69,7 @@ describe("CountdownsCard", () => {
   });
 
   it("lists each countdown with its date, audience and time left as text", () => {
-    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
     vi.setSystemTime(NOW);
     setup([
       item({ id: "g", title: "Hangout", scope: "GLOBAL", audienceCount: 3 }),
@@ -85,7 +86,7 @@ describe("CountdownsCard", () => {
   });
 
   it("marks a reached countdown with an icon as well as the word", () => {
-    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
     vi.setSystemTime(NOW);
     setup([item({ targetAt: "2026-11-13T11:50:00.000Z" })]);
     const label = screen.getByText("Reached");
@@ -93,14 +94,25 @@ describe("CountdownsCard", () => {
   });
 
   it("moves the time left forward every minute", () => {
-    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
     vi.setSystemTime(NOW);
-    setup([item({ targetAt: "2026-11-13T12:30:00.000Z" })]);
+    setup([item({ targetAt: "2026-11-13T12:30:30.000Z" })]);
     expect(screen.getByText("in 30 min")).toBeInTheDocument();
     act(() => {
-      vi.advanceTimersByTime(60_000);
+      vi.advanceTimersByTime(60_100);
     });
     expect(screen.getByText("in 29 min")).toBeInTheDocument();
+  });
+
+  it("flips to Reached at the target itself, not at the next minute", () => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    vi.setSystemTime(NOW);
+    setup([item({ targetAt: "2026-11-13T12:00:45.000Z" })]);
+    expect(screen.getByText("in under a minute")).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(45_100);
+    });
+    expect(screen.getByText("Reached")).toBeInTheDocument();
   });
 
   it("gives actions only on what the viewer may change", () => {
@@ -123,8 +135,12 @@ describe("CountdownsCard", () => {
     setup([]);
     await userEvent.click(screen.getByRole("button", { name: "New countdown" }));
     expect(screen.getByRole("heading", { name: "New countdown" })).toBeInTheDocument();
+    const changed = vi.fn();
+    window.addEventListener(COUNTDOWNS_CHANGED, changed);
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(refresh).toHaveBeenCalled());
+    window.removeEventListener(COUNTDOWNS_CHANGED, changed);
+    expect(changed).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("heading", { name: "New countdown" })).toBeNull();
   });
 
@@ -162,10 +178,14 @@ describe("CountdownsCard", () => {
     setup([item({})]);
     await openDelete();
     expect(screen.getByText(/Delete "Road trip"\?/)).toBeInTheDocument();
+    const changed = vi.fn();
+    window.addEventListener(COUNTDOWNS_CHANGED, changed);
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(deleteCountdownAction).toHaveBeenCalledWith("c1"));
+    window.removeEventListener(COUNTDOWNS_CHANGED, changed);
     expect(toast.success).toHaveBeenCalledWith("Countdown deleted");
     expect(refresh).toHaveBeenCalled();
+    expect(changed).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the countdown when the viewer cancels", async () => {
