@@ -30,6 +30,30 @@ describe("GET /auth/callback", () => {
     expect(response.headers.get("location")).toContain("/auth/sign-in?error=confirm");
   });
 
+  it("tells a refused Google or Discord account whose email is not on the list", async () => {
+    const request = new Request(
+      "https://example.test/auth/callback?error=server_error&error_description=email_not_allowed"
+    );
+    const response = await GET(request as never);
+    expect(response.headers.get("location")).toContain("/auth/sign-in?error=notAllowed");
+  });
+
+  it("does not blame the list when Supabase only says it could not save the user", async () => {
+    const request = new Request(
+      `https://example.test/auth/callback?error=server_error&error_description=${encodeURIComponent("Database error saving new user")}`
+    );
+    const response = await GET(request as never);
+    expect(response.headers.get("location")).toContain("/auth/sign-in?error=accountFailed");
+  });
+
+  it("does not treat other provider errors as a refused email", async () => {
+    const request = new Request(
+      "https://example.test/auth/callback?error=access_denied&error_description=User+denied"
+    );
+    const response = await GET(request as never);
+    expect(response.headers.get("location")).toContain("/auth/sign-in?error=confirm");
+  });
+
   it("redirects with profile sync error when upsert fails", async () => {
     createClientMock.mockResolvedValueOnce({
       auth: {

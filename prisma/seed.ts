@@ -18,7 +18,17 @@ const prisma = new PrismaClient({ adapter });
 const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? "admin@storytime.gg";
 const IS_PROD = process.env.NODE_ENV === "production";
 
+/** The admin must be allowed to sign in: the database refuses any account whose email is not on this list. */
+async function allowEmail(email: string) {
+  await prisma.allowedEmail.upsert({
+    where: { email: email.toLowerCase() },
+    update: {},
+    create: { email: email.toLowerCase(), addedBy: "seed" },
+  });
+}
+
 async function seedAdmin() {
+  await allowEmail(ADMIN_EMAIL);
   const admin = await prisma.user.upsert({
     where: { email: ADMIN_EMAIL },
     update: {},
@@ -51,6 +61,7 @@ async function seedDevData() {
   ];
 
   for (const user of devUsers) {
+    await allowEmail(user.email);
     const u = await prisma.user.upsert({
       where: { email: user.email },
       update: {},

@@ -815,3 +815,12 @@ model DiscordStatsPulse {
 
   @@map("discord_stats_pulse")
 }
+
+/// Emails that may create an account. A trigger on auth.users refuses every other email.
+model AllowedEmail {
+  email     String   @id
+  addedBy   String?
+  createdAt DateTime @default(now())
+
+  @@map("allowed_emails")
+}
