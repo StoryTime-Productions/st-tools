@@ -18,8 +18,18 @@ vi.mock("@/lib/prisma", () => ({
     user: {
       findMany: vi.fn(),
     },
+    allowedEmail: {
+      findMany: vi.fn(async () => []),
+    },
   },
 }));
+
+const accessListMock = vi.hoisted(() =>
+  vi.fn(({ entries }: { entries: { email: string; joined: boolean }[] }) => (
+    <div data-testid="access-list">{entries.map((e) => `${e.email}:${e.joined}`).join(",")}</div>
+  ))
+);
+vi.mock("@/app/admin/members/_components/access-list", () => ({ AccessList: accessListMock }));
 
 vi.mock("@/app/admin/members/_components/role-select", () => ({
   RoleSelect: roleSelectMock,
@@ -183,5 +193,21 @@ describe("AdminMembersPage", () => {
 
     expect(screen.getByText("zeta@example.com")).toBeInTheDocument();
     expect(screen.getByText("Z")).toBeInTheDocument();
+  });
+
+  it("passes the allowlist to the access card and marks who has already joined", async () => {
+    findManyMock.mockResolvedValueOnce([
+      makeUser({ id: "m1", name: "Bob", email: "Bob@Example.com", role: "MEMBER" }),
+    ]);
+    vi.mocked(prisma.allowedEmail.findMany).mockResolvedValueOnce([
+      { email: "bob@example.com", addedBy: null, createdAt: new Date() },
+      { email: "new@example.com", addedBy: "admin", createdAt: new Date() },
+    ]);
+    getCurrentUserMock.mockResolvedValueOnce(makeUser({ id: "m1", role: "MEMBER" }));
+    render(await AdminMembersPage());
+    expect(screen.getByText("Who can sign up")).toBeInTheDocument();
+    expect(screen.getByTestId("access-list")).toHaveTextContent(
+      "bob@example.com:true,new@example.com:false"
+    );
   });
 });

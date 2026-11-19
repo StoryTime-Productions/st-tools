@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { isRecoverySession } from "@/lib/auth-recovery";
+import { accountRefusalMessage, RESET_LINK_EXPIRED } from "@/lib/auth-errors";
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
@@ -106,7 +107,12 @@ function updatePasswordErrorMessage(error: { code?: string }): string {
   }
 }
 
-function signUpErrorMessage(error: { code?: string }): string {
+function signUpErrorMessage(error: { code?: string; message?: string }): string {
+  const refusal = accountRefusalMessage(error.message);
+  if (refusal) {
+    console.error("Sign-up refused", error.code, error.message);
+    return refusal;
+  }
   switch (error.code) {
     case "user_already_exists":
     case "email_exists":
@@ -262,7 +268,7 @@ export async function updatePasswordAction(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const expired = { error: "This reset link has expired. Request a new one." };
+  const expired = { error: RESET_LINK_EXPIRED };
   if (!user) {
     return expired;
   }

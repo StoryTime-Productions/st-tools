@@ -82,11 +82,11 @@ describe("DiscordLeaderboards", () => {
     ).toBeInTheDocument();
   });
 
-  it("notes the date voice tracking began", () => {
+  it("shows no tracking note once voice time has been counted", () => {
     render(<DiscordLeaderboards stats={ALL} />);
-    expect(
-      screen.getByText("Voice time counted since Oct 30. Earlier time is not available.")
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/Voice time counted since/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Earlier time is not available/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Voice time starts counting/)).not.toBeInTheDocument();
   });
 });
 

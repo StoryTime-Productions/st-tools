@@ -6,7 +6,7 @@ import { queueUpdate } from "@/lib/hangout-updates";
 import { revalidateHangoutPage } from "@/lib/hangout-live";
 import { prisma } from "@/lib/prisma";
 import { goingUser } from "@/lib/rides";
-import { recomputeRoutes } from "@/lib/routes";
+import { recomputeRoutes, recomputeTransit } from "@/lib/routes";
 import { geocodeAddress } from "@/lib/tomtom";
 
 export type TransitActionResult = { error: string } | { success: true };
@@ -124,8 +124,9 @@ export async function setTransitAction(
       "—",
       `${personName(user)} takes public transit (${wording[rideDirection]})`
     );
-  // Only cars that lost a stop need new times.
+  // Cars only need new times when one lost a stop (which re-plans transit too); otherwise just this plan.
   if (dropped.count > 0) await recomputeRoutes(hangoutId);
+  else await recomputeTransit(hangoutId);
   revalidateHangoutPage(hangoutId);
   return { success: true };
 }

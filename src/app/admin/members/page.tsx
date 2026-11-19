@@ -11,6 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AccessList } from "./_components/access-list";
 import { RoleSelect } from "./_components/role-select";
 
 export const metadata = { title: "Members – Admin" };
@@ -30,10 +31,16 @@ function initials(name: string | null, email: string): string {
 }
 
 export default async function AdminMembersPage() {
-  const [users, currentUser] = await Promise.all([
+  const [users, currentUser, allowed] = await Promise.all([
     prisma.user.findMany({ orderBy: { createdAt: "asc" } }),
     getCurrentUser(),
+    prisma.allowedEmail.findMany({ orderBy: { email: "asc" } }),
   ]);
+  const joinedEmails = new Set(users.map((user) => user.email.toLowerCase()));
+  const accessEntries = allowed.map((entry) => ({
+    email: entry.email,
+    joined: joinedEmails.has(entry.email),
+  }));
 
   const adminCount = users.filter((user) => user.role === "ADMIN").length;
   const memberCount = users.length - adminCount;
@@ -55,6 +62,19 @@ export default async function AdminMembersPage() {
             </div>
           ))}
         </dl>
+      </Card>
+
+      <Card className="border-border/70 bg-background/85 overflow-hidden rounded-3xl shadow-none">
+        <CardHeader className="border-border/60 border-b">
+          <CardTitle>Who can sign up</CardTitle>
+          <p className="text-muted-foreground text-sm">
+            Only these emails can create an account. Removing one does not remove someone who has
+            already joined.
+          </p>
+        </CardHeader>
+        <CardContent className="p-0">
+          <AccessList entries={accessEntries} />
+        </CardContent>
       </Card>
 
       <Card className="border-border/70 bg-background/85 overflow-hidden rounded-3xl shadow-none">

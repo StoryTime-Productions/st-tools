@@ -1,14 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle } from "lucide-react";
-import { describeWeather } from "@/lib/weather-codes";
+import { Button } from "@/components/ui/button";
+import { parsePreviewOverride, type PreviewOverride } from "@/lib/psx-weather/preview";
+import { parseLocalMinutes } from "@/lib/psx-weather/time-of-day";
+import { describeWeather, sceneConditionFor } from "@/lib/weather-codes";
+import { WeatherScene } from "./weather-scene";
 
 type WeatherInfo = {
   temperature: number;
   unit: string;
   weatherCode: number;
   locationLabel: string;
+  /** minutes since midnight at the weather location when the forecast was fetched (its own timezone) */
+  localMinutes?: number;
+  /** today's sunrise and sunset, minutes since midnight at the weather location */
+  sunrise?: number;
+  sunset?: number;
 };
 
 type IpLocation = {
@@ -26,6 +35,7 @@ type CachedWeatherRecord = {
 
 const WEATHER_REFRESH_MS = 60 * 60 * 1000;
 const WEATHER_CACHE_KEY = "dashboard-weather-cache-v1";
+const WEATHER_ERROR = "Weather unavailable right now.";
 
 function isValidWeatherInfo(value: unknown): value is WeatherInfo {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -37,11 +47,16 @@ function isValidWeatherInfo(value: unknown): value is WeatherInfo {
     typeof candidate.temperature === "number" &&
     typeof candidate.unit === "string" &&
     typeof candidate.weatherCode === "number" &&
-    typeof candidate.locationLabel === "string"
+    typeof candidate.locationLabel === "string" &&
+    ["localMinutes", "sunrise", "sunset"].every(
+      (key) => candidate[key] === undefined || typeof candidate[key] === "number"
+    )
   );
 }
 
-function readCachedWeather(): WeatherInfo | null {
+type CachedWeather = { weather: WeatherInfo; fetchedAt: number };
+
+function readCachedWeather(): CachedWeather | null {
   if (typeof window === "undefined") {
     return null;
   }
@@ -64,21 +79,21 @@ function readCachedWeather(): WeatherInfo | null {
       return null;
     }
 
-    return parsed.weather;
+    return { weather: parsed.weather, fetchedAt: parsed.fetchedAt };
   } catch {
     window.localStorage.removeItem(WEATHER_CACHE_KEY);
     return null;
   }
 }
 
-function writeCachedWeather(weather: WeatherInfo) {
+function writeCachedWeather(weather: WeatherInfo, fetchedAt: number) {
   if (typeof window === "undefined") {
     return;
   }
 
   const payload: CachedWeatherRecord = {
     weather,
-    fetchedAt: Date.now(),
+    fetchedAt,
   };
 
   window.localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify(payload));
@@ -103,7 +118,7 @@ async function loadWeather(): Promise<WeatherInfo> {
     .join(", ");
 
   const forecastRes = await fetch(
-    `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&timezone=auto`
+    `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&daily=sunrise,sunset&forecast_days=1&timezone=auto`
   );
 
   if (!forecastRes.ok) {
@@ -111,8 +126,9 @@ async function loadWeather(): Promise<WeatherInfo> {
   }
 
   const forecast = (await forecastRes.json()) as {
-    current?: { temperature_2m?: number; weather_code?: number };
+    current?: { time?: string; temperature_2m?: number; weather_code?: number };
     current_units?: { temperature_2m?: string };
+    daily?: { sunrise?: string[]; sunset?: string[] };
   };
 
   if (
@@ -122,23 +138,46 @@ async function loadWeather(): Promise<WeatherInfo> {
     throw new Error("Weather data was incomplete.");
   }
 
+  // the timestamps are in the weather location's own timezone (timezone=auto), not the viewer's
+  const localMinutes = parseLocalMinutes(forecast.current.time);
+  const sunrise = parseLocalMinutes(forecast.daily?.sunrise?.[0]);
+  const sunset = parseLocalMinutes(forecast.daily?.sunset?.[0]);
+
   return {
     temperature: forecast.current.temperature_2m,
     weatherCode: forecast.current.weather_code,
     unit: forecast.current_units?.temperature_2m ?? "C",
     locationLabel,
+    ...(localMinutes !== null ? { localMinutes } : {}),
+    ...(sunrise !== null ? { sunrise } : {}),
+    ...(sunset !== null ? { sunset } : {}),
   };
+}
+
+function viewerMinutes(at: number) {
+  const date = new Date(at);
+  return date.getHours() * 60 + date.getMinutes();
 }
 
 export function LiveTimeWeather({ firstName }: { firstName: string }) {
   const [now, setNow] = useState(() => new Date());
   const [weather, setWeather] = useState<WeatherInfo | null>(null);
+  const [fetchedAt, setFetchedAt] = useState(0);
+  const [override, setOverride] = useState<PreviewOverride | null>(null);
   const [isWeatherLoading, setIsWeatherLoading] = useState(true);
-  const [weatherError, setWeatherError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const statusRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    // `?weather=rain&time=16:45` pins the scene for design review; never in production
+    setOverride(
+      parsePreviewOverride(window.location.search, process.env.NODE_ENV === "production")
+    );
   }, []);
 
   useEffect(() => {
@@ -149,8 +188,8 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
 
       if (cachedWeather) {
         if (!cancelled) {
-          setWeather(cachedWeather);
-          setWeatherError(null);
+          setWeather(cachedWeather.weather);
+          setFetchedAt(cachedWeather.fetchedAt);
           setIsWeatherLoading(false);
         }
 
@@ -158,20 +197,17 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
       }
 
       setIsWeatherLoading(true);
-      setWeatherError(null);
 
       try {
         const nextWeather = await loadWeather();
         if (!cancelled) {
+          const now = Date.now();
           setWeather(nextWeather);
-          writeCachedWeather(nextWeather);
+          setFetchedAt(now);
+          writeCachedWeather(nextWeather, now);
         }
-      } catch (error) {
-        if (!cancelled) {
-          setWeatherError(
-            error instanceof Error ? error.message : "Weather unavailable right now."
-          );
-        }
+      } catch {
+        // The card shows a friendly message with Retry; the cause is not useful on a dashboard.
       } finally {
         if (!cancelled) {
           setIsWeatherLoading(false);
@@ -186,7 +222,7 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
       cancelled = true;
       clearInterval(refreshTimer);
     };
-  }, []);
+  }, [attempt]);
 
   const liveDate = useMemo(
     () =>
@@ -221,7 +257,7 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
   const weatherView = useMemo(() => {
     if (isWeatherLoading) {
       return (
-        <p className="flex items-center gap-2 text-sm text-slate-300">
+        <p role="status" className="flex items-center gap-2 text-sm text-slate-300">
           <LoaderCircle className="size-4 animate-spin" />
           Loading weather...
         </p>
@@ -230,7 +266,25 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
 
     if (!weather) {
       return (
-        <p className="text-sm text-slate-300">{weatherError ?? "Weather unavailable right now."}</p>
+        <p
+          role="status"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-300"
+        >
+          {WEATHER_ERROR}
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            className="rounded-full border-slate-500 bg-transparent text-slate-100 hover:bg-slate-800 hover:text-white dark:border-slate-500 dark:bg-transparent dark:hover:bg-slate-800"
+            onClick={() => {
+              setAttempt((count) => count + 1);
+              // the button is replaced by the loading line, so keep keyboard focus on the card
+              statusRef.current?.focus();
+            }}
+          >
+            Retry
+          </Button>
+        </p>
       );
     }
 
@@ -254,23 +308,49 @@ export function LiveTimeWeather({ firstName }: { firstName: string }) {
         ) : null}
       </p>
     );
-  }, [isWeatherLoading, weather, weatherError]);
+  }, [isWeatherLoading, weather]);
+
+  // the scene needs the weather (or a preview override); loading and error states stay plain navy
+  const sceneCondition =
+    override?.condition ?? (weather ? sceneConditionFor(weather.weatherCode) : null);
+  const sceneMinutes =
+    override?.minutes ?? weather?.localMinutes ?? viewerMinutes(fetchedAt || Date.now());
 
   return (
-    <div className="space-y-3">
-      <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
-        Welcome back, {firstName}
-      </h2>
-      <p className="text-sm text-slate-300 md:text-base">
-        {liveDate} -{" "}
-        <span className="inline-flex items-baseline gap-2">
-          <span className="tabular-nums">{liveTime.timeText}</span>
-          {liveTime.dayPeriod ? (
-            <span className="inline-flex w-10 justify-start">{liveTime.dayPeriod}</span>
-          ) : null}
-        </span>
-      </p>
-      {weatherView}
-    </div>
+    <>
+      {sceneCondition ? (
+        <WeatherScene
+          condition={sceneCondition}
+          baseMinutes={sceneMinutes}
+          baseAt={override?.minutes !== undefined ? 0 : fetchedAt || Date.now()}
+          sunrise={weather?.sunrise}
+          sunset={weather?.sunset}
+          fixedClock={override?.minutes !== undefined}
+          textKey={`${isWeatherLoading}|${weather?.locationLabel}|${weather?.weatherCode}|${weather?.temperature}`}
+        />
+      ) : null}
+      <div className="relative z-10 space-y-3">
+        <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
+          Welcome back, {firstName}
+        </h2>
+        {/* the server renders this a moment before the browser does, so the clock text is expected to differ */}
+        <p className="text-sm text-slate-300 md:text-base" suppressHydrationWarning>
+          {liveDate} -{" "}
+          <span className="inline-flex items-baseline gap-2">
+            <span className="tabular-nums" suppressHydrationWarning>
+              {liveTime.timeText}
+            </span>
+            {liveTime.dayPeriod ? (
+              <span className="inline-flex w-10 justify-start" suppressHydrationWarning>
+                {liveTime.dayPeriod}
+              </span>
+            ) : null}
+          </span>
+        </p>
+        <div ref={statusRef} tabIndex={-1} className="outline-none">
+          {weatherView}
+        </div>
+      </div>
+    </>
   );
 }

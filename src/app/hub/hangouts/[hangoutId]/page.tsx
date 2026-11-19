@@ -265,6 +265,7 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
                   startSlot={hangout.startSlot}
                   attendees={hangout.attendees}
                   userId={user.id}
+                  ended={ended}
                 />
               </fieldset>
             ) : null}

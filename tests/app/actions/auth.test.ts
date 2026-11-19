@@ -467,6 +467,51 @@ describe("auth actions", () => {
     }
   });
 
+  it("says the email is not on the list when the allowlist refuses the account", async () => {
+    const { signUpAction, createClient } = await loadAuthModule();
+    const supabase = buildSupabaseClient();
+    createClient.mockResolvedValue(supabase);
+    const values = {
+      email: "stranger@example.com",
+      password: "password123",
+      confirmPassword: "password123",
+    };
+    supabase.auth.signUp.mockResolvedValueOnce({
+      data: { session: null, user: null },
+      error: { message: "email_not_allowed", code: "P0001" },
+    });
+    await expect(signUpAction(values)).resolves.toEqual({
+      error: "That email isn't on the StoryTime list. Ask an admin to add it.",
+    });
+  });
+
+  it("does not blame the list when Supabase only says it could not save the user", async () => {
+    const { signUpAction, createClient } = await loadAuthModule();
+    const supabase = buildSupabaseClient();
+    createClient.mockResolvedValue(supabase);
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    supabase.auth.signUp.mockResolvedValueOnce({
+      data: { session: null, user: null },
+      error: { message: "Database error saving new user", code: "unexpected_failure" },
+    });
+    await expect(
+      signUpAction({
+        email: "stranger@example.com",
+        password: "password123",
+        confirmPassword: "password123",
+      })
+    ).resolves.toEqual({
+      error:
+        "We couldn't create your account. If your email should be on the StoryTime list, ask an admin to add it; otherwise try again later.",
+    });
+    expect(log).toHaveBeenCalledWith(
+      "Sign-up refused",
+      "unexpected_failure",
+      "Database error saving new user"
+    );
+    log.mockRestore();
+  });
+
   it("returns the provider error when discord oauth fails", async () => {
     const { signInWithDiscordAction, createClient } = await loadAuthModule();
     const supabase = buildSupabaseClient();

@@ -14,6 +14,7 @@ import {
   Users,
 } from "lucide-react";
 import { signOutAction } from "@/app/actions/auth";
+import { CountdownAlarmServer } from "@/components/layout/countdown-alarm-server";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { OnlinePresenceTracker } from "@/components/layout/online-presence-tracker";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -430,7 +431,10 @@ export function WorkspaceShell({
               </div>
             </header>
 
-            <main className="flex-1 px-4 py-6 md:px-6 md:py-8">{children}</main>
+            <main className="flex-1 px-4 py-6 md:px-6 md:py-8">
+              <CountdownAlarmServer userId={user.id} />
+              {children}
+            </main>
           </div>
         </div>
       </div>

@@ -33,6 +33,18 @@ async function loadDashboardPageModule() {
   const liveStats = vi.fn(() => <div data-testid="live-stats" />);
   const birthdaysCard = vi.fn(() => <div data-testid="birthdays-card" />);
   const getUpcomingBirthdays = vi.fn().mockResolvedValue([{ discordId: "1", daysUntil: 3 }]);
+  const countdownsCard = vi.fn(() => <div data-testid="countdowns-card" />);
+  const countdownsError = vi.fn(() => <div data-testid="countdowns-error" />);
+  const getVisibleCountdowns = vi
+    .fn()
+    .mockResolvedValue([
+      { id: "c1", title: "Trip", targetAt: new Date("2026-12-01T15:00:00Z"), audienceUserIds: [] },
+    ]);
+  const deleteExpiredCountdowns = vi.fn().mockResolvedValue({ count: 0 });
+  const findUsers = vi.fn().mockResolvedValue([
+    { id: "u1", name: "Alice", email: "alice@example.com" },
+    { id: "u2", name: null, email: "bob@example.com" },
+  ]);
 
   const getVoiceNow = vi.fn().mockResolvedValue([{ discordId: "1" }]);
   const getWordleStreak = vi.fn().mockResolvedValue({ streak: 80, postedOn: "2026-10-30" });
@@ -61,6 +73,14 @@ async function loadDashboardPageModule() {
     BirthdaysCard: birthdaysCard,
   }));
   vi.doMock("@/lib/discord-birthdays", () => ({ getUpcomingBirthdays }));
+  vi.doMock("@/app/dashboard/_components/countdowns-card", () => ({
+    CountdownsCard: countdownsCard,
+  }));
+  vi.doMock("@/app/dashboard/_components/countdowns-error", () => ({
+    CountdownsError: countdownsError,
+  }));
+  vi.doMock("@/lib/countdowns", () => ({ getVisibleCountdowns, deleteExpiredCountdowns }));
+  vi.doMock("@/lib/prisma", () => ({ prisma: { user: { findMany: findUsers } } }));
 
   const dashboardPageModule = await import("@/app/dashboard/page");
 
@@ -77,6 +97,10 @@ async function loadDashboardPageModule() {
     getVoiceNow,
     birthdaysCard,
     getUpcomingBirthdays,
+    countdownsCard,
+    getVisibleCountdowns,
+    deleteExpiredCountdowns,
+    findUsers,
   };
 }
 
@@ -200,6 +224,87 @@ describe("DashboardPage", () => {
     render(await DashboardPage());
 
     expect(birthdaysCard).not.toHaveBeenCalled();
+    expect(screen.getByTestId("playlist-widget")).toBeInTheDocument();
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
+  });
+
+  it("gives a member their countdowns without loading the member list", async () => {
+    const {
+      default: DashboardPage,
+      getCurrentUser,
+      countdownsCard,
+      getVisibleCountdowns,
+      deleteExpiredCountdowns,
+      findUsers,
+    } = await loadDashboardPageModule();
+    getCurrentUser.mockResolvedValueOnce(USER);
+
+    render(await DashboardPage());
+
+    expect(deleteExpiredCountdowns).toHaveBeenCalled();
+    expect(getVisibleCountdowns).toHaveBeenCalledWith(USER.id, expect.any(Date), {
+      asAdmin: false,
+    });
+    expect(findUsers).not.toHaveBeenCalled();
+    expect(countdownsCard).toHaveBeenCalledWith(
+      {
+        countdowns: [
+          {
+            id: "c1",
+            title: "Trip",
+            targetAt: "2026-12-01T15:00:00.000Z",
+            audienceUserIds: [],
+          },
+        ],
+        userId: USER.id,
+        isAdmin: false,
+        members: [],
+      },
+      undefined
+    );
+  });
+
+  it("gives an admin the member list and the chosen audiences", async () => {
+    const {
+      default: DashboardPage,
+      getCurrentUser,
+      countdownsCard,
+      getVisibleCountdowns,
+    } = await loadDashboardPageModule();
+    getCurrentUser.mockResolvedValueOnce({ ...USER, role: "ADMIN" });
+
+    render(await DashboardPage());
+
+    expect(getVisibleCountdowns).toHaveBeenCalledWith(USER.id, expect.any(Date), {
+      asAdmin: true,
+    });
+    expect(countdownsCard).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isAdmin: true,
+        members: [
+          { id: "u1", name: "Alice" },
+          { id: "u2", name: "bob@example.com" },
+        ],
+      }),
+      undefined
+    );
+  });
+
+  it("shows a retryable error in place of the countdowns card when they fail to load", async () => {
+    const {
+      default: DashboardPage,
+      getCurrentUser,
+      getVisibleCountdowns,
+    } = await loadDashboardPageModule();
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    getCurrentUser.mockResolvedValueOnce(USER);
+    getVisibleCountdowns.mockRejectedValueOnce(new Error("db down"));
+
+    render(await DashboardPage());
+
+    expect(screen.queryByTestId("countdowns-card")).not.toBeInTheDocument();
+    expect(screen.getByTestId("countdowns-error")).toBeInTheDocument();
     expect(screen.getByTestId("playlist-widget")).toBeInTheDocument();
     expect(log).toHaveBeenCalled();
     log.mockRestore();

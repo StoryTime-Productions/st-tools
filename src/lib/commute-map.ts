@@ -1,5 +1,6 @@
 import type { CarPassenger, HangoutCarItem, HangoutTransitItem } from "@/lib/hangouts";
 import type { CarSchedule, StopRoute } from "@/lib/routes";
+import { lineName } from "@/lib/transit-names";
 
 export type LatLon = [number, number];
 
@@ -34,14 +35,27 @@ export interface MapCar {
   dropoffs: MapPassenger[];
 }
 
-/** Someone travelling by public transit; `trip` says which phase their start pin belongs to. */
+/** One leg of a planned transit trip; `label` is what the hover shows, `walk` legs are drawn dashed. */
+export interface MapTransitLeg {
+  label: string;
+  walk: boolean;
+  path: LatLon[];
+}
+
+/**
+ * Someone travelling by public transit; `trip` says which phase their start pin and lines belong to.
+ * `legs` is empty when no route is stored or it could not be planned (the trip planner links cover that).
+ */
 export interface MapTransit {
+  userId: string;
   name: string;
   trip: "there" | "back";
   position: LatLon;
+  color: string;
+  legs: MapTransitLeg[];
 }
 
-/** Until transit routing exists the map links out to the regional trip planners. */
+/** Links shown for a transit rider whose route isn't drawn. */
 export const TRIP_PLANNERS = [
   { label: "STM", url: "https://www.stm.info/en" },
   { label: "exo", url: "https://exo.quebec/en" },
@@ -49,15 +63,19 @@ export const TRIP_PLANNERS = [
 
 export type Trip = "there" | "back";
 
-/** Direction arrows spaced evenly by distance along a path; `bearing` is degrees clockwise from north. */
-export function arrowsAlong(path: LatLon[], count = 4) {
+/**
+ * Direction arrows spaced evenly by distance along a path; `bearing` is degrees clockwise from north.
+ * `minGap` (in degrees, about 111 km each) drops arrows from a short path so they never overlap.
+ */
+export function arrowsAlong(path: LatLon[], count = 4, minGap = 0) {
   const km = (a: LatLon, b: LatLon) =>
     Math.hypot((b[1] - a[1]) * Math.cos(((a[0] + b[0]) / 2) * (Math.PI / 180)), b[0] - a[0]);
   const lengths = path.slice(1).map((point, i) => km(path[i], point));
   const total = lengths.reduce((sum, length) => sum + length, 0);
   if (total === 0) return [];
-  return Array.from({ length: count }, (_, n) => {
-    let left = (total * (n + 1)) / (count + 1);
+  const shown = minGap > 0 ? Math.min(count, Math.floor(total / minGap)) : count;
+  return Array.from({ length: shown }, (_, n) => {
+    let left = (total * (n + 1)) / (shown + 1);
     let i = 0;
     while (i < lengths.length - 1 && left > lengths[i]) left -= lengths[i++];
     const [from, to] = [path[i], path[i + 1]];
@@ -71,6 +89,9 @@ export function arrowsAlong(path: LatLon[], count = 4) {
 }
 
 export const CAR_COLORS = ["#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2"];
+
+/** Distinct from the car colours so a rider's line is never mistaken for a car's. */
+export const TRANSIT_COLORS = ["#be185d", "#a16207", "#4d7c0f", "#475569", "#7c2d12", "#1e3a8a"];
 
 const at = (lat: number | null, lon: number | null): LatLon | null =>
   lat === null || lon === null ? null : [lat, lon];
@@ -100,11 +121,29 @@ export function toMapCar(car: HangoutCarItem, homeOf: (userId: string) => LatLon
   };
 }
 
+/** Leg label for the hover: "Eve · STM 2", or "Eve · walk" for a walking leg. */
+function legLabel(name: string, leg: { mode: string; agency?: string; line?: string }) {
+  if (leg.mode === "WALK") return `${name} · walk`;
+  return `${name} · ${lineName(leg)}`;
+}
+
+/** Each rider keeps one colour for both of their trips. */
 export function toMapTransit(rows: HangoutTransitItem[]): MapTransit[] {
+  const order = [...new Set(rows.map((row) => row.userId))];
   return rows.map((row) => ({
+    userId: row.userId,
     name: row.name,
     trip: row.direction === "PICKUP" ? "there" : "back",
     position: [row.startLat, row.startLon],
+    color: TRANSIT_COLORS[order.indexOf(row.userId) % TRANSIT_COLORS.length],
+    legs:
+      row.route && !("error" in row.route)
+        ? row.route.legs.map((leg) => ({
+            label: legLabel(row.name, leg),
+            walk: leg.mode === "WALK",
+            path: leg.path,
+          }))
+        : [],
   }));
 }
 
@@ -139,8 +178,8 @@ export function buildCommuteMap(
     notOnMap,
     between,
     transit,
-    /** Shown in a phase that has transit people, since no transit line is drawn yet (AC 8). */
-    planners: transit.length > 0 ? TRIP_PLANNERS : [],
+    /** Offered when a transit rider has no drawn route (AC 4, AC 8). */
+    planners: transit.some((rider) => rider.legs.length === 0) ? TRIP_PLANNERS : [],
     cars: cars.map((car, index) => {
       // One pin per distinct place and phase; people who share a place share a pin.
       const pins = (["there", "back"] as const).flatMap((trip) => {

@@ -16,6 +16,9 @@ const PHASES: { id: Phase; label: string }[] = [
   { id: "home", label: "Getting home" },
 ];
 
+/** About 1 km: the least room an arrow needs on a transit leg. */
+const TRANSIT_ARROW_GAP = 0.01;
+
 const arrow = (position: [number, number], bearing: number, L: typeof import("leaflet")) =>
   L.marker(position, {
     interactive: false,
@@ -30,6 +33,29 @@ const arrow = (position: [number, number], bearing: number, L: typeof import("le
 const text = (value: string) =>
   Object.assign(document.createElement("div"), { textContent: value });
 
+/**
+ * Leaflet draws a path as an SVG element that Tab cannot reach. Make it a tab stop with the owner's name as its
+ * label; focusing it opens the same tooltip as hovering and thickens the line so the focus is visible.
+ * The element only exists once the map has a view, so call this after fitBounds/setView.
+ */
+const focusable = (line: import("leaflet").Polyline, label: string) => {
+  const element = line.getElement();
+  if (!element) return line;
+  element.setAttribute("tabindex", "0");
+  element.setAttribute("role", "img");
+  element.setAttribute("aria-label", label);
+  const weight = line.options.weight ?? 5;
+  element.addEventListener("focus", () => {
+    line.setStyle({ weight: weight + 3 });
+    line.openTooltip(line.getCenter());
+  });
+  element.addEventListener("blur", () => {
+    line.setStyle({ weight });
+    line.closeTooltip();
+  });
+  return line;
+};
+
 export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean }) {
   const container = useRef<HTMLDivElement>(null);
   const dark = useTheme().resolvedTheme === "dark";
@@ -38,11 +64,20 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
   const transitNow = data.transit.filter(
     (rider) => (rider.trip === "back" ? "home" : "there") === active
   );
+  const transitLegible = [
+    ...new Map(data.transit.filter((r) => r.legs.length > 0).map((r) => [r.userId, r])).values(),
+  ];
+  const showTransitCredit = transitNow.some((rider) => rider.legs.some((leg) => !leg.walk));
 
   useEffect(() => {
     if (!hasKey || !container.current) return;
     let map: import("leaflet").Map | undefined;
     let cancelled = false;
+    const tabbable: [import("leaflet").Polyline, string][] = [];
+    const track = (line: import("leaflet").Polyline, label: string) => {
+      tabbable.push([line, label]);
+      return line;
+    };
     void import("leaflet").then((L) => {
       if (cancelled || !container.current) return;
       map = L.map(container.current, { attributionControl: false });
@@ -72,16 +107,17 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
         car.lines.forEach((line, index) => {
           const trip = car.trips[index];
           if ((trip === "back" ? "home" : "there") !== active) return;
-          L.polyline(line, {
-            color: car.color,
-            weight: 5,
-            dashArray: car.dashed ? "8 8" : undefined,
-          })
-            .bindTooltip(
-              text(`${car.driver}'s car: ${trip === "back" ? "Getting home" : "Getting there"}`),
-              { sticky: true }
-            )
-            .addTo(map!);
+          const label = `${car.driver}'s car: ${trip === "back" ? "Getting home" : "Getting there"}`;
+          track(
+            L.polyline(line, {
+              color: car.color,
+              weight: 5,
+              dashArray: car.dashed ? "8 8" : undefined,
+            })
+              .bindTooltip(text(label), { sticky: true })
+              .addTo(map!),
+            label
+          );
           if (!car.dashed) {
             for (const { position, bearing } of arrowsAlong(line)) {
               arrow(position, bearing, L).addTo(map!);
@@ -108,12 +144,30 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
           "flex size-[22px] items-center justify-center rounded-md border-2 border-white text-xs text-white shadow",
           "🚌",
           rider.position,
-          "#475569"
+          rider.color
         ).bindTooltip(text(`${rider.name} (public transit)`), {
           direction: "top",
           offset: [0, -6],
         });
         points.push(rider.position);
+        for (const leg of rider.legs) {
+          const legLine = L.polyline(leg.path, {
+            color: rider.color,
+            weight: 5,
+            dashArray: leg.walk ? "1 10" : undefined,
+            lineCap: leg.walk ? "round" : undefined,
+          })
+            .bindTooltip(text(leg.label), { sticky: true })
+            .addTo(map);
+          // the dotted walk legs stay out of the tab order; the solid legs carry the line and owner
+          if (!leg.walk) track(legLine, leg.label);
+          if (!leg.walk) {
+            for (const { position, bearing } of arrowsAlong(leg.path, 4, TRANSIT_ARROW_GAP)) {
+              arrow(position, bearing, L).addTo(map);
+            }
+          }
+          points.push(...leg.path);
+        }
       }
       if (active === "between" && data.between) {
         const { legs, dashed, guide } = data.between;
@@ -124,9 +178,12 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
               label: `Stop ${leg.from} to stop ${leg.to}: ${leg.minutes} min`,
             }));
         for (const { path, label } of lines) {
-          L.polyline(path, { color: "#111", weight: 5, dashArray: dashed ? "8 8" : undefined })
-            .bindTooltip(text(label), { sticky: true })
-            .addTo(map);
+          track(
+            L.polyline(path, { color: "#111", weight: 5, dashArray: dashed ? "8 8" : undefined })
+              .bindTooltip(text(label), { sticky: true })
+              .addTo(map),
+            label
+          );
           if (!dashed) {
             for (const { position, bearing } of arrowsAlong(path)) {
               arrow(position, bearing, L).addTo(map);
@@ -137,6 +194,7 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
       }
       if (points.length > 0) map.fitBounds(points, { padding: [24, 24] });
       else map.setView([43.65, -79.38], 10);
+      for (const [line, label] of tabbable) focusable(line, label);
     });
     return () => {
       cancelled = true;
@@ -171,7 +229,23 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
         role="group"
         aria-label="Map of the hangout's stops and carpool routes. The itinerary lists the same stops."
       />
-      <p className="text-muted-foreground text-xs">© TomTom</p>
+      <p className="text-muted-foreground text-xs">
+        © TomTom
+        {showTransitCredit ? (
+          <>
+            {" · Transit data: STM, exo ("}
+            <a
+              href="https://www.donneesquebec.ca/licence/#cc-by"
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-2"
+            >
+              CC BY 4.0
+            </a>
+            {"), REM"}
+          </>
+        ) : null}
+      </p>
       {data.cars.length > 0 ? (
         <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
           {data.cars.map((car) => (
@@ -186,7 +260,22 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
           ))}
         </ul>
       ) : null}
+      {transitLegible.length > 0 ? (
+        <ul aria-label="Public transit riders" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+          {transitLegible.map((rider) => (
+            <li key={rider.userId} className="flex items-center gap-2">
+              <span
+                aria-hidden
+                className="inline-block h-0 w-6 border-t-4"
+                style={{ borderColor: rider.color }}
+              />
+              {rider.name} (public transit)
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {data.cars.some((car) => !car.dashed && car.lines.length > 0) ||
+      transitNow.some((rider) => rider.legs.some((leg) => !leg.walk)) ||
       (data.between && !data.between.dashed) ? (
         <p className="text-muted-foreground text-xs">Arrows show the direction of travel.</p>
       ) : null}
@@ -202,8 +291,8 @@ export function CommuteMap({ data, hasKey }: { data: MapData; hasKey: boolean })
       {transitNow.length > 0 ? (
         <p className="text-sm">
           <span className="text-muted-foreground">
-            By public transit: {transitNow.map((rider) => rider.name).join(", ")}. Plan the
-            trip:{" "}
+            By public transit: {transitNow.map((rider) => rider.name).join(", ")}.
+            {data.planners.length > 0 ? " Plan the trip: " : ""}
           </span>
           {data.planners.map((planner, index) => (
             <span key={planner.url}>

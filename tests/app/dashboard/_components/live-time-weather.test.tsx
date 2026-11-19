@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { LiveTimeWeather } from "@/app/dashboard/_components/live-time-weather";
 
 const WEATHER_CACHE_KEY = "dashboard-weather-cache-v1";
+
+// the GPU scene is covered by its own tests; these tests only care about the text and the cache
+vi.mock("@/lib/psx-weather/scene", () => ({
+  createPsxScene: vi.fn(() => ({ setFrame: vi.fn(), setTime: vi.fn(), dispose: vi.fn() })),
+}));
 
 describe("LiveTimeWeather", () => {
   beforeEach(() => {
@@ -225,7 +230,8 @@ describe("LiveTimeWeather", () => {
 
     render(<LiveTimeWeather firstName="Nirav" />);
 
-    expect(await screen.findByText("Could not resolve location.")).toBeInTheDocument();
+    expect(await screen.findByText("Weather unavailable right now.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 
   it("shows a weather error when location coordinates are incomplete", async () => {
@@ -239,7 +245,8 @@ describe("LiveTimeWeather", () => {
 
     render(<LiveTimeWeather firstName="Nirav" />);
 
-    expect(await screen.findByText("Location lookup was incomplete.")).toBeInTheDocument();
+    expect(await screen.findByText("Weather unavailable right now.")).toBeInTheDocument();
+    expect(screen.queryByText("Location lookup was incomplete.")).not.toBeInTheDocument();
   });
 
   it("shows a weather error when forecast payload is incomplete", async () => {
@@ -268,6 +275,30 @@ describe("LiveTimeWeather", () => {
 
     render(<LiveTimeWeather firstName="Nirav" />);
 
-    expect(await screen.findByText("Weather data was incomplete.")).toBeInTheDocument();
+    expect(await screen.findByText("Weather unavailable right now.")).toBeInTheDocument();
+    expect(screen.queryByText("Weather data was incomplete.")).not.toBeInTheDocument();
+  });
+
+  it("retries the weather lookup when Retry is pressed", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({ ok: false } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ latitude: 45.5, longitude: -73.6, city: "Montreal" }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          current: { temperature_2m: 12, weather_code: 3 },
+          current_units: { temperature_2m: "°C" },
+        }),
+      } as Response);
+
+    render(<LiveTimeWeather firstName="Nirav" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
+
+    expect(await screen.findByText("Overcast")).toBeInTheDocument();
+    expect(screen.queryByText("Weather unavailable right now.")).not.toBeInTheDocument();
   });
 });

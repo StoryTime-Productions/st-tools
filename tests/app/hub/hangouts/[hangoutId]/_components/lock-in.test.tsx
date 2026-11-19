@@ -41,7 +41,11 @@ describe("RankedSlots", () => {
       .mockResolvedValueOnce({ success: true });
     render(<RankedSlots hangoutId="h1" runs={RUNS} total={3} canLock />);
 
-    expect(screen.getByText(/Sat, Oct 3, 2:00 PM – 4:30 PM/)).toHaveTextContent("2 of 3 free");
+    const row = screen.getByText(
+      (_, element) =>
+        element?.tagName === "LI" && /Sat, Oct 3, 2:00 PM – 4:30 PM/.test(element.textContent ?? "")
+    );
+    expect(row).toHaveTextContent("2 of 3 free");
     expect(screen.getByText("1.")).toBeInTheDocument();
     expect(screen.getByText("2.")).toBeInTheDocument();
     expect(screen.getByText(/Lock one in to schedule/)).toBeInTheDocument();
@@ -106,6 +110,21 @@ describe("LockedIn", () => {
     expect(screen.getByText("Alice")).toBeInTheDocument();
     expect(screen.getByText("Bob")).toBeInTheDocument();
     expect(screen.getAllByText("Nobody yet")).toHaveLength(2);
+  });
+
+  it("says why responses are closed once the hangout has ended", () => {
+    const props = {
+      hangoutId: "h1",
+      startSlot: "2026-10-03T14:00",
+      attendees: [{ userId: "a", name: "Alice", status: "GOING" }],
+      userId: "a",
+    };
+    const { rerender } = render(<LockedIn {...props} />);
+    expect(screen.queryByText(/has ended/)).not.toBeInTheDocument();
+
+    rerender(<LockedIn {...props} ended />);
+    expect(screen.getByText("This hangout has ended, so responses are closed.")).toBeVisible();
+    expect(screen.getByText("Your response: Going")).toBeVisible();
   });
 
   it("sets the viewer's own attendance", async () => {

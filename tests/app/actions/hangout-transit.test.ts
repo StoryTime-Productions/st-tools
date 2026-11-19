@@ -39,9 +39,10 @@ async function loadModule() {
   vi.doMock("@/lib/prisma", () => ({ prisma }));
   vi.doMock("@/lib/tomtom", () => ({ geocodeAddress }));
   const recomputeRoutes = vi.fn();
+  const recomputeTransit = vi.fn();
   const queueUpdate = vi.fn();
   vi.doMock("@/lib/hangout-updates", () => ({ queueUpdate }));
-  vi.doMock("@/lib/routes", () => ({ recomputeRoutes }));
+  vi.doMock("@/lib/routes", () => ({ recomputeRoutes, recomputeTransit }));
   const hangoutEnded = vi.fn().mockResolvedValue(false);
   vi.doMock("@/lib/hangouts", () => ({ hangoutEnded }));
   const actions = await import("@/app/actions/hangout-transit");
@@ -52,6 +53,7 @@ async function loadModule() {
     geocodeAddress,
     prisma,
     recomputeRoutes,
+    recomputeTransit,
     queueUpdate,
     hangoutEnded,
   };
@@ -234,7 +236,7 @@ describe("transit actions", () => {
     expect(mod.prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it("takes the caller off that direction's car lists, and re-routes only then (AC6)", async () => {
+  it("takes the caller off that direction's car lists, and re-routes cars only then, and always plans their transit (AC3, AC6)", async () => {
     const mod = await loadModule();
 
     await mod.setTransitAction(HANGOUT_ID, "PICKUP", { start: "Bar" });
@@ -246,10 +248,13 @@ describe("transit actions", () => {
       },
     });
     expect(mod.recomputeRoutes).not.toHaveBeenCalled();
+    expect(mod.recomputeTransit).toHaveBeenCalledWith(HANGOUT_ID);
 
+    mod.recomputeTransit.mockClear();
     mod.prisma.hangoutPassenger.deleteMany.mockResolvedValueOnce({ count: 1 });
     await mod.setTransitAction(HANGOUT_ID, "PICKUP", { start: "Bar" });
     expect(mod.recomputeRoutes).toHaveBeenCalledWith(HANGOUT_ID);
+    expect(mod.recomputeTransit).not.toHaveBeenCalled();
   });
 
   it("doesn't announce a change to an existing choice again", async () => {

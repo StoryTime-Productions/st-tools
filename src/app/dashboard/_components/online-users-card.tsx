@@ -208,19 +208,26 @@ export function OnlineUsersCard({ currentUser }: OnlineUsersCardProps) {
           const isPokePending = pendingPokeUserIds.includes(member.id);
 
           return (
-            <div key={member.id} className="flex items-center gap-3 rounded-xl border px-3 py-2">
+            <div
+              key={member.id}
+              className="flex items-center gap-3 rounded-xl border px-3 py-2 max-md:min-h-15"
+            >
               <div className="relative h-9 w-9 shrink-0 overflow-visible">
                 <Avatar className="h-9 w-9">
                   <AvatarImage src={member.avatarUrl ?? undefined} alt={getDisplayName(member)} />
                   <AvatarFallback>{getInitials(member.name, member.email)}</AvatarFallback>
                 </Avatar>
-                <span className="ring-background absolute right-0 bottom-0 z-10 block size-2.5 translate-x-1/4 translate-y-1/4 rounded-full bg-emerald-500 ring-2" />
+                <span
+                  aria-hidden="true"
+                  className="ring-background absolute right-0 bottom-0 z-10 block size-2.5 translate-x-1/4 translate-y-1/4 rounded-full bg-emerald-500 ring-2"
+                />
               </div>
 
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">
                   {getDisplayName(member)}
                   {isCurrentUser ? " (You)" : ""}
+                  <span className="sr-only">, online</span>
                 </p>
                 <p className="text-muted-foreground truncate text-xs">{member.email}</p>
               </div>

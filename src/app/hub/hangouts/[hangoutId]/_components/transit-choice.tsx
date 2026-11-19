@@ -7,7 +7,9 @@ import { useRun } from "@/app/hub/hangouts/[hangoutId]/_components/use-run";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TRIP_PLANNERS } from "@/lib/commute-map";
 import type { HangoutTransitItem } from "@/lib/hangouts";
+import { lineName } from "@/lib/transit-names";
 
 export interface TransitStop {
   id: string;
@@ -19,6 +21,43 @@ const TRIPS: { direction: RideDirection; title: string; short: string }[] = [
   { direction: "PICKUP", title: "Getting there", short: "getting there" },
   { direction: "DROPOFF", title: "Getting home", short: "getting home" },
 ];
+
+const clock = (iso: string) =>
+  new Date(iso).toLocaleTimeString("en-US", {
+    timeZone: "America/Toronto",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+/** When to leave and what to catch; metro is named by line only, never by departure time. */
+function routeText(route: NonNullable<HangoutTransitItem["route"]>) {
+  if ("error" in route) return null;
+  const lines = route.legs.filter((leg) => leg.mode !== "WALK").map(lineName);
+  return `Leave ${clock(route.start)} · ${lines.length > 0 ? `take ${lines.join(", then ")}` : "walk"} · ${route.minutes} min`;
+}
+
+function RouteLine({ route }: { route: HangoutTransitItem["route"] }) {
+  const text = route ? routeText(route) : null;
+  if (text) return <p className="text-muted-foreground text-sm">{text}</p>;
+  return (
+    <p className="text-muted-foreground text-sm">
+      Route could not be computed. Plan the trip:{" "}
+      {TRIP_PLANNERS.map((planner, index) => (
+        <span key={planner.url}>
+          {index > 0 ? " · " : null}
+          <a
+            href={planner.url}
+            target="_blank"
+            rel="noreferrer"
+            className="text-foreground underline underline-offset-2"
+          >
+            {planner.label}
+          </a>
+        </span>
+      ))}
+    </p>
+  );
+}
 
 /**
  * Everyone's public transit choices (R5), and for a Going attendee who isn't driving, a form per
@@ -74,6 +113,7 @@ export function TransitChoice({
                           {row.destAddress}
                         </p>
                       ) : null}
+                      <RouteLine route={row.route} />
                     </li>
                   ))}
                 </ul>

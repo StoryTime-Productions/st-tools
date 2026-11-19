@@ -27,6 +27,12 @@ vi.mock("@/components/layout/online-presence-tracker", () => ({
   OnlinePresenceTracker: trackerMock,
 }));
 
+vi.mock("@/components/layout/countdown-alarm-server", () => ({
+  CountdownAlarmServer: ({ userId }: { userId: string }) => (
+    <div data-testid="countdown-alarm" data-user={userId} />
+  ),
+}));
+
 vi.mock("@/components/theme-toggle", () => ({
   ThemeToggle: () => <button type="button">Theme toggle</button>,
 }));
@@ -49,6 +55,18 @@ function makeUser(overrides: Partial<WorkspaceShellUser> = {}): WorkspaceShellUs
 describe("WorkspaceShell", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("mounts the countdown alarm above the page content", () => {
+    render(
+      <WorkspaceShell user={makeUser()} activeNav="focus" title="Focus">
+        <p>Page body</p>
+      </WorkspaceShell>
+    );
+
+    const alarm = screen.getByTestId("countdown-alarm");
+    const body = screen.getByText("Page body");
+    expect(alarm.compareDocumentPosition(body) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("renders workspace navigation for members without admin links", () => {

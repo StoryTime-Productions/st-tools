@@ -13,6 +13,7 @@ import {
   type FieldValues,
 } from "react-hook-form";
 
+import { CircleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 
@@ -133,14 +134,29 @@ function FormMessage({ className, ...props }: React.ComponentProps<"p">) {
     return null;
   }
 
+  if (!error) {
+    return (
+      <p
+        data-slot="form-message"
+        id={formMessageId}
+        className={cn("text-destructive text-sm", className)}
+        {...props}
+      >
+        {body}
+      </p>
+    );
+  }
+
   return (
     <p
       data-slot="form-message"
       id={formMessageId}
-      className={cn("text-destructive text-sm", className)}
+      role="alert"
+      className={cn("text-destructive flex items-start gap-2 text-sm", className)}
       {...props}
     >
-      {body}
+      <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      <span>{body}</span>
     </p>
   );
 }
