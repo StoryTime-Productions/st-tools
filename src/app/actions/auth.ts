@@ -6,7 +6,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { isRecoverySession } from "@/lib/auth-recovery";
-import { RESET_LINK_EXPIRED } from "@/lib/auth-errors";
+import { accountRefusalMessage, RESET_LINK_EXPIRED } from "@/lib/auth-errors";
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
@@ -107,7 +107,12 @@ function updatePasswordErrorMessage(error: { code?: string }): string {
   }
 }
 
-function signUpErrorMessage(error: { code?: string }): string {
+function signUpErrorMessage(error: { code?: string; message?: string }): string {
+  const refusal = accountRefusalMessage(error.message);
+  if (refusal) {
+    console.error("Sign-up refused", error.code, error.message);
+    return refusal;
+  }
   switch (error.code) {
     case "user_already_exists":
     case "email_exists":
