@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
@@ -36,14 +36,22 @@ import {
   hasReached,
   remainingLabel,
 } from "@/lib/countdown-core";
+import { nextTickMs } from "@/lib/countdown-alarm";
+import { notifyCountdownsChanged } from "@/lib/countdown-sync";
 
-/** Re-reads the clock every minute; the labels only change at minute resolution. */
-function useMinuteClock() {
+/** Re-reads the clock on the minute and at each target, on the same schedule as the alarm banner, so a row never lags it. */
+function useCountdownClock(targets: Date[]) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 60_000);
-    return () => clearInterval(timer);
-  }, []);
+    const timer = setTimeout(
+      () => setNow(new Date()),
+      nextTickMs(
+        targets.map((targetAt) => ({ targetAt })),
+        new Date()
+      )
+    );
+    return () => clearTimeout(timer);
+  }, [targets, now]);
   return now;
 }
 
@@ -59,7 +67,8 @@ export function CountdownsCard({
   members: CountdownMember[];
 }) {
   const router = useRouter();
-  const now = useMinuteClock();
+  const targets = useMemo(() => countdowns.map((c) => new Date(c.targetAt)), [countdowns]);
+  const now = useCountdownClock(targets);
   const [soundOn, setSoundOn] = useAlarmSound();
   const [confirm, confirmDialog] = useConfirm();
   const [dialog, setDialog] = useState<{ item: CountdownItem | null } | null>(null);
@@ -70,6 +79,7 @@ export function CountdownsCard({
 
   function closeDialog() {
     setDialog(null);
+    notifyCountdownsChanged();
     router.refresh();
   }
 
@@ -87,6 +97,7 @@ export function CountdownsCard({
       return;
     }
     toast.success("Countdown deleted");
+    notifyCountdownsChanged();
     router.refresh();
   }
 

@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 
 const KEY = "st-countdown-sound";
 const EVENT = "st-countdown-sound-change";
+const RESUME_WAIT_MS = 500;
 const NOTES = [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5];
 
 export function readAlarmSound() {
@@ -46,7 +47,8 @@ export async function playAlarmChime() {
   if (!Ctor) return false;
   try {
     const context = new Ctor();
-    await context.resume();
+    // Safari and Chrome can leave resume() pending forever when no click has armed audio; never wait on it.
+    await Promise.race([context.resume(), new Promise((done) => setTimeout(done, RESUME_WAIT_MS))]);
     if (context.state !== "running") {
       void context.close();
       return false;

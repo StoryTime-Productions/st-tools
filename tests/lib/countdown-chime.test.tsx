@@ -118,6 +118,21 @@ describe("playAlarmChime", () => {
     expect(contexts[0].close).toHaveBeenCalled();
   });
 
+  it("does not wait forever on a resume the browser never answers", async () => {
+    vi.useFakeTimers();
+    const contexts = installAudio("suspended");
+    const original = (globalThis as unknown as { AudioContext: new () => FakeContext })
+      .AudioContext;
+    class Hanging extends (original as unknown as new () => FakeContext) {
+      resume = vi.fn(() => new Promise<void>(() => {}));
+    }
+    vi.stubGlobal("AudioContext", Hanging);
+    const result = playAlarmChime();
+    await vi.advanceTimersByTimeAsync(600);
+    await expect(result).resolves.toBe(false);
+    expect(contexts[0].close).toHaveBeenCalled();
+  });
+
   it("reports false when audio is missing or throws", async () => {
     vi.stubGlobal("AudioContext", undefined);
     await expect(playAlarmChime()).resolves.toBe(false);

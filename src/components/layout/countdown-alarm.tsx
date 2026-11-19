@@ -13,9 +13,9 @@ import {
   type AlarmCountdown,
 } from "@/lib/countdown-alarm";
 import { playAlarmChime, useAlarmSound, writeAlarmSound } from "@/lib/countdown-chime";
+import { COUNTDOWN_CHANNEL, COUNTDOWNS_CHANGED } from "@/lib/countdown-sync";
 import { currentTabTitle, setTabTitle, subscribeTabTitle } from "@/lib/tab-title";
 
-const CHANNEL = "st-countdowns";
 const REFETCH_MS = 60_000;
 
 export interface ApiCountdown {
@@ -48,8 +48,14 @@ function useTitleOwner() {
       written = wanted;
     };
     const unsubscribe = subscribeTabTitle(apply);
+    // The page's own title is rewritten on every router refresh; take the title back whenever that happens.
+    const observer = new MutationObserver(() => {
+      if (written !== null && document.title !== written) apply();
+    });
+    observer.observe(document.head, { subtree: true, childList: true, characterData: true });
     apply();
     return () => {
+      observer.disconnect();
       unsubscribe();
       if (base !== null) document.title = base;
     };
@@ -90,20 +96,24 @@ export function CountdownAlarm({ initial }: { initial: ApiCountdown[] }) {
       if (document.visibilityState === "visible") void load();
     };
     document.addEventListener("visibilitychange", onVisible);
-    const bc = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(CHANNEL);
+    window.addEventListener(COUNTDOWNS_CHANGED, onVisible);
+    const bc =
+      typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(COUNTDOWN_CHANNEL);
     channel.current = bc;
     if (bc) bc.onmessage = () => void load();
     return () => {
       clearTimeout(first);
       clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener(COUNTDOWNS_CHANGED, onVisible);
       bc?.close();
       channel.current = null;
     };
   }, [load]);
 
   useEffect(() => {
-    const timer = setTimeout(() => setNow(new Date()), nextTickMs(list, now));
+    // Read the clock here, not from `now`: a refetch re-runs this effect, and a stale `now` would push the next tick (and the alarm) out by up to a minute.
+    const timer = setTimeout(() => setNow(new Date()), nextTickMs(list, new Date()));
     return () => clearTimeout(timer);
   }, [list, now]);
 
