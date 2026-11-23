@@ -62,6 +62,7 @@ model User {
   countdowns                   Countdown[]                   @relation("CountdownOwner")
   countdownAudiences           CountdownAudience[]           @relation("CountdownAudienceUser")
   countdownDismissals          CountdownDismissal[]          @relation("CountdownDismissalUser")
+  bucketItems                  BucketItem[]
 
   @@map("users")
 }
@@ -187,8 +188,9 @@ model Tag {
   name      String   @unique
   createdAt DateTime @default(now())
 
-  cards    Card[]
-  projects Project[]
+  cards       Card[]
+  projects    Project[]
+  bucketItems BucketItem[]
 
   @@map("tags")
 }
@@ -327,8 +329,58 @@ model Hangout {
   costs          HangoutCost[]
   notifications  HangoutNotification[]
   pendingUpdates HangoutPendingUpdate[]
+  bucketItem     BucketItem?
 
   @@map("hangouts")
+}
+
+// ─── Bucket list (ST-uff) ──────────────────────────────────────────────────────
+
+enum BucketStatus {
+  TODO
+  IN_PLAN
+  DONE
+}
+
+enum BucketSeason {
+  SPRING
+  SUMMER
+  FALL
+  WINTER
+}
+
+model BucketItem {
+  id            String        @id @default(uuid())
+  title         String
+  notes         String?
+  status        BucketStatus  @default(TODO)
+  season        BucketSeason?
+  seasonYear    Int?
+  /**
+   * The Drive subfolder holding this item's photos; only the id is stored, photos stay in Drive.
+   */
+  driveFolderId String?
+  doneAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  /**
+   * Null once the suggester's account is deleted; the item stays.
+   */
+  suggestedById String?
+  suggestedBy   User?   @relation(fields: [suggestedById], references: [id], onDelete: SetNull)
+
+  /**
+   * At most one bucket-list item per hangout, so the hangout page can show "its" item.
+   */
+  hangoutId String?  @unique
+  hangout   Hangout? @relation(fields: [hangoutId], references: [id], onDelete: SetNull)
+
+  tags Tag[]
+
+  @@index([status])
+  @@index([suggestedById])
+  @@map("bucket_items")
 }
 
 model HangoutAvailability {
