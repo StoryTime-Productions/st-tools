@@ -188,6 +188,15 @@ describe("bucket list queries", () => {
     expect(list.TODO[0]).toMatchObject({ id: "b2", suggestedByName: null, hangoutTitle: null });
   });
 
+  it("lists the shared tag names alphabetically", async () => {
+    const findMany = vi.fn().mockResolvedValue([{ name: "food" }, { name: "trip" }]);
+    vi.doMock("@/lib/prisma", () => ({ prisma: { tag: { findMany } } }));
+    const { getTagNames } = await import("@/lib/bucket-list");
+
+    expect(await getTagNames()).toEqual(["food", "trip"]);
+    expect(findMany).toHaveBeenCalledWith({ select: { name: true }, orderBy: { name: "asc" } });
+  });
+
   it("finds one item by id, or null", async () => {
     const findUnique = vi.fn().mockResolvedValueOnce(row()).mockResolvedValueOnce(null);
     const { getBucketItem } = await load({ findUnique });

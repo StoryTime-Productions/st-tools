@@ -9,6 +9,7 @@ import {
   Compass,
   FolderKanban,
   Home,
+  ListChecks,
   LogOut,
   Settings,
   Users,
@@ -24,7 +25,14 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-export type WorkspaceNavKey = "overview" | "boards" | "hub" | "focus" | "profile" | "members";
+export type WorkspaceNavKey =
+  | "overview"
+  | "boards"
+  | "hub"
+  | "bucket-list"
+  | "focus"
+  | "profile"
+  | "members";
 
 export interface WorkspaceShellUser {
   id: string;
@@ -243,6 +251,13 @@ export function WorkspaceShell({
       caption: "Projects, hangouts and calendar",
       icon: Compass,
       key: "hub",
+    },
+    {
+      href: "/bucket-list",
+      label: "ST-uff",
+      caption: "The group's bucket list",
+      icon: ListChecks,
+      key: "bucket-list",
     },
     {
       href: "/timer",
