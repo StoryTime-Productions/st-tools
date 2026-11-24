@@ -1,7 +1,7 @@
 "use client";
 
-import { useId, useState, useTransition } from "react";
-import { AlertCircle, Check, Plus } from "lucide-react";
+import { useId, useRef, useState, useTransition } from "react";
+import { AlertCircle, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { saveBucketItemAction } from "@/app/actions/bucket-list";
 import { Button } from "@/components/ui/button";
@@ -32,7 +32,6 @@ import {
   type BucketItemView,
   type BucketSeason,
 } from "@/lib/bucket-list-core";
-import { cn } from "@/lib/utils";
 
 const NO_SEASON = "none";
 const SEASON_OPTIONS: ReadonlyArray<{ value: BucketSeason; label: string }> = [
@@ -42,19 +41,22 @@ const SEASON_OPTIONS: ReadonlyArray<{ value: BucketSeason; label: string }> = [
   { value: "WINTER", label: "Winter" },
 ];
 
+/** The list with one more tag typed by a member; blank and same-name-in-any-case tags are ignored. */
+function withTag(tags: string[], raw: string) {
+  const name = raw.trim().replace(/\s+/g, " ");
+  if (name === "" || tags.some((tag) => tag.toLowerCase() === name.toLowerCase())) return tags;
+  return [...tags, name];
+}
+
 interface BucketItemDialogProps {
   /** Present when editing; absent for the "Add an item" button, which brings its own trigger. */
   item?: BucketItemView;
-  tagNames: string[];
-  isAdmin: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
 
 export function BucketItemDialog({
   item,
-  tagNames,
-  isAdmin,
   open: controlledOpen,
   onOpenChange,
 }: BucketItemDialogProps) {
@@ -69,9 +71,7 @@ export function BucketItemDialog({
   const [newTag, setNewTag] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-
-  // tags already on the item stay selectable even if the shared list changed under it
-  const choices = Array.from(new Set([...tagNames, ...tags])).sort((a, b) => a.localeCompare(b));
+  const tagInput = useRef<HTMLInputElement>(null);
 
   function handleOpenChange(next: boolean) {
     if (isPending) return;
@@ -88,16 +88,14 @@ export function BucketItemDialog({
     onOpenChange?.(next);
   }
 
-  function toggleTag(name: string) {
-    setTags((current) =>
-      current.includes(name) ? current.filter((tag) => tag !== name) : [...current, name]
-    );
+  function removeTag(name: string) {
+    setTags((current) => current.filter((tag) => tag !== name));
+    // the chip that had focus is gone, so keep focus inside the form
+    tagInput.current?.focus();
   }
 
-  function addNewTag() {
-    const name = newTag.trim();
-    if (name === "") return;
-    setTags((current) => (current.includes(name) ? current : [...current, name]));
+  function addTag() {
+    setTags(withTag(tags, newTag));
     setNewTag("");
   }
 
@@ -105,6 +103,8 @@ export function BucketItemDialog({
     event.preventDefault();
     setError(null);
     const hasSeason = season !== NO_SEASON;
+    // a tag typed but not yet added still counts
+    const finalTags = withTag(tags, newTag);
 
     startTransition(async () => {
       const result = await saveBucketItemAction({
@@ -113,7 +113,7 @@ export function BucketItemDialog({
         notes,
         season: hasSeason ? season : null,
         seasonYear: hasSeason && year.trim() !== "" ? Number(year) : null,
-        tags,
+        tags: finalTags,
       });
       if ("error" in result) {
         setError(result.error);
@@ -212,50 +212,44 @@ export function BucketItemDialog({
 
           <fieldset className="space-y-2">
             <legend className="text-sm leading-none font-medium">Tags (optional)</legend>
-            {choices.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
-                {isAdmin ? "No tags yet. Add one below." : "No shared tags exist yet."}
-              </p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {choices.map((name) => {
-                  const selected = tags.includes(name);
-                  return (
+            <div className="flex gap-2">
+              <Input
+                ref={tagInput}
+                aria-label="New tag"
+                value={newTag}
+                onChange={(event) => setNewTag(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addTag();
+                  }
+                }}
+                placeholder="Type a tag, press Enter"
+                maxLength={40}
+                autoComplete="off"
+              />
+              <Button type="button" variant="outline" onClick={addTag}>
+                Add tag
+              </Button>
+            </div>
+            {tags.length > 0 ? (
+              <ul className="flex flex-wrap gap-2" aria-label="Tags on this item">
+                {tags.map((name) => (
+                  <li key={name}>
                     <Button
-                      key={name}
                       type="button"
                       size="sm"
-                      variant={selected ? "default" : "outline"}
-                      aria-pressed={selected}
-                      onClick={() => toggleTag(name)}
-                      className={cn("rounded-full", selected && "pl-2")}
+                      variant="secondary"
+                      aria-label={`Remove tag ${name}`}
+                      onClick={() => removeTag(name)}
+                      className="rounded-full"
                     >
-                      {selected ? <Check aria-hidden="true" className="size-3.5" /> : null}
                       {name}
+                      <X aria-hidden="true" className="size-3.5" />
                     </Button>
-                  );
-                })}
-              </div>
-            )}
-            {isAdmin ? (
-              <div className="flex gap-2 pt-1">
-                <Input
-                  aria-label="New tag"
-                  value={newTag}
-                  onChange={(event) => setNewTag(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      addNewTag();
-                    }
-                  }}
-                  placeholder="New tag"
-                  maxLength={40}
-                />
-                <Button type="button" variant="outline" onClick={addNewTag}>
-                  Add tag
-                </Button>
-              </div>
+                  </li>
+                ))}
+              </ul>
             ) : null}
           </fieldset>
 

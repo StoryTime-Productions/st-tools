@@ -7,9 +7,7 @@ vi.mock("@/app/bucket-list/_components/bucket-item-card", () => ({
   BucketItemCard: ({ item }: { item: BucketItemView }) => <div>card:{item.title}</div>,
 }));
 vi.mock("@/app/bucket-list/_components/bucket-item-dialog", () => ({
-  BucketItemDialog: ({ isAdmin }: { isAdmin: boolean }) => (
-    <button type="button">Add an item {isAdmin ? "(admin)" : "(member)"}</button>
-  ),
+  BucketItemDialog: () => <button type="button">Add an item</button>,
 }));
 
 const item = (id: string, status: BucketItemView["status"]): BucketItemView => ({
@@ -40,7 +38,6 @@ describe("BucketListView", () => {
           IN_PLAN: [item("Cabin", "IN_PLAN")],
           DONE: [item("Skating", "DONE")],
         }}
-        tagNames={[]}
         viewer={viewer}
       />
     );
@@ -55,14 +52,13 @@ describe("BucketListView", () => {
     expect(
       within(screen.getByRole("region", { name: /Done/ })).getByText("card:Skating")
     ).toBeVisible();
-    expect(screen.getByRole("button", { name: "Add an item (member)" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Add an item" })).toBeVisible();
   });
 
   it("gives an empty column its own hint while other columns have items", () => {
     render(
       <BucketListView
         grouped={{ TODO: [item("Camping", "TODO")], IN_PLAN: [], DONE: [] }}
-        tagNames={[]}
         viewer={{ id: "a", role: "ADMIN" }}
       />
     );
@@ -70,13 +66,11 @@ describe("BucketListView", () => {
     expect(screen.getByText("Nothing in plan")).toBeVisible();
     expect(screen.getByText("Nothing done yet")).toBeVisible();
     expect(screen.queryByText("Nothing to do yet")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add an item (admin)" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Add an item" })).toBeVisible();
   });
 
   it("shows one page-level empty state when the list has no items", () => {
-    render(
-      <BucketListView grouped={{ TODO: [], IN_PLAN: [], DONE: [] }} tagNames={[]} viewer={viewer} />
-    );
+    render(<BucketListView grouped={{ TODO: [], IN_PLAN: [], DONE: [] }} viewer={viewer} />);
 
     expect(screen.getByRole("heading", { name: "The list is empty" })).toBeVisible();
     expect(screen.queryByText("Nothing in plan")).not.toBeInTheDocument();

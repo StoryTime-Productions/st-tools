@@ -51,8 +51,8 @@ const existing = (over: Partial<BucketItemView> = {}): BucketItemView => ({
   ...over,
 });
 
-async function openAdd(props: { tagNames?: string[]; isAdmin?: boolean } = {}) {
-  render(<BucketItemDialog tagNames={props.tagNames ?? []} isAdmin={props.isAdmin ?? false} />);
+async function openAdd() {
+  render(<BucketItemDialog />);
   await userEvent.click(screen.getByRole("button", { name: "Add an item" }));
   return screen.findByRole("dialog");
 }
@@ -145,57 +145,69 @@ describe("BucketItemDialog (add)", () => {
     );
   });
 
-  it("lets a member pick from the shared tags but not create one", async () => {
-    await openAdd({ tagNames: ["food", "trip"] });
+  it("lets any member type their own tags with the button or Enter", async () => {
+    await openAdd();
+    const field = screen.getByLabelText("New tag");
+    expect(screen.queryByRole("list", { name: "Tags on this item" })).not.toBeInTheDocument();
 
-    expect(screen.queryByLabelText("New tag")).not.toBeInTheDocument();
-    const food = screen.getByRole("button", { name: "food" });
-    expect(food).toHaveAttribute("aria-pressed", "false");
-    await userEvent.click(food);
-    expect(food).toHaveAttribute("aria-pressed", "true");
-    await userEvent.click(screen.getByRole("button", { name: "trip" }));
-    await userEvent.click(food);
-    expect(food).toHaveAttribute("aria-pressed", "false");
+    await userEvent.type(field, "games");
+    await userEvent.click(screen.getByRole("button", { name: "Add tag" }));
+    expect(screen.getByRole("button", { name: "Remove tag games" })).toBeVisible();
+    expect(field).toHaveValue("");
+
+    await userEvent.type(field, "night  market{Enter}");
+    expect(screen.getByRole("button", { name: "Remove tag night market" })).toBeVisible();
+    // Enter in the tag field adds the tag, it does not submit the form
+    expect(actionMocks.saveBucketItemAction).not.toHaveBeenCalled();
 
     await userEvent.type(screen.getByLabelText("Title"), "Crawl");
     await userEvent.click(screen.getByRole("button", { name: "Add item" }));
     await waitFor(() =>
       expect(actionMocks.saveBucketItemAction).toHaveBeenCalledWith(
-        expect.objectContaining({ tags: ["trip"] })
+        expect.objectContaining({ tags: ["games", "night market"] })
       )
     );
   });
 
-  it("says when there are no shared tags yet", async () => {
-    await openAdd({ tagNames: [] });
-    expect(screen.getByText("No shared tags exist yet.")).toBeVisible();
-  });
-
-  it("lets an admin create tags with the button or Enter, ignoring blanks and repeats", async () => {
-    await openAdd({ tagNames: [], isAdmin: true });
-    expect(screen.getByText("No tags yet. Add one below.")).toBeVisible();
-
+  it("ignores a blank tag and a repeat in any letter case, and other keys do not add", async () => {
+    await openAdd();
     const field = screen.getByLabelText("New tag");
-    // a blank tag is ignored
+
     await userEvent.click(screen.getByRole("button", { name: "Add tag" }));
-    expect(screen.getByText("No tags yet. Add one below.")).toBeVisible();
+    expect(screen.queryByRole("list", { name: "Tags on this item" })).not.toBeInTheDocument();
 
-    await userEvent.type(field, "games");
-    await userEvent.click(screen.getByRole("button", { name: "Add tag" }));
-    expect(screen.getByRole("button", { name: "games" })).toHaveAttribute("aria-pressed", "true");
-    expect(field).toHaveValue("");
-
-    await userEvent.type(field, "music{Enter}");
-    expect(screen.getByRole("button", { name: "music" })).toHaveAttribute("aria-pressed", "true");
-    // Enter in the tag field adds the tag, it does not submit the form
-    expect(actionMocks.saveBucketItemAction).not.toHaveBeenCalled();
-
-    await userEvent.type(field, "games{Enter}");
-    expect(screen.getAllByRole("button", { name: "games" })).toHaveLength(1);
+    await userEvent.type(field, "Food{Enter}");
+    await userEvent.type(field, "food{Enter}");
+    expect(screen.getAllByRole("button", { name: /Remove tag/ })).toHaveLength(1);
 
     await userEvent.type(field, "x");
     fireEvent.keyDown(field, { key: "a" });
     expect(field).toHaveValue("x");
+  });
+
+  it("removes a tag again and keeps focus in the form", async () => {
+    await openAdd();
+
+    await userEvent.type(screen.getByLabelText("New tag"), "food{Enter}");
+    await userEvent.click(screen.getByRole("button", { name: "Remove tag food" }));
+
+    expect(screen.queryByRole("button", { name: "Remove tag food" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("New tag")).toHaveFocus();
+  });
+
+  it("counts a tag that was typed but not added when the item is saved", async () => {
+    await openAdd();
+
+    await userEvent.type(screen.getByLabelText("Title"), "Crawl");
+    await userEvent.type(screen.getByLabelText("New tag"), "food{Enter}");
+    await userEvent.type(screen.getByLabelText("New tag"), "late");
+    await userEvent.click(screen.getByRole("button", { name: "Add item" }));
+
+    await waitFor(() =>
+      expect(actionMocks.saveBucketItemAction).toHaveBeenCalledWith(
+        expect.objectContaining({ tags: ["food", "late"] })
+      )
+    );
   });
 });
 
@@ -207,15 +219,7 @@ describe("BucketItemDialog (edit)", () => {
 
   it("starts from the saved item and saves it by id", async () => {
     const onOpenChange = vi.fn();
-    render(
-      <BucketItemDialog
-        item={existing()}
-        tagNames={["food"]}
-        isAdmin={false}
-        open
-        onOpenChange={onOpenChange}
-      />
-    );
+    render(<BucketItemDialog item={existing()} open onOpenChange={onOpenChange} />);
 
     expect(screen.getByRole("heading", { name: "Edit item" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Add an item" })).not.toBeInTheDocument();
@@ -223,12 +227,7 @@ describe("BucketItemDialog (edit)", () => {
     expect(screen.getByLabelText("Notes (optional)")).toHaveValue("Bring snacks");
     expect(screen.getByRole("combobox")).toHaveValue("SUMMER");
     expect(screen.getByLabelText("Year (optional)")).toHaveValue(2027);
-    // a tag already on the item stays selectable even if it left the shared list
-    expect(screen.getByRole("button", { name: "outdoors" })).toHaveAttribute(
-      "aria-pressed",
-      "true"
-    );
-    expect(screen.getByRole("button", { name: "food" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Remove tag outdoors" })).toBeVisible();
 
     await userEvent.clear(screen.getByLabelText("Title"));
     await userEvent.type(screen.getByLabelText("Title"), "Camping trip");
@@ -250,8 +249,6 @@ describe("BucketItemDialog (edit)", () => {
     render(
       <BucketItemDialog
         item={existing({ notes: null, season: null, seasonYear: null, tags: [] })}
-        tagNames={[]}
-        isAdmin={false}
         open
       />
     );
@@ -263,15 +260,7 @@ describe("BucketItemDialog (edit)", () => {
 
   it("tells the parent when it is dismissed", async () => {
     const onOpenChange = vi.fn();
-    render(
-      <BucketItemDialog
-        item={existing()}
-        tagNames={[]}
-        isAdmin={false}
-        open
-        onOpenChange={onOpenChange}
-      />
-    );
+    render(<BucketItemDialog item={existing()} open onOpenChange={onOpenChange} />);
 
     await userEvent.type(screen.getByLabelText("Title"), " DISCARDED");
     await userEvent.keyboard("{Escape}");
@@ -282,15 +271,7 @@ describe("BucketItemDialog (edit)", () => {
     let finish: (value: { success: true }) => void = () => {};
     actionMocks.saveBucketItemAction.mockReturnValue(new Promise((resolve) => (finish = resolve)));
     const onOpenChange = vi.fn();
-    render(
-      <BucketItemDialog
-        item={existing()}
-        tagNames={[]}
-        isAdmin={false}
-        open
-        onOpenChange={onOpenChange}
-      />
-    );
+    render(<BucketItemDialog item={existing()} open onOpenChange={onOpenChange} />);
 
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
     expect(await screen.findByRole("button", { name: "Saving..." })).toBeDisabled();

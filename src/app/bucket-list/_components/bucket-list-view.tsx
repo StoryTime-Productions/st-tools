@@ -37,11 +37,9 @@ function EmptyColumn({ status }: { status: BucketStatus }) {
 
 export function BucketListView({
   grouped,
-  tagNames,
   viewer,
 }: {
   grouped: Record<BucketStatus, BucketItemView[]>;
-  tagNames: string[];
   viewer: BucketViewer;
 }) {
   const total = BUCKET_STATUSES.reduce((sum, status) => sum + grouped[status].length, 0);
@@ -55,7 +53,7 @@ export function BucketListView({
             Things the group wants to do. Anyone can add one or tick it done.
           </p>
         </div>
-        <BucketItemDialog tagNames={tagNames} isAdmin={viewer.role === "ADMIN"} />
+        <BucketItemDialog />
       </div>
 
       {total === 0 ? (
@@ -89,7 +87,7 @@ export function BucketListView({
                 <ul className="space-y-3">
                   {grouped[status].map((item) => (
                     <li key={item.id}>
-                      <BucketItemCard item={item} viewer={viewer} tagNames={tagNames} />
+                      <BucketItemCard item={item} viewer={viewer} />
                     </li>
                   ))}
                 </ul>

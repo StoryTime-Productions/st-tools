@@ -29,15 +29,7 @@ function shortDate(date: Date) {
   });
 }
 
-export function BucketItemCard({
-  item,
-  viewer,
-  tagNames,
-}: {
-  item: BucketItemView;
-  viewer: BucketViewer;
-  tagNames: string[];
-}) {
+export function BucketItemCard({ item, viewer }: { item: BucketItemView; viewer: BucketViewer }) {
   const [isPending, startTransition] = useTransition();
   const [editing, setEditing] = useState(false);
   const [confirm, confirmDialog] = useConfirm();
@@ -179,13 +171,7 @@ export function BucketItemCard({
           </DropdownMenu>
           {/* mounted only while editing, so every open starts from the saved item */}
           {editing ? (
-            <BucketItemDialog
-              item={item}
-              tagNames={tagNames}
-              isAdmin={viewer.role === "ADMIN"}
-              open
-              onOpenChange={handleEditOpenChange}
-            />
+            <BucketItemDialog item={item} open onOpenChange={handleEditOpenChange} />
           ) : null}
         </>
       ) : null}

@@ -51,12 +51,6 @@ export async function getBucketList() {
   return groupByStatus(rows.map(toView));
 }
 
-/** The shared tags, for the add and edit dialog. */
-export async function getTagNames() {
-  const tags = await prisma.tag.findMany({ select: { name: true }, orderBy: { name: "asc" } });
-  return tags.map((tag) => tag.name);
-}
-
 export async function getBucketItem(id: string) {
   const row = await prisma.bucketItem.findUnique({ where: { id }, include: itemInclude });
   return row ? toView(row) : null;

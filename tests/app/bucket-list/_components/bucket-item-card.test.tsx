@@ -48,7 +48,7 @@ describe("BucketItemCard", () => {
   });
 
   it("shows the title, notes and who suggested it", () => {
-    render(<BucketItemCard item={item()} viewer={owner} tagNames={[]} />);
+    render(<BucketItemCard item={item()} viewer={owner} />);
 
     expect(screen.getByRole("heading", { name: "Camping" })).toBeVisible();
     expect(screen.getByText("Bring snacks")).toBeVisible();
@@ -60,7 +60,6 @@ describe("BucketItemCard", () => {
       <BucketItemCard
         item={item({ notes: null, suggestedByName: null, suggestedById: null })}
         viewer={owner}
-        tagNames={[]}
       />
     );
 
@@ -81,7 +80,6 @@ describe("BucketItemCard", () => {
           hangoutTitle: "Lake day",
         })}
         viewer={owner}
-        tagNames={[]}
       />
     );
 
@@ -95,7 +93,7 @@ describe("BucketItemCard", () => {
   });
 
   it("names a linked hangout generically when its title is missing", () => {
-    render(<BucketItemCard item={item({ hangoutId: "h1" })} viewer={owner} tagNames={[]} />);
+    render(<BucketItemCard item={item({ hangoutId: "h1" })} viewer={owner} />);
 
     expect(screen.getByRole("link", { name: /Hangout/ })).toBeVisible();
   });
@@ -105,7 +103,6 @@ describe("BucketItemCard", () => {
       <BucketItemCard
         item={item({ status: "DONE", doneAt: new Date("2026-11-09T20:00:00Z") })}
         viewer={owner}
-        tagNames={[]}
       />
     );
 
@@ -118,7 +115,7 @@ describe("BucketItemCard", () => {
 
   it("ticks an item done and says so", async () => {
     actionMocks.setBucketItemDoneAction.mockResolvedValue({ success: true });
-    render(<BucketItemCard item={item()} viewer={owner} tagNames={[]} />);
+    render(<BucketItemCard item={item()} viewer={owner} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Done: Camping" }));
 
@@ -128,7 +125,7 @@ describe("BucketItemCard", () => {
 
   it("unticks a done item", async () => {
     actionMocks.setBucketItemDoneAction.mockResolvedValue({ success: true });
-    render(<BucketItemCard item={item({ status: "DONE" })} viewer={owner} tagNames={[]} />);
+    render(<BucketItemCard item={item({ status: "DONE" })} viewer={owner} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Done: Camping" }));
 
@@ -138,7 +135,7 @@ describe("BucketItemCard", () => {
 
   it("reports a failed tick", async () => {
     actionMocks.setBucketItemDoneAction.mockResolvedValue({ error: "That item no longer exists." });
-    render(<BucketItemCard item={item()} viewer={owner} tagNames={[]} />);
+    render(<BucketItemCard item={item()} viewer={owner} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Done: Camping" }));
 
@@ -150,19 +147,19 @@ describe("BucketItemCard", () => {
 
   it("hides the menu from members who did not suggest it, shows it to the suggester and admins", () => {
     const { rerender } = render(
-      <BucketItemCard item={item()} viewer={{ id: "u2", role: "MEMBER" }} tagNames={[]} />
+      <BucketItemCard item={item()} viewer={{ id: "u2", role: "MEMBER" }} />
     );
     expect(screen.queryByRole("button", { name: "Actions for Camping" })).not.toBeInTheDocument();
 
-    rerender(<BucketItemCard item={item()} viewer={owner} tagNames={[]} />);
+    rerender(<BucketItemCard item={item()} viewer={owner} />);
     expect(screen.getByRole("button", { name: "Actions for Camping" })).toBeVisible();
 
-    rerender(<BucketItemCard item={item()} viewer={{ id: "u9", role: "ADMIN" }} tagNames={[]} />);
+    rerender(<BucketItemCard item={item()} viewer={{ id: "u9", role: "ADMIN" }} />);
     expect(screen.getByRole("button", { name: "Actions for Camping" })).toBeVisible();
   });
 
   it("opens the edit dialog from the menu and returns focus to the menu when it closes", async () => {
-    render(<BucketItemCard item={item()} viewer={owner} tagNames={[]} />);
+    render(<BucketItemCard item={item()} viewer={owner} />);
 
     await userEvent.click(screen.getByRole("button", { name: "Actions for Camping" }));
     await userEvent.click(await screen.findByRole("menuitem", { name: "Edit" }));
@@ -176,7 +173,7 @@ describe("BucketItemCard", () => {
   });
 
   it("asks before deleting and does nothing on cancel", async () => {
-    render(<BucketItemCard item={item()} viewer={owner} tagNames={[]} />);
+    render(<BucketItemCard item={item()} viewer={owner} />);
 
     await userEvent.click(screen.getByRole("button", { name: "Actions for Camping" }));
     await userEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
@@ -195,7 +192,7 @@ describe("BucketItemCard", () => {
     actionMocks.deleteBucketItemAction
       .mockResolvedValueOnce({ error: "You can only change items you suggested." })
       .mockResolvedValueOnce({ success: true });
-    render(<BucketItemCard item={item()} viewer={owner} tagNames={[]} />);
+    render(<BucketItemCard item={item()} viewer={owner} />);
 
     await userEvent.click(screen.getByRole("button", { name: "Actions for Camping" }));
     await userEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));

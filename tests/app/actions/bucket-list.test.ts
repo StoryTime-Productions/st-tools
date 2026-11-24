@@ -84,22 +84,20 @@ describe("saveBucketItemAction", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/bucket-list");
   });
 
-  it("refuses a member creating a new tag", async () => {
-    const { saveBucketItemAction, tx } = await load();
-    expect(await saveBucketItemAction({ title: "x", tags: ["brand-new", "other"] })).toEqual({
-      error: "Only admins can create tags: brand-new, other",
-    });
-    expect(tx.bucketItem.create).not.toHaveBeenCalled();
-  });
-
-  it("lets an admin create new tags", async () => {
-    const { saveBucketItemAction, tx } = await load({ id: OTHER, role: "ADMIN" });
-    expect(await saveBucketItemAction({ title: "x", tags: ["brand-new"] })).toEqual({
-      success: true,
-    });
+  it("lets any member type new tags, creating only the ones that do not exist yet", async () => {
+    const { saveBucketItemAction, prisma, tx } = await load();
+    prisma.tag.findMany.mockResolvedValue([{ name: "outdoors" }]);
+    expect(
+      await saveBucketItemAction({ title: "x", tags: ["brand-new", "outdoors", "other"] })
+    ).toEqual({ success: true });
     expect(tx.tag.createMany).toHaveBeenCalledWith({
-      data: [{ name: "brand-new" }],
+      data: [{ name: "brand-new" }, { name: "other" }],
       skipDuplicates: true,
+    });
+    expect(tx.bucketItem.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        tags: { connect: [{ name: "brand-new" }, { name: "outdoors" }, { name: "other" }] },
+      }),
     });
   });
 
