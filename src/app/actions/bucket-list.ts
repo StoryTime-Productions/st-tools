@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { Role } from "@prisma/client";
 import { canManageItem, parseBucketInput } from "@/lib/bucket-list-core";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { prisma } from "@/lib/prisma";
@@ -29,8 +28,8 @@ function refresh() {
 }
 
 /**
- * Add an item (any member) or edit one (the suggester or an admin). New tags are admin-only, like on
- * boards: a member picks from the shared tags that already exist.
+ * Add an item (any member) or edit one (the suggester or an admin). Tags are free text: any member
+ * can type a new one, and it joins the shared tag table.
  */
 export async function saveBucketItemAction(
   input: SaveBucketItemInput
@@ -60,9 +59,6 @@ export async function saveBucketItemAction(
     select: { name: true },
   });
   const fresh = tags.filter((name) => !known.some((tag) => tag.name === name));
-  if (fresh.length > 0 && user.role !== Role.ADMIN) {
-    return { error: `Only admins can create tags: ${fresh.join(", ")}` };
-  }
 
   const { title, notes, season, seasonYear } = fields.value;
   await prisma.$transaction(async (tx) => {
