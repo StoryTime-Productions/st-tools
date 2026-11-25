@@ -1,6 +1,7 @@
 import type { HangoutStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
+  disambiguate,
   groupByStatus,
   seasonLabel,
   slotDateLabel,
@@ -85,13 +86,11 @@ export async function getLinkableHangouts() {
   const rows = await prisma.hangout.findMany({
     where: { bucketItem: null, status: { not: "CANCELLED" } },
     select: { id: true, title: true, startSlot: true },
-    orderBy: { title: "asc" },
+    orderBy: [{ title: "asc" }, { createdAt: "asc" }],
   });
-  return rows.map((row) => ({
-    id: row.id,
-    title: row.title,
-    detail: slotDateLabel(row.startSlot),
-  }));
+  return disambiguate(
+    rows.map((row) => ({ id: row.id, title: row.title, detail: slotDateLabel(row.startSlot) }))
+  );
 }
 
 /** Items that can be linked from a hangout page: not done and not tied to another hangout. */
@@ -105,15 +104,17 @@ export async function getUnlinkedBucketItems() {
       seasonYear: true,
       suggestedBy: { select: { name: true } },
     },
-    orderBy: { title: "asc" },
+    orderBy: [{ title: "asc" }, { createdAt: "asc" }],
   });
-  return rows.map((row) => ({
-    id: row.id,
-    title: row.title,
-    detail: [seasonLabel(row.season, row.seasonYear), `by ${row.suggestedBy?.name ?? "someone"}`]
-      .filter(Boolean)
-      .join(" · "),
-  }));
+  return disambiguate(
+    rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      detail: [seasonLabel(row.season, row.seasonYear), `by ${row.suggestedBy?.name ?? "someone"}`]
+        .filter(Boolean)
+        .join(" · "),
+    }))
+  );
 }
 
 /** The item linked to a hangout, for the hangout page (Q4). */

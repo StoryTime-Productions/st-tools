@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BUCKET_STATUSES,
   canManageItem,
+  disambiguate,
   groupByStatus,
   normalizeNotes,
   normalizeTitle,
@@ -45,6 +46,24 @@ describe("bucket list wording", () => {
   it("writes a hangout start as a short date, or says there is none yet", () => {
     expect(slotDateLabel("2026-12-06T18:00")).toBe("Sun, Dec 6");
     expect(slotDateLabel(null)).toBe("No date yet");
+  });
+
+  it("numbers only the options whose title and detail both collide", () => {
+    const option = (id: string, title: string, detail: string) => ({ id, title, detail });
+    expect(
+      disambiguate([
+        option("a", "Board games", "No date yet"),
+        option("b", "Board games", "Sun, Dec 6"),
+        option("c", "Board games", "No date yet"),
+        option("d", "Picnic", "No date yet"),
+      ])
+    ).toEqual([
+      option("a", "Board games", "No date yet (1 of 2)"),
+      option("b", "Board games", "Sun, Dec 6"),
+      option("c", "Board games", "No date yet (2 of 2)"),
+      option("d", "Picnic", "No date yet"),
+    ]);
+    expect(disambiguate([])).toEqual([]);
   });
 
   it("tidies and caps titles and notes", () => {
@@ -230,6 +249,7 @@ describe("bucket list queries", () => {
     const hangoutFindMany = vi.fn().mockResolvedValue([
       { id: "h1", title: "Lake day", startSlot: "2026-12-06T18:00" },
       { id: "h2", title: "Lake day", startSlot: null },
+      { id: "h3", title: "Lake day", startSlot: null },
     ]);
     const itemFindMany = vi.fn().mockResolvedValue([
       {
@@ -248,7 +268,8 @@ describe("bucket list queries", () => {
 
     expect(await getLinkableHangouts()).toEqual([
       { id: "h1", title: "Lake day", detail: "Sun, Dec 6" },
-      { id: "h2", title: "Lake day", detail: "No date yet" },
+      { id: "h2", title: "Lake day", detail: "No date yet (1 of 2)" },
+      { id: "h3", title: "Lake day", detail: "No date yet (2 of 2)" },
     ]);
     expect(hangoutFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { bucketItem: null, status: { not: "CANCELLED" } } })

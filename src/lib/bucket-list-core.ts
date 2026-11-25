@@ -72,6 +72,21 @@ export function slotDateLabel(startSlot: string | null) {
   });
 }
 
+/** Adds "(1 of 2)" to options whose title and detail are both the same, so a picker never shows two identical rows. */
+export function disambiguate<T extends { title: string; detail: string }>(options: T[]): T[] {
+  const key = (option: T) => `${option.title}\u0000${option.detail}`;
+  const totals = new Map<string, number>();
+  for (const option of options) totals.set(key(option), (totals.get(key(option)) ?? 0) + 1);
+  const seen = new Map<string, number>();
+  return options.map((option) => {
+    const total = totals.get(key(option)) ?? 1;
+    if (total === 1) return option;
+    const n = (seen.get(key(option)) ?? 0) + 1;
+    seen.set(key(option), n);
+    return { ...option, detail: `${option.detail} (${n} of ${total})` };
+  });
+}
+
 export function normalizeTitle(title: string) {
   return title.trim().replace(/\s+/g, " ").slice(0, MAX_BUCKET_TITLE);
 }
