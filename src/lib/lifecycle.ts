@@ -25,6 +25,19 @@ export function unpaidCount(shares: ShareMoney[]) {
   ).length;
 }
 
+/** True once a scheduled hangout's last stop has finished (paid up or not). */
+export function hangoutEnded(
+  hangout: { status: HangoutStatus; startSlot: string | null },
+  stops: TimedStop[],
+  now = new Date()
+) {
+  return (
+    hangout.status === "SCHEDULED" &&
+    !!hangout.startSlot &&
+    now >= hangoutEnd(hangout.startSlot, stops)
+  );
+}
+
 export function hangoutPhase(
   hangout: { status: HangoutStatus; startSlot: string | null },
   stops: TimedStop[],

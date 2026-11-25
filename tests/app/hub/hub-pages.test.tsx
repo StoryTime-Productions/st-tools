@@ -81,6 +81,26 @@ async function loadHub() {
   vi.doMock("@/lib/get-current-user", () => ({ getCurrentUser }));
   vi.doMock("@/lib/hub", () => lib);
   vi.doMock("@/lib/hangouts", () => hangouts);
+  const bucket = {
+    getBucketItemForHangout: vi.fn().mockResolvedValue(null),
+    getUnlinkedBucketItems: vi.fn().mockResolvedValue([{ id: "b1", title: "Camping" }]),
+  };
+  vi.doMock("@/lib/bucket-list", () => bucket);
+  vi.doMock("@/app/hub/hangouts/[hangoutId]/_components/bucket-link", () => ({
+    BucketLink: ({
+      item,
+      ended,
+      options,
+    }: {
+      item: { title: string } | null;
+      ended: boolean;
+      options: unknown[];
+    }) => (
+      <p data-testid="bucket-link">
+        {item?.title ?? "no item"} · {ended ? "ended" : "not ended"} · {options.length} options
+      </p>
+    ),
+  }));
   vi.doMock("@/app/hub/_components/hangout-dialog", () => ({
     HangoutDialog: ({ hangout }: { hangout?: { title: string } }) => (
       <button type="button">{hangout ? `Edit ${hangout.title}` : "New hangout"}</button>
@@ -255,6 +275,7 @@ async function loadHub() {
     IdeasPage,
     HangoutPage,
     hangouts,
+    bucket,
     HubLayout,
     HubPage,
     CalendarPage,
@@ -670,6 +691,26 @@ describe("hub pages", () => {
     render(await HangoutPage(params()));
     expect(screen.getAllByTestId("commute-map").at(-1)).toHaveTextContent("key");
     vi.unstubAllEnvs();
+  });
+
+  it("hands the bucket-list link its item, the ended state and the open items", async () => {
+    const { HangoutPage, getCurrentUser, hangouts, bucket } = await loadHub();
+    const params = () => ({ params: Promise.resolve({ hangoutId: "h1" }) });
+    getCurrentUser.mockResolvedValue(admin);
+
+    const open = render(await HangoutPage(params()));
+    expect(screen.getByTestId("bucket-link")).toHaveTextContent("no item · not ended · 1 options");
+    open.unmount();
+
+    bucket.getBucketItemForHangout.mockResolvedValueOnce({ id: "b1", title: "Camping" });
+    hangouts.getHangoutDetail.mockResolvedValueOnce({ ...HANGOUT, phase: "DONE" });
+    const done = render(await HangoutPage(params()));
+    expect(screen.getByTestId("bucket-link")).toHaveTextContent("Camping · ended · 1 options");
+    done.unmount();
+
+    hangouts.getHangoutDetail.mockResolvedValueOnce({ ...HANGOUT, phase: "CANCELLED" });
+    render(await HangoutPage(params()));
+    expect(screen.getByTestId("bucket-link")).toHaveTextContent("no item · not ended · 0 options");
   });
 
   it("keeps an ended hangout readable, with an unpaid badge until settled", async () => {

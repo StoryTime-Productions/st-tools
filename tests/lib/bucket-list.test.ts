@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BUCKET_STATUSES,
   canManageItem,
+  disambiguate,
   groupByStatus,
   normalizeNotes,
   normalizeTitle,
   parseBucketInput,
   seasonLabel,
+  slotDateLabel,
   statusLabel,
   type BucketItemView,
 } from "@/lib/bucket-list-core";
@@ -22,6 +24,7 @@ const view = (id: string, over: Partial<BucketItemView> = {}): BucketItemView =>
   suggestedByName: "Alice",
   hangoutId: null,
   hangoutTitle: null,
+  hangoutEnded: false,
   driveFolderId: null,
   doneAt: null,
   createdAt: new Date("2026-11-01T00:00:00Z"),
@@ -38,6 +41,29 @@ describe("bucket list wording", () => {
     expect(seasonLabel("SUMMER", 2027)).toBe("Summer 2027");
     expect(seasonLabel("FALL", null)).toBe("Fall");
     expect(seasonLabel(null, null)).toBeNull();
+  });
+
+  it("writes a hangout start as a short date, or says there is none yet", () => {
+    expect(slotDateLabel("2026-12-06T18:00")).toBe("Sun, Dec 6");
+    expect(slotDateLabel(null)).toBe("No date yet");
+  });
+
+  it("numbers only the options whose title and detail both collide", () => {
+    const option = (id: string, title: string, detail: string) => ({ id, title, detail });
+    expect(
+      disambiguate([
+        option("a", "Board games", "No date yet"),
+        option("b", "Board games", "Sun, Dec 6"),
+        option("c", "Board games", "No date yet"),
+        option("d", "Picnic", "No date yet"),
+      ])
+    ).toEqual([
+      option("a", "Board games", "No date yet (1 of 2)"),
+      option("b", "Board games", "Sun, Dec 6"),
+      option("c", "Board games", "No date yet (2 of 2)"),
+      option("d", "Picnic", "No date yet"),
+    ]);
+    expect(disambiguate([])).toEqual([]);
   });
 
   it("tidies and caps titles and notes", () => {
@@ -158,13 +184,21 @@ describe("bucket list queries", () => {
     doneAt: null,
     createdAt: new Date("2026-11-01T00:00:00Z"),
     suggestedBy: { name: "Alice" },
-    hangout: { title: "Lake day" },
+    hangout: {
+      title: "Lake day",
+      status: "SCHEDULED",
+      startSlot: "2026-10-03T19:30",
+      stops: [{ durationMinutes: 120, arriveBy: null }],
+    },
     tags: [{ name: "outdoors" }, { name: "summer" }],
     ...over,
   });
 
-  async function load(prismaOver: Record<string, unknown>) {
-    const prisma = { bucketItem: prismaOver };
+  async function load(
+    prismaOver: Record<string, unknown>,
+    hangoutOver: Record<string, unknown> = {}
+  ) {
+    const prisma = { bucketItem: prismaOver, hangout: hangoutOver };
     vi.doMock("@/lib/prisma", () => ({ prisma }));
     return import("@/lib/bucket-list");
   }
@@ -183,9 +217,15 @@ describe("bucket list queries", () => {
       id: "b1",
       suggestedByName: "Alice",
       hangoutTitle: "Lake day",
+      hangoutEnded: true,
       tags: ["outdoors", "summer"],
     });
-    expect(list.TODO[0]).toMatchObject({ id: "b2", suggestedByName: null, hangoutTitle: null });
+    expect(list.TODO[0]).toMatchObject({
+      id: "b2",
+      suggestedByName: null,
+      hangoutTitle: null,
+      hangoutEnded: false,
+    });
   });
 
   it("finds one item by id, or null", async () => {
@@ -203,5 +243,43 @@ describe("bucket list queries", () => {
       expect.objectContaining({ where: { hangoutId: "h1" } })
     );
     expect(await getBucketItemForHangout("h2")).toBeNull();
+  });
+
+  it("lists the hangouts that can still take an item, and the items that can still be linked", async () => {
+    const hangoutFindMany = vi.fn().mockResolvedValue([
+      { id: "h1", title: "Lake day", startSlot: "2026-12-06T18:00" },
+      { id: "h2", title: "Lake day", startSlot: null },
+      { id: "h3", title: "Lake day", startSlot: null },
+    ]);
+    const itemFindMany = vi.fn().mockResolvedValue([
+      {
+        id: "b1",
+        title: "Camping",
+        season: "SUMMER",
+        seasonYear: 2027,
+        suggestedBy: { name: "Alice" },
+      },
+      { id: "b2", title: "Camping", season: null, seasonYear: null, suggestedBy: null },
+    ]);
+    const { getLinkableHangouts, getUnlinkedBucketItems } = await load(
+      { findMany: itemFindMany },
+      { findMany: hangoutFindMany }
+    );
+
+    expect(await getLinkableHangouts()).toEqual([
+      { id: "h1", title: "Lake day", detail: "Sun, Dec 6" },
+      { id: "h2", title: "Lake day", detail: "No date yet (1 of 2)" },
+      { id: "h3", title: "Lake day", detail: "No date yet (2 of 2)" },
+    ]);
+    expect(hangoutFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { bucketItem: null, status: { not: "CANCELLED" } } })
+    );
+    expect(await getUnlinkedBucketItems()).toEqual([
+      { id: "b1", title: "Camping", detail: "Summer 2027 · by Alice" },
+      { id: "b2", title: "Camping", detail: "by someone" },
+    ]);
+    expect(itemFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { hangoutId: null, status: { not: "DONE" } } })
+    );
   });
 });

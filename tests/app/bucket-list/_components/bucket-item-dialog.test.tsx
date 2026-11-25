@@ -44,6 +44,7 @@ const existing = (over: Partial<BucketItemView> = {}): BucketItemView => ({
   suggestedByName: "Alice",
   hangoutId: null,
   hangoutTitle: null,
+  hangoutEnded: false,
   driveFolderId: null,
   doneAt: null,
   createdAt: new Date("2026-11-01T00:00:00Z"),

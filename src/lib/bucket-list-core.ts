@@ -34,6 +34,8 @@ export interface BucketItemView {
   suggestedByName: string | null;
   hangoutId: string | null;
   hangoutTitle: string | null;
+  /** The linked hangout's last stop has finished, so the item can be offered as "Mark as done?". */
+  hangoutEnded: boolean;
   driveFolderId: string | null;
   doneAt: Date | null;
   createdAt: Date;
@@ -57,6 +59,32 @@ export function statusLabel(status: BucketStatus) {
 export function seasonLabel(season: BucketSeason | null, year: number | null) {
   if (!season) return null;
   return year ? `${SEASON_LABELS[season]} ${year}` : SEASON_LABELS[season];
+}
+
+/** "Sat, Dec 6" for a hangout's `YYYY-MM-DDTHH:mm` start, "No date yet" without one; tells same-titled options apart. */
+export function slotDateLabel(startSlot: string | null) {
+  if (!startSlot) return "No date yet";
+  return new Date(`${startSlot.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-CA", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** Adds "(1 of 2)" to options whose title and detail are both the same, so a picker never shows two identical rows. */
+export function disambiguate<T extends { title: string; detail: string }>(options: T[]): T[] {
+  const key = (option: T) => `${option.title}\u0000${option.detail}`;
+  const totals = new Map<string, number>();
+  for (const option of options) totals.set(key(option), (totals.get(key(option)) ?? 0) + 1);
+  const seen = new Map<string, number>();
+  return options.map((option) => {
+    const total = totals.get(key(option)) ?? 1;
+    if (total === 1) return option;
+    const n = (seen.get(key(option)) ?? 0) + 1;
+    seen.set(key(option), n);
+    return { ...option, detail: `${option.detail} (${n} of ${total})` };
+  });
 }
 
 export function normalizeTitle(title: string) {
