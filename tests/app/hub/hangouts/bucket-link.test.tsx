@@ -37,8 +37,8 @@ vi.mock("@/components/ui/select", () => ({
 }));
 
 const options = [
-  { id: "b1", title: "Camping" },
-  { id: "b2", title: "Skydiving" },
+  { id: "b1", title: "Camping", detail: "Summer 2027 · by Alice" },
+  { id: "b2", title: "Skydiving", detail: "by Bob" },
 ];
 const linked = { id: "b1", title: "Camping", status: "IN_PLAN" as const };
 
@@ -77,7 +77,7 @@ describe("BucketLink", () => {
 
     expect(screen.getByRole("link", { name: "Camping" })).toHaveAttribute("href", "/bucket-list");
     expect(screen.getByText("In plan")).toBeVisible();
-    expect(screen.queryByText("Mark as done?")).not.toBeInTheDocument();
+    expect(screen.queryByText("This hangout has ended.")).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Unlink this item" }));
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Item unlinked"));
@@ -88,7 +88,7 @@ describe("BucketLink", () => {
     actionMocks.setBucketItemDoneAction.mockResolvedValue({ success: true });
     render(<BucketLink hangoutId="h1" item={linked} ended options={[]} />);
 
-    expect(screen.getByText("Mark as done?")).toBeVisible();
+    expect(screen.getByText("This hangout has ended.")).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Mark as done" }));
     await waitFor(() => expect(toastMocks.success).toHaveBeenCalledWith("Marked as done"));
     expect(actionMocks.setBucketItemDoneAction).toHaveBeenCalledWith("b1", true);
@@ -98,7 +98,7 @@ describe("BucketLink", () => {
     render(<BucketLink hangoutId="h1" item={{ ...linked, status: "DONE" }} ended options={[]} />);
 
     expect(screen.getByText("Done")).toBeVisible();
-    expect(screen.queryByText("Mark as done?")).not.toBeInTheDocument();
+    expect(screen.queryByText("This hangout has ended.")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Unlink this item" })).not.toBeInTheDocument();
   });
 });

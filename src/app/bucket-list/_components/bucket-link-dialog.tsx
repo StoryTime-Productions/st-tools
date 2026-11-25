@@ -24,6 +24,8 @@ import {
 export interface HangoutOption {
   id: string;
   title: string;
+  /** Tells same-titled hangouts apart, e.g. the date. */
+  detail: string;
 }
 
 interface BucketLinkDialogProps {
@@ -61,7 +63,9 @@ export function BucketLinkDialog({
         <DialogHeader>
           <DialogTitle>Link a hangout</DialogTitle>
           <DialogDescription>
-            Pick the hangout that makes &ldquo;{itemTitle}&rdquo; happen. It moves to In plan.
+            {hangouts.length === 0
+              ? `There is no hangout for “${itemTitle}” to join yet.`
+              : `Pick the hangout that makes “${itemTitle}” happen. It moves to In plan.`}
           </DialogDescription>
         </DialogHeader>
         {hangouts.length === 0 ? (
@@ -72,13 +76,13 @@ export function BucketLinkDialog({
           <div className="space-y-2">
             <Label htmlFor={`link-hangout-${itemId}`}>Hangout</Label>
             <Select value={hangoutId} onValueChange={setHangoutId}>
-              <SelectTrigger id={`link-hangout-${itemId}`} className="w-full">
+              <SelectTrigger id={`link-hangout-${itemId}`} className="w-full max-sm:h-11">
                 <SelectValue placeholder="Choose a hangout" />
               </SelectTrigger>
               <SelectContent>
                 {hangouts.map((hangout) => (
                   <SelectItem key={hangout.id} value={hangout.id}>
-                    {hangout.title}
+                    {hangout.title} · {hangout.detail}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -87,11 +91,13 @@ export function BucketLinkDialog({
         )}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {hangouts.length === 0 ? "Close" : "Cancel"}
           </Button>
-          <Button type="button" disabled={!hangoutId || isPending} onClick={handleLink}>
-            Link hangout
-          </Button>
+          {hangouts.length > 0 ? (
+            <Button type="button" disabled={!hangoutId || isPending} onClick={handleLink}>
+              Link hangout
+            </Button>
+          ) : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>

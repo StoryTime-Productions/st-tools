@@ -1,6 +1,12 @@
 import type { HangoutStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { groupByStatus, type BucketItemView, type BucketStatus } from "@/lib/bucket-list-core";
+import {
+  groupByStatus,
+  seasonLabel,
+  slotDateLabel,
+  type BucketItemView,
+  type BucketStatus,
+} from "@/lib/bucket-list-core";
 import { hangoutEnded } from "@/lib/lifecycle";
 
 export * from "@/lib/bucket-list-core";
@@ -76,20 +82,38 @@ export async function getBucketItem(id: string) {
 
 /** Hangouts that can still take an item: not cancelled and not already linked (one item per hangout). */
 export async function getLinkableHangouts() {
-  return prisma.hangout.findMany({
+  const rows = await prisma.hangout.findMany({
     where: { bucketItem: null, status: { not: "CANCELLED" } },
-    select: { id: true, title: true },
+    select: { id: true, title: true, startSlot: true },
     orderBy: { title: "asc" },
   });
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    detail: slotDateLabel(row.startSlot),
+  }));
 }
 
 /** Items that can be linked from a hangout page: not done and not tied to another hangout. */
 export async function getUnlinkedBucketItems() {
-  return prisma.bucketItem.findMany({
+  const rows = await prisma.bucketItem.findMany({
     where: { hangoutId: null, status: { not: "DONE" } },
-    select: { id: true, title: true },
+    select: {
+      id: true,
+      title: true,
+      season: true,
+      seasonYear: true,
+      suggestedBy: { select: { name: true } },
+    },
     orderBy: { title: "asc" },
   });
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    detail: [seasonLabel(row.season, row.seasonYear), `by ${row.suggestedBy?.name ?? "someone"}`]
+      .filter(Boolean)
+      .join(" · "),
+  }));
 }
 
 /** The item linked to a hangout, for the hangout page (Q4). */

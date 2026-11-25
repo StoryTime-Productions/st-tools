@@ -238,8 +238,8 @@ describe("BucketItemCard", () => {
         item={item()}
         viewer={{ id: "u2", role: "MEMBER" }}
         hangouts={[
-          { id: "h1", title: "Lake day" },
-          { id: "h2", title: "Bowling" },
+          { id: "h1", title: "Lake day", detail: "Sun, Dec 6" },
+          { id: "h2", title: "Bowling", detail: "No date yet" },
         ]}
       />
     );

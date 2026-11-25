@@ -34,8 +34,8 @@ vi.mock("@/components/ui/select", () => ({
 }));
 
 const hangouts = [
-  { id: "h1", title: "Lake day" },
-  { id: "h2", title: "Bowling" },
+  { id: "h1", title: "Lake day", detail: "Sun, Dec 6" },
+  { id: "h2", title: "Bowling", detail: "No date yet" },
 ];
 
 describe("BucketLinkDialog", () => {
@@ -55,6 +55,7 @@ describe("BucketLinkDialog", () => {
 
     expect(screen.getByText(/Camping/)).toBeVisible();
     expect(screen.getByRole("button", { name: "Link hangout" })).toBeDisabled();
+    expect(screen.getByRole("option", { name: "Bowling · No date yet" })).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "h2" } });
     await userEvent.click(screen.getByRole("button", { name: "Link hangout" }));
@@ -87,7 +88,7 @@ describe("BucketLinkDialog", () => {
     expect(onOpenChange).not.toHaveBeenCalled();
   });
 
-  it("explains when every open hangout already has an item, and closes on Cancel", async () => {
+  it("explains when every open hangout already has an item, and closes from the footer", async () => {
     const onOpenChange = vi.fn();
     render(
       <BucketLinkDialog itemId="b1" itemTitle="Camping" hangouts={[]} onOpenChange={onOpenChange} />
@@ -95,9 +96,10 @@ describe("BucketLinkDialog", () => {
 
     expect(screen.getByText(/Every open hangout already has an item/)).toBeVisible();
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Link hangout" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Link hangout" })).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    // the dialog's own X is also named Close; the footer button comes last
+    await userEvent.click(screen.getAllByRole("button", { name: "Close" }).at(-1)!);
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });

@@ -161,9 +161,16 @@ export function BucketItemCard({
           </Link>
         ) : null}
         {item.status === "IN_PLAN" && item.hangoutEnded ? (
-          <div className="bg-muted/50 flex flex-wrap items-center gap-2 rounded-2xl px-3 py-2 text-sm">
+          <div className="bg-muted/50 flex w-full flex-wrap items-center gap-2 rounded-2xl px-3 py-2 text-sm">
             <span>That hangout has ended.</span>
-            <Button type="button" size="sm" disabled={isPending} onClick={toggleDone}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="max-sm:h-11"
+              disabled={isPending}
+              onClick={toggleDone}
+            >
               Mark as done
             </Button>
           </div>

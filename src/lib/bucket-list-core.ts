@@ -61,6 +61,17 @@ export function seasonLabel(season: BucketSeason | null, year: number | null) {
   return year ? `${SEASON_LABELS[season]} ${year}` : SEASON_LABELS[season];
 }
 
+/** "Sat, Dec 6" for a hangout's `YYYY-MM-DDTHH:mm` start, "No date yet" without one; tells same-titled options apart. */
+export function slotDateLabel(startSlot: string | null) {
+  if (!startSlot) return "No date yet";
+  return new Date(`${startSlot.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-CA", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 export function normalizeTitle(title: string) {
   return title.trim().replace(/\s+/g, " ").slice(0, MAX_BUCKET_TITLE);
 }

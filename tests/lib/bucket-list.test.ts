@@ -7,6 +7,7 @@ import {
   normalizeTitle,
   parseBucketInput,
   seasonLabel,
+  slotDateLabel,
   statusLabel,
   type BucketItemView,
 } from "@/lib/bucket-list-core";
@@ -39,6 +40,11 @@ describe("bucket list wording", () => {
     expect(seasonLabel("SUMMER", 2027)).toBe("Summer 2027");
     expect(seasonLabel("FALL", null)).toBe("Fall");
     expect(seasonLabel(null, null)).toBeNull();
+  });
+
+  it("writes a hangout start as a short date, or says there is none yet", () => {
+    expect(slotDateLabel("2026-12-06T18:00")).toBe("Sun, Dec 6");
+    expect(slotDateLabel(null)).toBe("No date yet");
   });
 
   it("tidies and caps titles and notes", () => {
@@ -221,18 +227,36 @@ describe("bucket list queries", () => {
   });
 
   it("lists the hangouts that can still take an item, and the items that can still be linked", async () => {
-    const hangoutFindMany = vi.fn().mockResolvedValue([{ id: "h1", title: "Lake day" }]);
-    const itemFindMany = vi.fn().mockResolvedValue([{ id: "b1", title: "Camping" }]);
+    const hangoutFindMany = vi.fn().mockResolvedValue([
+      { id: "h1", title: "Lake day", startSlot: "2026-12-06T18:00" },
+      { id: "h2", title: "Lake day", startSlot: null },
+    ]);
+    const itemFindMany = vi.fn().mockResolvedValue([
+      {
+        id: "b1",
+        title: "Camping",
+        season: "SUMMER",
+        seasonYear: 2027,
+        suggestedBy: { name: "Alice" },
+      },
+      { id: "b2", title: "Camping", season: null, seasonYear: null, suggestedBy: null },
+    ]);
     const { getLinkableHangouts, getUnlinkedBucketItems } = await load(
       { findMany: itemFindMany },
       { findMany: hangoutFindMany }
     );
 
-    expect(await getLinkableHangouts()).toEqual([{ id: "h1", title: "Lake day" }]);
+    expect(await getLinkableHangouts()).toEqual([
+      { id: "h1", title: "Lake day", detail: "Sun, Dec 6" },
+      { id: "h2", title: "Lake day", detail: "No date yet" },
+    ]);
     expect(hangoutFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { bucketItem: null, status: { not: "CANCELLED" } } })
     );
-    expect(await getUnlinkedBucketItems()).toEqual([{ id: "b1", title: "Camping" }]);
+    expect(await getUnlinkedBucketItems()).toEqual([
+      { id: "b1", title: "Camping", detail: "Summer 2027 · by Alice" },
+      { id: "b2", title: "Camping", detail: "by someone" },
+    ]);
     expect(itemFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { hangoutId: null, status: { not: "DONE" } } })
     );

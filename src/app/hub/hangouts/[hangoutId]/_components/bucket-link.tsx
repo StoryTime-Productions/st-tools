@@ -25,7 +25,7 @@ interface BucketLinkProps {
   /** The last stop has finished, so a linked item is offered as "Mark as done?". */
   ended: boolean;
   /** Items that can still be linked; empty when the hangout is cancelled. */
-  options: { id: string; title: string }[];
+  options: { id: string; title: string; detail: string }[];
 }
 
 /** The hangout page's side of the bucket-list link (Q4): shows its item, or lets a member pick one. */
@@ -67,11 +67,13 @@ export function BucketLink({ hangoutId, item, ended, options }: BucketLinkProps)
               <Badge variant="secondary">{statusLabel(item.status)}</Badge>
             </div>
             {ended && item.status !== "DONE" ? (
-              <div className="bg-muted/50 flex flex-wrap items-center gap-2 rounded-2xl px-3 py-2 text-sm">
-                <span>Mark as done?</span>
+              <div className="bg-muted/50 flex w-full flex-wrap items-center gap-2 rounded-2xl px-3 py-2 text-sm">
+                <span>This hangout has ended.</span>
                 <Button
                   type="button"
+                  variant="outline"
                   size="sm"
+                  className="max-sm:h-11"
                   disabled={isPending}
                   onClick={() =>
                     run(() => setBucketItemDoneAction(item.id, true), "Marked as done")
@@ -86,6 +88,7 @@ export function BucketLink({ hangoutId, item, ended, options }: BucketLinkProps)
                 type="button"
                 variant="outline"
                 size="sm"
+                className="max-sm:h-11"
                 disabled={isPending}
                 onClick={() =>
                   run(() => linkBucketItemHangoutAction(item.id, null), "Item unlinked")
@@ -98,15 +101,15 @@ export function BucketLink({ hangoutId, item, ended, options }: BucketLinkProps)
         ) : (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
             <div className="min-w-0 flex-1 space-y-2">
-              <Label htmlFor="bucket-link-item">Is this hangout on the bucket list?</Label>
+              <Label htmlFor="bucket-link-item">Link a bucket-list item</Label>
               <Select value={itemId} onValueChange={setItemId}>
-                <SelectTrigger id="bucket-link-item" className="w-full">
+                <SelectTrigger id="bucket-link-item" className="w-full max-sm:h-11">
                   <SelectValue placeholder="Pick an item" />
                 </SelectTrigger>
                 <SelectContent>
                   {options.map((option) => (
                     <SelectItem key={option.id} value={option.id}>
-                      {option.title}
+                      {option.title} · {option.detail}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -114,6 +117,7 @@ export function BucketLink({ hangoutId, item, ended, options }: BucketLinkProps)
             </div>
             <Button
               type="button"
+              className="max-sm:h-11"
               disabled={!itemId || isPending}
               onClick={() =>
                 run(() => linkBucketItemHangoutAction(itemId, hangoutId), "Linked to the item")
