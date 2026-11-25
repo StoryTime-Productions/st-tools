@@ -23,8 +23,9 @@ const idSchema = z.string().uuid();
 
 const NOT_ALLOWED = "You can only change items you suggested.";
 
-function refresh() {
+function refresh(hangoutId?: string | null) {
   revalidatePath("/bucket-list");
+  if (hangoutId) revalidatePath(`/hub/hangouts/${hangoutId}`);
 }
 
 /**
@@ -101,8 +102,8 @@ export async function deleteBucketItemAction(id: string): Promise<BucketActionRe
   if (!existing) return { error: "That item no longer exists." };
   if (!canManageItem(existing, user)) return { error: NOT_ALLOWED };
 
-  await prisma.bucketItem.delete({ where: { id } });
-  refresh();
+  const removed = await prisma.bucketItem.delete({ where: { id }, select: { hangoutId: true } });
+  refresh(removed.hangoutId);
   return { success: true };
 }
 
@@ -134,6 +135,78 @@ export async function setBucketItemDoneAction(
     });
   }
 
-  refresh();
+  refresh(existing.hangoutId);
+  return { success: true };
+}
+
+/**
+ * Move an item between To do and In plan; any member can. A Done item stays Done (untick it first).
+ */
+export async function setBucketItemPlannedAction(
+  id: string,
+  planned: boolean
+): Promise<BucketActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "Sign in to use the bucket list." };
+  if (!idSchema.safeParse(id).success) return { error: "That item no longer exists." };
+
+  const existing = await prisma.bucketItem.findUnique({
+    where: { id },
+    select: { status: true, hangoutId: true },
+  });
+  if (!existing) return { error: "That item no longer exists." };
+  if (existing.status === "DONE") return { error: "Untick Done first." };
+
+  await prisma.bucketItem.update({
+    where: { id },
+    data: { status: planned ? "IN_PLAN" : "TODO" },
+  });
+  refresh(existing.hangoutId);
+  return { success: true };
+}
+
+/**
+ * Link an item to a hangout, or unlink it with `hangoutId` null; any member can. Linking moves a
+ * To do item to In plan; unlinking leaves the status alone (In plan can exist without a hangout).
+ */
+export async function linkBucketItemHangoutAction(
+  id: string,
+  hangoutId: string | null
+): Promise<BucketActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "Sign in to use the bucket list." };
+  if (!idSchema.safeParse(id).success) return { error: "That item no longer exists." };
+  if (hangoutId !== null && !idSchema.safeParse(hangoutId).success) {
+    return { error: "That hangout no longer exists." };
+  }
+
+  const existing = await prisma.bucketItem.findUnique({
+    where: { id },
+    select: { status: true, hangoutId: true },
+  });
+  if (!existing) return { error: "That item no longer exists." };
+
+  if (hangoutId !== null) {
+    const hangout = await prisma.hangout.findUnique({
+      where: { id: hangoutId },
+      select: { status: true, bucketItem: { select: { id: true } } },
+    });
+    if (!hangout || hangout.status === "CANCELLED") {
+      return { error: "That hangout no longer exists." };
+    }
+    if (hangout.bucketItem && hangout.bucketItem.id !== id) {
+      return { error: "That hangout already has a bucket-list item." };
+    }
+  }
+
+  await prisma.bucketItem.update({
+    where: { id },
+    data: {
+      hangoutId,
+      ...(hangoutId !== null && existing.status === "TODO" ? { status: "IN_PLAN" as const } : {}),
+    },
+  });
+  refresh(existing.hangoutId);
+  refresh(hangoutId);
   return { success: true };
 }

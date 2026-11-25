@@ -34,6 +34,8 @@ export interface BucketItemView {
   suggestedByName: string | null;
   hangoutId: string | null;
   hangoutTitle: string | null;
+  /** The linked hangout's last stop has finished, so the item can be offered as "Mark as done?". */
+  hangoutEnded: boolean;
   driveFolderId: string | null;
   doneAt: Date | null;
   createdAt: Date;

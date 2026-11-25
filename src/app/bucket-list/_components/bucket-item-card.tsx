@@ -2,11 +2,31 @@
 
 import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { CalendarDays, Check, MoreHorizontal, Pencil, Sun, Trash2 } from "lucide-react";
+import {
+  CalendarDays,
+  CalendarPlus,
+  Check,
+  Link2,
+  Link2Off,
+  MoreHorizontal,
+  Pencil,
+  Sun,
+  Trash2,
+  Undo2,
+} from "lucide-react";
 import { toast } from "sonner";
-import { deleteBucketItemAction, setBucketItemDoneAction } from "@/app/actions/bucket-list";
+import {
+  deleteBucketItemAction,
+  linkBucketItemHangoutAction,
+  setBucketItemDoneAction,
+  setBucketItemPlannedAction,
+} from "@/app/actions/bucket-list";
 import type { BucketViewer } from "@/app/bucket-list/_components/bucket-list-view";
 import { BucketItemDialog } from "@/app/bucket-list/_components/bucket-item-dialog";
+import {
+  BucketLinkDialog,
+  type HangoutOption,
+} from "@/app/bucket-list/_components/bucket-link-dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,9 +49,18 @@ function shortDate(date: Date) {
   });
 }
 
-export function BucketItemCard({ item, viewer }: { item: BucketItemView; viewer: BucketViewer }) {
+export function BucketItemCard({
+  item,
+  viewer,
+  hangouts,
+}: {
+  item: BucketItemView;
+  viewer: BucketViewer;
+  hangouts: HangoutOption[];
+}) {
   const [isPending, startTransition] = useTransition();
   const [editing, setEditing] = useState(false);
+  const [linking, setLinking] = useState(false);
   const [confirm, confirmDialog] = useConfirm();
   // the menu item that opens the edit dialog or the delete confirm is gone by the time they close
   const menuButton = useRef<HTMLButtonElement>(null);
@@ -45,6 +74,28 @@ export function BucketItemCard({ item, viewer }: { item: BucketItemView; viewer:
       if ("error" in result) toast.error(result.error);
       else toast.success(done ? "Moved back to the list" : "Marked as done");
     });
+  }
+
+  function togglePlanned() {
+    const planned = item.status !== "IN_PLAN";
+    startTransition(async () => {
+      const result = await setBucketItemPlannedAction(item.id, planned);
+      if ("error" in result) toast.error(result.error);
+      else toast.success(planned ? "Moved to In plan" : "Moved back to To do");
+    });
+  }
+
+  function unlink() {
+    startTransition(async () => {
+      const result = await linkBucketItemHangoutAction(item.id, null);
+      if ("error" in result) toast.error(result.error);
+      else toast.success("Hangout unlinked");
+    });
+  }
+
+  function handleLinkOpenChange(open: boolean) {
+    setLinking(open);
+    if (!open) requestAnimationFrame(() => menuButton.current?.focus());
   }
 
   function handleEditOpenChange(open: boolean) {
@@ -109,6 +160,14 @@ export function BucketItemCard({ item, viewer }: { item: BucketItemView; viewer:
             {item.hangoutTitle ?? "Hangout"}
           </Link>
         ) : null}
+        {item.status === "IN_PLAN" && item.hangoutEnded ? (
+          <div className="bg-muted/50 flex flex-wrap items-center gap-2 rounded-2xl px-3 py-2 text-sm">
+            <span>That hangout has ended.</span>
+            <Button type="button" size="sm" disabled={isPending} onClick={toggleDone}>
+              Mark as done
+            </Button>
+          </div>
+        ) : null}
         {season || item.tags.length > 0 ? (
           <div className="flex flex-wrap items-center gap-1.5">
             {season ? (
@@ -138,7 +197,7 @@ export function BucketItemCard({ item, viewer }: { item: BucketItemView; viewer:
         </p>
       </div>
 
-      {canManage ? (
+      {canManage || !done ? (
         <>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -155,23 +214,58 @@ export function BucketItemCard({ item, viewer }: { item: BucketItemView; viewer:
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem className="max-md:min-h-11" onSelect={() => setEditing(true)}>
-                <Pencil aria-hidden="true" />
-                Edit
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                variant="destructive"
-                className="max-md:min-h-11"
-                onSelect={handleDelete}
-              >
-                <Trash2 aria-hidden="true" />
-                Delete
-              </DropdownMenuItem>
+              {/* planning is open to every member; only edit and delete need the suggester or an admin */}
+              {!done ? (
+                <DropdownMenuItem className="max-md:min-h-11" onSelect={togglePlanned}>
+                  {item.status === "IN_PLAN" ? (
+                    <Undo2 aria-hidden="true" />
+                  ) : (
+                    <CalendarPlus aria-hidden="true" />
+                  )}
+                  {item.status === "IN_PLAN" ? "Back to To do" : "Move to In plan"}
+                </DropdownMenuItem>
+              ) : null}
+              {!done && !item.hangoutId ? (
+                <DropdownMenuItem className="max-md:min-h-11" onSelect={() => setLinking(true)}>
+                  <Link2 aria-hidden="true" />
+                  Link a hangout
+                </DropdownMenuItem>
+              ) : null}
+              {!done && item.hangoutId ? (
+                <DropdownMenuItem className="max-md:min-h-11" onSelect={unlink}>
+                  <Link2Off aria-hidden="true" />
+                  Unlink hangout
+                </DropdownMenuItem>
+              ) : null}
+              {canManage ? (
+                <>
+                  <DropdownMenuItem className="max-md:min-h-11" onSelect={() => setEditing(true)}>
+                    <Pencil aria-hidden="true" />
+                    Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    variant="destructive"
+                    className="max-md:min-h-11"
+                    onSelect={handleDelete}
+                  >
+                    <Trash2 aria-hidden="true" />
+                    Delete
+                  </DropdownMenuItem>
+                </>
+              ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
-          {/* mounted only while editing, so every open starts from the saved item */}
+          {/* mounted only while open, so every open starts from the saved item */}
           {editing ? (
             <BucketItemDialog item={item} open onOpenChange={handleEditOpenChange} />
+          ) : null}
+          {linking ? (
+            <BucketLinkDialog
+              itemId={item.id}
+              itemTitle={item.title}
+              hangouts={hangouts}
+              onOpenChange={handleLinkOpenChange}
+            />
           ) : null}
         </>
       ) : null}

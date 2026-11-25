@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hangoutEnd, hangoutPhase, unpaidCount } from "@/lib/lifecycle";
+import { hangoutEnd, hangoutEnded, hangoutPhase, unpaidCount } from "@/lib/lifecycle";
 
 const stop = { durationMinutes: 120, arriveBy: null };
 const share = (status: "UNPAID" | "SENT" | "CONFIRMED" | "REFUNDED", amount = 1000, paid = 0) => ({
@@ -58,5 +58,26 @@ describe("hangoutPhase", () => {
   it("is Settling up with unpaid shares, else Done", () => {
     expect(hangoutPhase(scheduled, [stop], 1, after)).toBe("SETTLING_UP");
     expect(hangoutPhase(scheduled, [stop], 0, after)).toBe("DONE");
+  });
+});
+
+describe("hangoutEnded", () => {
+  const scheduled = { status: "SCHEDULED" as const, startSlot: "2026-10-03T19:30" };
+
+  it("is true once the last stop has finished", () => {
+    expect(hangoutEnded(scheduled, [stop], new Date("2026-10-04T01:31:00Z"))).toBe(true);
+  });
+
+  it("is false before it finishes", () => {
+    expect(hangoutEnded(scheduled, [stop], new Date("2026-10-04T01:29:00Z"))).toBe(false);
+  });
+
+  it("is false for a hangout that was never scheduled or has no start", () => {
+    const late = new Date("2030-01-01T00:00:00Z");
+    expect(hangoutEnded({ status: "COLLECTING", startSlot: null }, [], late)).toBe(false);
+    expect(hangoutEnded({ status: "CANCELLED", startSlot: "2026-10-03T19:30" }, [], late)).toBe(
+      false
+    );
+    expect(hangoutEnded({ status: "SCHEDULED", startSlot: null }, [], late)).toBe(false);
   });
 });

@@ -1,6 +1,7 @@
 import { ListChecks } from "lucide-react";
 import { BucketItemCard } from "@/app/bucket-list/_components/bucket-item-card";
 import { BucketItemDialog } from "@/app/bucket-list/_components/bucket-item-dialog";
+import type { HangoutOption } from "@/app/bucket-list/_components/bucket-link-dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   BUCKET_STATUSES,
@@ -38,9 +39,11 @@ function EmptyColumn({ status }: { status: BucketStatus }) {
 export function BucketListView({
   grouped,
   viewer,
+  hangouts,
 }: {
   grouped: Record<BucketStatus, BucketItemView[]>;
   viewer: BucketViewer;
+  hangouts: HangoutOption[];
 }) {
   const total = BUCKET_STATUSES.reduce((sum, status) => sum + grouped[status].length, 0);
 
@@ -87,7 +90,7 @@ export function BucketListView({
                 <ul className="space-y-3">
                   {grouped[status].map((item) => (
                     <li key={item.id}>
-                      <BucketItemCard item={item} viewer={viewer} />
+                      <BucketItemCard item={item} viewer={viewer} hangouts={hangouts} />
                     </li>
                   ))}
                 </ul>

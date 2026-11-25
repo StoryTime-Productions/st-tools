@@ -22,6 +22,8 @@ import { LiveRefresh } from "@/app/hub/hangouts/[hangoutId]/_components/live-ref
 import { CancelHangoutButton, HangoutDialog } from "@/app/hub/_components/hangout-dialog";
 import { hourLabel, todayKey, torontoInputValue } from "@/lib/calendar";
 import { rankRuns } from "@/lib/availability";
+import { BucketLink } from "@/app/hub/hangouts/[hangoutId]/_components/bucket-link";
+import { getBucketItemForHangout, getUnlinkedBucketItems } from "@/lib/bucket-list";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { getAvailabilityResponses, getHangoutDetail, getMemberOptions } from "@/lib/hangouts";
 import { formatDeadline, HANGOUT_STATUS_LABEL } from "@/lib/hub-format";
@@ -40,6 +42,10 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
   if (!hangout) notFound();
 
   const ended = hangout.phase === "SETTLING_UP" || hangout.phase === "DONE";
+  const [bucketItem, unlinkedItems] = await Promise.all([
+    getBucketItemForHangout(hangout.id),
+    getUnlinkedBucketItems(),
+  ]);
   const canEdit =
     user.role === "ADMIN" && hangout.phase !== "CANCELLED" && hangout.phase !== "DONE";
   const collecting = hangout.status === "COLLECTING";
@@ -226,6 +232,13 @@ export default async function HangoutPage({ params }: { params: Promise<{ hangou
           Discord thread
         </a>
       ) : null}
+
+      <BucketLink
+        hangoutId={hangout.id}
+        item={bucketItem}
+        ended={ended}
+        options={hangout.phase === "CANCELLED" ? [] : unlinkedItems}
+      />
 
       {ended ? costsCard : null}
 

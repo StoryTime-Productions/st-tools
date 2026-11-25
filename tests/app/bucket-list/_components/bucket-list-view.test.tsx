@@ -21,6 +21,7 @@ const item = (id: string, status: BucketItemView["status"]): BucketItemView => (
   suggestedByName: "Alice",
   hangoutId: null,
   hangoutTitle: null,
+  hangoutEnded: false,
   driveFolderId: null,
   doneAt: null,
   createdAt: new Date("2026-11-01T00:00:00Z"),
@@ -39,6 +40,7 @@ describe("BucketListView", () => {
           DONE: [item("Skating", "DONE")],
         }}
         viewer={viewer}
+        hangouts={[]}
       />
     );
 
@@ -60,6 +62,7 @@ describe("BucketListView", () => {
       <BucketListView
         grouped={{ TODO: [item("Camping", "TODO")], IN_PLAN: [], DONE: [] }}
         viewer={{ id: "a", role: "ADMIN" }}
+        hangouts={[]}
       />
     );
 
@@ -70,7 +73,9 @@ describe("BucketListView", () => {
   });
 
   it("shows one page-level empty state when the list has no items", () => {
-    render(<BucketListView grouped={{ TODO: [], IN_PLAN: [], DONE: [] }} viewer={viewer} />);
+    render(
+      <BucketListView grouped={{ TODO: [], IN_PLAN: [], DONE: [] }} viewer={viewer} hangouts={[]} />
+    );
 
     expect(screen.getByRole("heading", { name: "The list is empty" })).toBeVisible();
     expect(screen.queryByText("Nothing in plan")).not.toBeInTheDocument();

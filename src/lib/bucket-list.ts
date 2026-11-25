@@ -1,11 +1,23 @@
+import type { HangoutStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { groupByStatus, type BucketItemView, type BucketStatus } from "@/lib/bucket-list-core";
+import { hangoutEnded } from "@/lib/lifecycle";
 
 export * from "@/lib/bucket-list-core";
 
 const itemInclude = {
   suggestedBy: { select: { name: true } },
-  hangout: { select: { title: true } },
+  hangout: {
+    select: {
+      title: true,
+      status: true,
+      startSlot: true,
+      stops: {
+        select: { durationMinutes: true, arriveBy: true },
+        orderBy: { position: "asc" as const },
+      },
+    },
+  },
   tags: { select: { name: true }, orderBy: { name: "asc" as const } },
 };
 
@@ -22,7 +34,12 @@ type ItemRow = {
   doneAt: Date | null;
   createdAt: Date;
   suggestedBy: { name: string | null } | null;
-  hangout: { title: string } | null;
+  hangout: {
+    title: string;
+    status: HangoutStatus;
+    startSlot: string | null;
+    stops: { durationMinutes: number; arriveBy: string | null }[];
+  } | null;
   tags: { name: string }[];
 };
 
@@ -38,6 +55,7 @@ function toView(row: ItemRow): BucketItemView {
     suggestedByName: row.suggestedBy?.name ?? null,
     hangoutId: row.hangoutId,
     hangoutTitle: row.hangout?.title ?? null,
+    hangoutEnded: row.hangout ? hangoutEnded(row.hangout, row.hangout.stops) : false,
     driveFolderId: row.driveFolderId,
     doneAt: row.doneAt,
     createdAt: row.createdAt,
@@ -54,6 +72,24 @@ export async function getBucketList() {
 export async function getBucketItem(id: string) {
   const row = await prisma.bucketItem.findUnique({ where: { id }, include: itemInclude });
   return row ? toView(row) : null;
+}
+
+/** Hangouts that can still take an item: not cancelled and not already linked (one item per hangout). */
+export async function getLinkableHangouts() {
+  return prisma.hangout.findMany({
+    where: { bucketItem: null, status: { not: "CANCELLED" } },
+    select: { id: true, title: true },
+    orderBy: { title: "asc" },
+  });
+}
+
+/** Items that can be linked from a hangout page: not done and not tied to another hangout. */
+export async function getUnlinkedBucketItems() {
+  return prisma.bucketItem.findMany({
+    where: { hangoutId: null, status: { not: "DONE" } },
+    select: { id: true, title: true },
+    orderBy: { title: "asc" },
+  });
 }
 
 /** The item linked to a hangout, for the hangout page (Q4). */

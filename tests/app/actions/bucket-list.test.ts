@@ -22,6 +22,9 @@ async function load(user: unknown = { id: ME, role: "MEMBER" }) {
       delete: vi.fn().mockResolvedValue({}),
     },
     tag: { findMany: vi.fn().mockResolvedValue([]) },
+    hangout: {
+      findUnique: vi.fn().mockResolvedValue({ status: "SCHEDULED", bucketItem: null }),
+    },
     $transaction: vi.fn(async (fn: (t: typeof tx) => Promise<void>) => fn(tx)),
   };
   vi.doMock("next/cache", () => ({ revalidatePath }));
@@ -157,8 +160,18 @@ describe("deleteBucketItemAction", () => {
   it("lets the suggester delete", async () => {
     const { deleteBucketItemAction, prisma, revalidatePath } = await load();
     expect(await deleteBucketItemAction(ITEM)).toEqual({ success: true });
-    expect(prisma.bucketItem.delete).toHaveBeenCalledWith({ where: { id: ITEM } });
+    expect(prisma.bucketItem.delete).toHaveBeenCalledWith({
+      where: { id: ITEM },
+      select: { hangoutId: true },
+    });
     expect(revalidatePath).toHaveBeenCalledWith("/bucket-list");
+  });
+
+  it("refreshes the linked hangout page too", async () => {
+    const { deleteBucketItemAction, prisma, revalidatePath } = await load();
+    prisma.bucketItem.delete.mockResolvedValue({ hangoutId: "h1" });
+    await deleteBucketItemAction(ITEM);
+    expect(revalidatePath).toHaveBeenCalledWith("/hub/hangouts/h1");
   });
 
   it("lets an admin delete, refuses another member, reports a missing item", async () => {
@@ -231,5 +244,149 @@ describe("setBucketItemDoneAction", () => {
     expect(await setBucketItemDoneAction(ITEM, true)).toEqual({ success: true });
     expect(prisma.bucketItem.update).not.toHaveBeenCalled();
     expect(revalidatePath).toHaveBeenCalled();
+  });
+
+  it("refreshes the linked hangout page so its Mark as done prompt goes away", async () => {
+    const { setBucketItemDoneAction, prisma, revalidatePath } = await load();
+    prisma.bucketItem.findUnique.mockResolvedValue({ status: "IN_PLAN", hangoutId: "h1" });
+    await setBucketItemDoneAction(ITEM, true);
+    expect(revalidatePath).toHaveBeenCalledWith("/hub/hangouts/h1");
+  });
+});
+
+describe("setBucketItemPlannedAction", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("needs a signed-in user, a real id and an existing item", async () => {
+    expect(await (await load(null)).setBucketItemPlannedAction(ITEM, true)).toEqual({
+      error: "Sign in to use the bucket list.",
+    });
+    expect(await (await load()).setBucketItemPlannedAction("nope", true)).toEqual({
+      error: "That item no longer exists.",
+    });
+    const gone = await load();
+    gone.prisma.bucketItem.findUnique.mockResolvedValue(null);
+    expect(await gone.setBucketItemPlannedAction(ITEM, true)).toEqual({
+      error: "That item no longer exists.",
+    });
+  });
+
+  it("lets any member move an item between To do and In plan", async () => {
+    const { setBucketItemPlannedAction, prisma, revalidatePath } = await load({
+      id: OTHER,
+      role: "MEMBER",
+    });
+    expect(await setBucketItemPlannedAction(ITEM, true)).toEqual({ success: true });
+    expect(prisma.bucketItem.update).toHaveBeenCalledWith({
+      where: { id: ITEM },
+      data: { status: "IN_PLAN" },
+    });
+    expect(revalidatePath).toHaveBeenCalledWith("/bucket-list");
+
+    await setBucketItemPlannedAction(ITEM, false);
+    expect(prisma.bucketItem.update).toHaveBeenLastCalledWith({
+      where: { id: ITEM },
+      data: { status: "TODO" },
+    });
+  });
+
+  it("leaves a Done item alone", async () => {
+    const { setBucketItemPlannedAction, prisma } = await load();
+    prisma.bucketItem.findUnique.mockResolvedValue({ status: "DONE", hangoutId: null });
+    expect(await setBucketItemPlannedAction(ITEM, true)).toEqual({ error: "Untick Done first." });
+    expect(prisma.bucketItem.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("linkBucketItemHangoutAction", () => {
+  const HANGOUT = "44444444-4444-4444-8444-444444444444";
+  beforeEach(() => vi.clearAllMocks());
+
+  it("needs a signed-in user, real ids and an existing item", async () => {
+    expect(await (await load(null)).linkBucketItemHangoutAction(ITEM, HANGOUT)).toEqual({
+      error: "Sign in to use the bucket list.",
+    });
+    expect(await (await load()).linkBucketItemHangoutAction("nope", HANGOUT)).toEqual({
+      error: "That item no longer exists.",
+    });
+    expect(await (await load()).linkBucketItemHangoutAction(ITEM, "nope")).toEqual({
+      error: "That hangout no longer exists.",
+    });
+    const gone = await load();
+    gone.prisma.bucketItem.findUnique.mockResolvedValue(null);
+    expect(await gone.linkBucketItemHangoutAction(ITEM, HANGOUT)).toEqual({
+      error: "That item no longer exists.",
+    });
+  });
+
+  it("moves a To do item to In plan when any member links it", async () => {
+    const { linkBucketItemHangoutAction, prisma, revalidatePath } = await load({
+      id: OTHER,
+      role: "MEMBER",
+    });
+    expect(await linkBucketItemHangoutAction(ITEM, HANGOUT)).toEqual({ success: true });
+    expect(prisma.bucketItem.update).toHaveBeenCalledWith({
+      where: { id: ITEM },
+      data: { hangoutId: HANGOUT, status: "IN_PLAN" },
+    });
+    expect(revalidatePath).toHaveBeenCalledWith("/bucket-list");
+    expect(revalidatePath).toHaveBeenCalledWith(`/hub/hangouts/${HANGOUT}`);
+  });
+
+  it("keeps the status of an item already In plan or Done", async () => {
+    for (const status of ["IN_PLAN", "DONE"]) {
+      const { linkBucketItemHangoutAction, prisma } = await load();
+      prisma.bucketItem.findUnique.mockResolvedValue({ status, hangoutId: null });
+      await linkBucketItemHangoutAction(ITEM, HANGOUT);
+      expect(prisma.bucketItem.update).toHaveBeenCalledWith({
+        where: { id: ITEM },
+        data: { hangoutId: HANGOUT },
+      });
+    }
+  });
+
+  it("refuses a missing or cancelled hangout and one that already has an item", async () => {
+    const missing = await load();
+    missing.prisma.hangout.findUnique.mockResolvedValue(null);
+    expect(await missing.linkBucketItemHangoutAction(ITEM, HANGOUT)).toEqual({
+      error: "That hangout no longer exists.",
+    });
+
+    const cancelled = await load();
+    cancelled.prisma.hangout.findUnique.mockResolvedValue({
+      status: "CANCELLED",
+      bucketItem: null,
+    });
+    expect(await cancelled.linkBucketItemHangoutAction(ITEM, HANGOUT)).toEqual({
+      error: "That hangout no longer exists.",
+    });
+
+    const taken = await load();
+    taken.prisma.hangout.findUnique.mockResolvedValue({
+      status: "SCHEDULED",
+      bucketItem: { id: "other-item" },
+    });
+    expect(await taken.linkBucketItemHangoutAction(ITEM, HANGOUT)).toEqual({
+      error: "That hangout already has a bucket-list item.",
+    });
+    expect(taken.prisma.bucketItem.update).not.toHaveBeenCalled();
+  });
+
+  it("accepts relinking the same item to its own hangout", async () => {
+    const { linkBucketItemHangoutAction, prisma } = await load();
+    prisma.hangout.findUnique.mockResolvedValue({ status: "SCHEDULED", bucketItem: { id: ITEM } });
+    expect(await linkBucketItemHangoutAction(ITEM, HANGOUT)).toEqual({ success: true });
+  });
+
+  it("unlinks without touching the status and refreshes the old hangout page", async () => {
+    const { linkBucketItemHangoutAction, prisma, revalidatePath } = await load();
+    prisma.bucketItem.findUnique.mockResolvedValue({ status: "IN_PLAN", hangoutId: HANGOUT });
+    expect(await linkBucketItemHangoutAction(ITEM, null)).toEqual({ success: true });
+    expect(prisma.bucketItem.update).toHaveBeenCalledWith({
+      where: { id: ITEM },
+      data: { hangoutId: null },
+    });
+    expect(prisma.hangout.findUnique).not.toHaveBeenCalled();
+    expect(revalidatePath).toHaveBeenCalledWith(`/hub/hangouts/${HANGOUT}`);
   });
 });
